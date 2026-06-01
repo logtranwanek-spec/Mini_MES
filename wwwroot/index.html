@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống MES - Giám Sát Sản Xuất</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="/js/theme.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom/dist/panzoom.min.js"></script>
+
+    <style>
+        /* ==================== BẢN ĐỒ 2D NHÀ MÁY (PAN & ZOOM) ==================== */
+        body { margin: 0; background: #0a0c10; font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; }
+        
+        .top-nav { display: flex; justify-content: space-between; align-items: center; padding: 15px 30px; background: #141e30; border-bottom: 2px solid #2c3e50; position: relative; z-index: 100; }
+        .top-nav h1 { margin: 0; font-size: 22px; color: #fff; font-weight: bold; }
+
+        .map-viewport { width: 100vw; height: calc(100vh - 70px); overflow: hidden; position: relative; cursor: grab; }
+        .map-viewport:active { cursor: grabbing; }
+        .map-canvas { width: 2000px; height: 1200px; transform-origin: center center; display: flex; align-items: center; justify-content: center; }
+
+        .factory-map { display: grid; grid-template-columns: 800px 80px 500px 80px 300px; gap: 0; width: 100%; height: 100%; padding: 40px; box-sizing: border-box; }
+        
+        .col-left { display: flex; flex-direction: column; justify-content: space-between; position: relative; }
+        .building { background: #111; border: 2px solid #444; position: relative; padding: 20px; display: flex; flex-direction: column; }
+        .b3 { height: 48%; }
+        .b2 { height: 48%; }
+        .b1 { height: 100%; }
+        .b4 { height: 100%; }
+
+        .b-header { position: absolute; top: -12px; left: 20px; background: #0a0c10; padding: 0 10px; color: #888; font-weight: bold; font-size: 14px; }
+        .floor-toggle { position: absolute; top: 10px; left: 10px; background: #222; color: #fff; border: 1px solid #555; padding: 4px 10px; font-size: 12px; font-weight: bold; cursor: pointer; border-radius: 4px; z-index: 10; }
+        .floor-toggle:hover { background: #444; }
+
+        /* Container chứa các khối Zone, phải có position: relative */
+        .floor-content { flex: 1; position: relative; width: 100%; height: 100%; }
+        .floor-content.hidden { display: none !important; }
+        
+        .zone { 
+            position: absolute; /* 🚀 SỬ DỤNG ĐỊNH VỊ TUYỆT ĐỐI */
+            border: 1px solid #333; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            color: #aaa; 
+            font-size: 14px; 
+            font-weight: bold; 
+            text-decoration: none; 
+            transition: 0.2s; 
+            background: #181818;
+            box-sizing: border-box;
+            padding: 5px;
+            text-align: center;
+        }
+        .zone.interactive { border-color: #3498db; color: #3498db; background: rgba(52, 152, 219, 0.05); cursor: pointer; }
+        .zone.interactive:hover { background: rgba(52, 152, 219, 0.2); box-shadow: 0 0 15px rgba(52, 152, 219, 0.3); color: #fff; }
+        
+        /* ==================== BẢN VẼ CHI TIẾT BẰNG ĐỊNH VỊ TUYỆT ĐỐI ==================== */
+        /* Tọa độ và Kích thước của từng khu vực trong B3 */
+        #b3-cnc-go { top: 5%; left: 15%; width: 70%; height: 40%; }
+        #b3-ban-khung { top: 55%; left: 15%; width: 70%; height: 40%; }
+
+        /* Tọa độ và Kích thước của từng khu vực trong B2 */
+        #b2-test-area { top: 5%; left: 0%; width: 10%; height: 12%; }
+        #b2-inv3-top   { top: 5%; left: 11%; width: 21%; height: 12%; }
+        #b2-inv2       { top: 5%; left: 34%; width: 22%; height: 12%; }
+        #b2-inv1       { top: 5%; left: 60%; width: 25%; height: 12%; }
+        #b2-kits-inv   { top: 5%; right: 3%; width: 9%; height: 12%; }
+
+        #b2-glue1      { top: 20%; left:0%; width: 10%; height: 35%; }
+        #b2-glue2      { top: 20%; left: 11%; width: 8%; height: 35%; }
+        #b2-inv3-mid1  { top: 20%; left: 20%; width: 12%; height: 15%; }
+        #b2-inv3-mid2  { top: 37%; left: 20%; width: 12%; height: 18%; }
+
+        #b2-blow-fill1 { top: 20%; left: 34%; width: 22%; height: 15%; }
+        #b2-glue3      { top: 37%; left: 34%; width: 10%; height: 18%; }
+        #b2-inv4       { top: 37%; left: 46%; width: 10%; height: 13%; }
+
+        #b2-hand-fill1 { top: 57%; left: 34%; width: 10%; height: 19%; }
+        #b2-hand-fill2 { top: 53%; left: 46%; width: 10%; height: 23%; }
+        
+        #b2-blow-fill2 { top: 20%; left: 58%; width: 27%; height: 20%; }
+        #b2-blow-fill3 { top: 44%; left: 58%; width: 27%; height: 32%; }
+        #b2-blow-motion{ top: 20%; right: 7%; width: 5%; height: 52%; writing-mode: vertical-rl; text-orientation: mixed; }
+
+        #b2-sorting-foam { top: 58%; left: 0%; width: 32%; height: 18%; }
+        #b2-feather-fill { top: 80%; left: 0%; width: 30%; height: 18%; }
+
+        #b2-foam-inv   { top: 80%; left: 34%; width: 26%; height: 18%; }
+        #b2-wing-arm   { top: 80%; left: 62%; width: 23%; height: 18%; }
+        
+        /* Các thành phần còn lại */
+        .b1-layout { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 40px; padding: 40px; height: 100%; }
+        .vertical-bridge-left { position: absolute; top: 48%; bottom: 48%; left: 20%; width: 30px; background: #1a1a1a; border-left: 2px solid #444; border-right: 2px solid #444; z-index: 1; }
+        .vertical-bridge-right { position: absolute; top: 48%; bottom: 48%; right: 20%; width: 30px; background: #1a1a1a; border-left: 2px solid #444; border-right: 2px solid #444; z-index: 1; }
+        .wip-node { position: absolute; top: 50%; right: 20%; transform: translate(50%, -50%); background: #111; border: 2px solid #3498db; color: #3498db; padding: 8px 15px; font-size: 12px; font-weight: bold; text-decoration: none; z-index: 20; white-space: nowrap; }
+        .wip-node:hover { background: #3498db; color: #fff; }
+
+        .col-mid { display: flex; flex-direction: column; } .col-right { display: flex; flex-direction: column; }
+        .bridge-col { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 200px; }
+        .bridge { width: 100%; height: 40px; background: #1a1a1a; border-top: 2px solid #444; border-bottom: 2px solid #444; }
+
+        .zoom-controls { position: absolute; bottom: 30px; right: 30px; display: flex; flex-direction: column; gap: 10px; z-index: 100; }
+        .btn-zoom { width: 45px; height: 45px; background: #141e30; border: 2px solid #2c3e50; color: #fff; font-size: 20px; font-weight: bold; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .btn-zoom:hover { background: #3498db; border-color: #3498db; }
+
+        /* ==================== CHẾ ĐỘ SÁNG (SIMPLE VIEW) ==================== */
+        html.simple-view body { background: #f0f2f5; }
+        html.simple-view .building { background: #fff; border-color: #bdc3c7; }
+        html.simple-view .b-header { background: #f0f2f5; color: #7f8c8d; }
+        html.simple-view .floor-toggle { background: #fff; color: #2c3e50; border-color: #bdc3c7; }
+        html.simple-view .bridge, html.simple-view .vertical-bridge-left, html.simple-view .vertical-bridge-right { background: #e2e8f0; border-color: #cbd5e1; }
+        html.simple-view .zone { background: #f8f9fc; border-color: #e2e8f0; color: #7f8c8d; }
+        html.simple-view .zone.interactive { border-color: #2980b9; color: #2980b9; background: rgba(41, 128, 185, 0.05); }
+        html.simple-view .zone.interactive:hover { background: #2980b9; color: #fff; }
+        html.simple-view .wip-node { background: #fff; border-color: #2980b9; color: #2980b9; }
+        html.simple-view .wip-node:hover { background: #2980b9; color: #fff; }
+        html.simple-view .btn-zoom { background: #fff; border-color: #bdc3c7; color: #2c3e50; }
+        html.simple-view .btn-zoom:hover { background: #f1f5f9; border-color: #3498db; }
+    </style>
+</head>
+<body>
+    <!-- THANH ĐIỀU HƯỚNG -->
+    <div class="top-nav">
+        <h1>🏭 TỔNG QUAN NHÀ MÁY (FACTORY MAP)</h1>
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <a href="/tracking" class="btn btn-primary" style="text-decoration: none; padding: 8px 20px; width: auto; font-size: 13px;">🔍 Tracking Hành Trình</a>
+            <button class="btn-global-toggle btn-view-toggle" style="margin: 0;">🎨 Chế độ đơn giản</button>
+        </div>
+    </div>
+
+    <!-- BẢN ĐỒ NHÀ MÁY -->
+    <div class="map-viewport" id="mapViewport">
+        <div class="map-canvas" id="mapCanvas">
+            
+            <div class="factory-map">
+                <!-- CỘT TRÁI: B3, WIP, B2 -->
+                <div class="col-left">
+                    <!-- TÒA B3 -->
+                    <div class="building b3">
+                        <div class="b-header">B3</div>
+                        <button class="floor-toggle" onclick="toggleFloor('b3')">L1</button>
+                        
+                        <div id="b3-l1" class="floor-content">
+                            <a href="/cnc-go" id="b3-cnc-go" class="zone interactive">CNC GỖ</a>
+                            <a href="/ban-khung-go" id="b3-ban-khung" class="zone interactive">BẮN KHUNG GỖ</a>
+                        </div>
+                        <div id="b3-l2" class="floor-content hidden">
+                            <div class="zone" style="background: rgba(243, 156, 18, 0.1); border-color: #f39c12; color: #f39c12; position: static;">C&S (CẮT MAY)</div>
+                        </div>
+                    </div>
+
+                    <!-- ỐNG NỐI VÀ WIP WNK3 -->
+                    <div class="vertical-bridge-left"></div>
+                    <div class="vertical-bridge-right"></div>
+                    <a href="/wip-wnk3" class="wip-node">WIP WNK3</a>
+
+                    <!-- TÒA B2 -->
+                    <div class="building b2">
+                        <div class="b-header">B2</div>
+                        <button class="floor-toggle" onclick="toggleFloor('b2')">L1</button>
+                        
+                        <!-- B2 - Tầng 1: ĐÃ VẼ LẠI CHI TIẾT -->
+                        <div id="b2-l1" class="floor-content">
+                            <a href="#" id="b2-test-area" class="zone interactive">TEST AREA</a>
+                            <div id="b2-inv3-top" class="zone">INV 3</div>
+                            <div id="b2-inv2" class="zone">INV 2</div>
+                            <div id="b2-inv1" class="zone">INV 1</div>
+                            <a href="/kits-inv" id="b2-kits-inv" class="zone interactive">Kits INV</a>
+                            <a href="/glue-line" id="b2-glue1" class="zone interactive">GLUE LINE 1</a>
+                            <a href="/glue-line" id="b2-glue2" class="zone interactive">GLUE LINE 2</a>
+                            <div id="b2-inv3-mid1" class="zone">INV 3</div>
+                            <a href="/blow-fill" id="b2-blow-fill1" class="zone interactive">BLOW FILL</a>
+                            <div id="b2-blow-motion" class="zone">BLOW FILL MOTION</div>
+                            <div id="b2-inv3-mid2" class="zone">INV 3</div>
+                            <a href="/glue-line" id="b2-glue3" class="zone interactive">GLUE LINE 3</a>
+                            <a href="/blow-fill" id="b2-blow-fill2" class="zone interactive">BLOW FILL</a>
+                            <a href="/sorting-foam" id="b2-sorting-foam" class="zone interactive">SORTING FOAM</a>
+                            <a href="/hand-fill" id="b2-hand-fill1" class="zone interactive">HAND FILL</a>
+                            <a href="/hand-fill" id="b2-hand-fill2" class="zone interactive">HAND FILL</a>
+                            <div id="b2-inv4" class="zone">INV 4</div>
+                            <a href="/blow-fill" id="b2-blow-fill3" class="zone interactive">BLOW FILL</a>
+                            <a href="/feather-fill" id="b2-feather-fill" class="zone interactive">FEATHER FILL</a>
+                            <div id="b2-foam-inv" class="zone">FOAM INV</div>
+                            <a href="#" id="b2-wing-arm" class="zone interactive">WING/ARM</a>
+                        </div>
+
+                        <div id="b2-l2" class="floor-content hidden">
+                            <div class="zone" style="background: rgba(243, 156, 18, 0.1); border-color: #f39c12; color: #f39c12; position: static;">C&S (CẮT MAY)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CÁC CỘT CÒN LẠI GIỮ NGUYÊN -->
+                <div class="bridge-col"><div class="bridge"></div><div class="bridge"></div></div>
+                <div class="col-mid">
+                    <div class="building b1">
+                        <div class="b-header">B1</div>
+                        <div class="floor-content b1-layout">
+                            <a href="/assemble" class="zone interactive" style="position: static;">Assemble 3</a>
+                            <a href="/assemble" class="zone interactive" style="position: static;">Assemble 4</a>
+                            <a href="/assemble" class="zone interactive" style="position: static;">Assemble 1</a>
+                            <a href="/assemble" class="zone interactive" style="position: static;">Assemble 2</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="bridge-col"><div class="bridge"></div><div class="bridge"></div></div>
+                <div class="col-right">
+                    <div class="building b4">
+                        <div class="b-header">B4</div>
+                        <div class="floor-content"><div class="zone" style="border-style: dashed; opacity: 0.5; position: static;">Khu vực mở rộng</div></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- CÁC NÚT ĐIỀU KHIỂN ZOOM -->
+    <div class="zoom-controls">
+        <button class="btn-zoom" id="zoomIn" title="Phóng to">+</button>
+        <button class="btn-zoom" id="zoomReset" title="Vừa màn hình">⛶</button>
+        <button class="btn-zoom" id="zoomOut" title="Thu nhỏ">-</button>
+    </div>
+
+    <!-- JAVASCRIPT XỬ LÝ CHUYỂN TẦNG VÀ ZOOM/PAN -->
+    <script>
+        function toggleFloor(buildingId) {
+            const btn = document.querySelector(`.${buildingId} .floor-toggle`);
+            const l1 = document.getElementById(`${buildingId}-l1`);
+            const l2 = document.getElementById(`${buildingId}-l2`);
+
+            if (btn.textContent === 'L1') {
+                btn.textContent = 'L2'; btn.style.borderColor = '#f39c12'; btn.style.color = '#f39c12';
+                l1.classList.add('hidden'); l2.classList.remove('hidden');
+            } else {
+                btn.textContent = 'L1'; btn.style.borderColor = ''; btn.style.color = '';
+                l2.classList.add('hidden'); l1.classList.remove('hidden');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const elem = document.getElementById('mapCanvas');
+            const viewport = document.getElementById('mapViewport');
+            const panzoom = Panzoom(elem, { maxScale: 3, minScale: 0.3, step: 0.1, cursor: 'grab' });
+
+            viewport.addEventListener('wheel', (event) => { event.preventDefault(); panzoom.zoomWithWheel(event); });
+            elem.addEventListener('panzoomstart', () => viewport.style.cursor = 'grabbing');
+            elem.addEventListener('panzoomend', () => viewport.style.cursor = 'grab');
+
+            document.getElementById('zoomIn').addEventListener('click', panzoom.zoomIn);
+            document.getElementById('zoomOut').addEventListener('click', panzoom.zoomOut);
+            document.getElementById('zoomReset').addEventListener('click', () => { panzoom.reset(); panzoom.zoom(0.8, { animate: true }); });
+
+            setTimeout(() => panzoom.zoom(0.8), 100);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WIP WNK3 - Giao Nhận KIT</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="/js/theme.js"></script> 
+</head>
+<body>
+    <header class="header" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 30px; background: #141e30; border-bottom: 2px solid #2c3e50;">
+
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <a href="/" class="btn-back-home">🏠 Trang chủ</a>
+            <h1 style="margin: 0; font-size: 22px;">🔧 WIP WNK3 - GIAO NHẬN KIT</h1>
+        </div>
+        
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <a href="/dashboard" class="btn btn-primary" style="text-decoration: none; padding: 10px 20px; width: auto; font-size: 14px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);">📊 MỞ DASHBOARD</a>
+            <button class="btn-global-toggle btn-view-toggle" style="position: static; transform: none; margin: 0;">🎨 Chế độ đơn giản</button>
+        </div>
+    </header>
+    
+    <button id="scrollToTopBtn" title="Lên đầu trang">↑</button>
+    <div class="container">
+        <aside class="sidebar">
+            <section class="section">
+                <h3>📅 CHỌN NGÀY & FILE</h3>
+                <div class="date-input-wrapper">
+                    <label>Ngày nhận hàng:</label>
+                    <input type="date" id="dateInput" class="input-field">
+                </div>
+                <div class="file-buttons">
+                    <button id="btnConsoleLid" class="btn btn-primary">
+                        📋 Console Lid
+                    </button>
+                    <button id="btnOtherFile" class="btn btn-secondary">
+                        📊 File Khác
+                    </button>
+                </div>
+                <div id="selectedFileLabel" class="status-text">
+                    Chưa chọn file
+                </div>
+            </section>
+
+            <!-- 2. Barcode Scanner -->
+            <section class="section barcode-section">
+                <h3>📷 SCAN BARCODE</h3>
+                <div class="scanner-input-wrapper">
+                    <input 
+                        type="text" 
+                        id="barcodeInput" 
+                        class="barcode-input" 
+                        placeholder="Scan hoặc nhập MO..."
+                        autocomplete="off"
+                        disabled
+                    >
+                    <div class="scanner-status" id="scannerStatus">
+                        ⏸️ Chưa sẵn sàng
+                    </div>
+                </div>
+                
+                <!-- Quick Scan History -->
+                <div class="scan-history">
+                    <h4>📋 Vừa quét:</h4>
+                    <div id="scanHistory" class="history-list">
+                        <div class="history-empty">Chưa có MO nào</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <button id="btnSync" class="btn btn-sync">
+                    🔄 Cập Nhật Master File
+                </button>
+                <button id="btnExport" class="btn btn-export">
+                    📊 Xuất Báo Cáo
+                </button>
+                <div id="syncStatus" class="sync-status">
+                    ✅ Sẵn sàng
+                </div>
+            </section>
+            
+        </aside>
+        <main class="main-content">
+            <div class="search-filter-bar" style="border-top: none;">
+                <div class="search-wrapper" style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <input type="text" id="searchInput" class="search-input" placeholder="🔍 Tìm kiếm ODRNO, FITEM, MW#...">
+                    <button id="btnClearSearch" class="btn-clear">Xóa</button>
+                    <div class="total-label" id="totalLabel" style="display: flex; align-items: center; background: rgba(102, 126, 234, 0.15); padding: 0 20px; border-radius: 8px; border: 1px solid #667eea; font-weight: bold; color: #a8edea; white-space: nowrap;">
+                        Tổng: 0 MX
+                    </div>
+                </div>
+
+                <div class="filter-wrapper" style="width: 100%; display: flex; align-items: flex-start; gap: 20px;">
+                    <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+                        <label style="font-weight: bold; font-size: 14px; color: #bdc3c7; white-space: nowrap; margin-top: 10px;">Lọc hiển thị:</label>
+                        <div class="filter-group-box">
+                            <label class="checkbox-label"><input type="checkbox" id="filterPending" checked><span>⏳ Chưa nhận</span></label>
+                            <div class="filter-divider"></div>
+                            <label class="checkbox-label"><input type="checkbox" id="filterReceived" checked><span>✅ Đã nhận</span></label>
+                            <div class="filter-divider"></div>
+                            <label class="checkbox-label"><input type="checkbox" id="filterLack" checked><span>❌ Thiếu hàng</span></label>
+                        </div>
+                    </div>
+                    <div style="width: 2px; align-self: stretch; background: rgba(255,255,255,0.1); margin: 0 5px;"></div>
+                    <div style="display: flex; align-items: flex-start; gap: 10px; flex: 1;">
+                        <label style="font-weight: bold; font-size: 14px; color: #bdc3c7; white-space: nowrap; margin-top: 10px;">Cuộn đến:</label>
+                        <div id="timeScrollContainer" class="time-scroll-container">
+                            <span style="color: #95a5a6; font-size: 13px; font-style: italic; margin-top: 10px;">Đang tải...</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div id="orderList" class="order-list">
+            </div>
+        </main>
+    </div>
+
+    <div id="modalCheck" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header modal-header-info">
+                <h2 id="checkModalTitle">✅ ĐÃ TÌM THẤY MO</h2>
+            </div>
+            <div class="modal-body">
+                <div id="moDetails" class="mo-details-large"></div>
+                <div class="check-question-box">
+                    <p class="check-question">Bên nhận kiểm tra đã đủ hàng?</p>
+                </div>
+            </div>
+            <div class="modal-footer modal-footer-large">
+                <button id="btnMarkReceived" class="btn btn-success btn-large">✅ ĐỦ HÀNG</button>
+                <button id="btnMarkLack" class="btn btn-danger btn-large">❌ THIẾU HÀNG</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalNotFound" class="modal">
+        <div class="modal-content modal-md">
+            <div class="modal-header modal-header-warning">
+                <h2>⚠️ KHÔNG TÌM THẤY MO</h2>
+            </div>
+            <div class="modal-body">
+                <div class="not-found-message">
+                    <p>MO: <strong id="notFoundOdrno"></strong></p>
+                    <p>Không có trong danh sách hàng nhận hôm nay</p>
+                    <p class="warning-text">Chuyển trạng thái MO thành "NOT FOUND"?</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnConfirmNotFound" class="btn btn-warning">⚠️ Xác Nhận NOT FOUND</button>
+                <button id="btnCancelNotFound" class="btn btn-secondary">Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalMxDetail" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header modal-header-info">
+                <h2 id="mxDetailTitle">📋 CHI TIẾT MX</h2>
+                <button class="btn-close" id="btnCloseMxDetail">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="mx-detail-header">
+                    <div class="mx-info-row">
+                        <div class="mx-info-item"><label>Mã MX:</label><span id="mxDetailOdrno" class="mx-value">-</span></div>
+                        <div class="mx-info-item"><label>Tổng số Items:</label><span id="mxDetailTotalItems" class="mx-value">-</span></div>
+                    </div>
+                </div>
+                <div class="mx-items-section">
+                    <h3>📦 Danh sách Items trong MX</h3>
+                    <div id="mxItemsList" class="mx-items-list"></div>
+                </div>
+                <div class="mx-parts-section">
+                    <h3>🔧 Chi tiết Parts</h3>
+                    <div id="mxPartsList" class="mx-parts-list"><div class="loading-text">Đang tải...</div></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnExportMxDetail" class="btn btn-export">📊 Xuất Excel</button>
+                <button id="btnPrintMxDetail" class="btn btn-primary">🖨️ In</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

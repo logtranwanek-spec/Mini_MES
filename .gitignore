@@ -1,0 +1,12 @@
+# Build folders
+bin/
+obj/
+**/publish/
+
+# Executables
+*.exe
+*.dll
+
+# VS
+.vs/
+.vscode/

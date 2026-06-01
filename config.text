@@ -1,0 +1,15 @@
+"V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\RUN KIT - NHẬN KIT"
+"V:\Prod & Inv Control\Public\P&IC UPH\01.MSS for UPH\2026\MSS0520\Sub Schedule\Kit schedule\WIP\2.KIT STACK OUT\INHOUSE"
+
+Run:
+dotnet build -c Release
+dotnet bin\Release\net8.0\OrderTrackingWeb.dll
+
+Publish:
+dotnet publish -c Release
+
+thư viện odbc cho .NET
+dotnet add package System.Data.Odbc
+
+
+http://localhost:5050/api/debug/workcenters?date=2026-06-01

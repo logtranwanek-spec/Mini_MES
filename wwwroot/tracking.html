@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Hành Trình MX theo Work Center</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="/js/theme.js"></script>
+</head>
+<body>
+    <button id="scrollToTopBtn" title="Lên đầu trang">↑</button>
+    <div class="dash-header" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 30px; background: #141e30; border-bottom: 2px solid #2c3e50;">
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <a href="/" class="btn-back-home">🏠 Trang chủ</a>
+            <h1 style="margin: 0; font-size: 22px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">🔍 TRACKING HÀNH TRÌNH MX</h1>
+        </div>
+        <div style="display: flex; align-items: center;">
+            <button class="btn-global-toggle btn-view-toggle" style="position: static; transform: none; margin: 0;">🎨 Chế độ đơn giản</button>
+        </div>
+    </div>
+
+    <div class="tracking-page">
+        <div class="tracking-controls">
+            <label for="trackDate">Chọn ngày kế hoạch:</label>
+            <input type="date" id="trackDate" class="input-field" style="width: 200px;">
+
+            <button id="btnFilterInProgress" class="btn-filter-progress" title="Lọc MO đang làm">
+                🟨
+            </button>
+
+            <button id="btnFilterLate" class="btn-filter-late" title="Cuộn đến các MO bị trễ">
+                🟥
+            </button>
+
+            <button id="btnSelectWorkCenter" class="btn-select-wc" title="Chọn Work Center">
+                📋 Chọn WC
+            </button>
+
+            <input type="text" id="trackSearch" class="input-field" placeholder="🔍 Tìm mã MX..." style="width: 250px; margin-left: auto;">
+
+            <button id="viewToggleBtn" class="btn-primary" style="width: auto; padding: 10px 15px; font-size: 13px;">
+                Xem theo Work Center
+            </button>
+        </div>
+        
+        <div id="resultsContainer" class="tracking-results">
+            <p style="text-align: center; color: #95a5a6; padding: 50px;">Vui lòng chọn ngày để xem dữ liệu.</p>
+        </div>
+    </div>
+
+    <!-- MODAL CHI TIẾT QUÉT MO -->
+    <div id="modalMoScanDetail" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header modal-header-info">
+                <h2>📋 CHI TIẾT QUÉT MO: <span id="moDetailTitle">-</span></h2>
+                <button class="btn-close" onclick="document.getElementById('modalMoScanDetail').classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Thông tin tổng quan -->
+                <div class="mo-scan-summary">
+                    <div class="summary-item" id="moMxBox">
+                        <span class="summary-label">📦 MX:</span>
+                        <span class="summary-value" id="moMx">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">📦 Kế hoạch:</span>
+                        <span class="summary-value" id="moPlannedQty">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">✅ Đã quét:</span>
+                        <span class="summary-value" id="moScannedQty">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">⏱️ Leadtime:</span>
+                        <span class="summary-value" id="moLeadtime">-</span>
+                    </div>
+                </div>
+
+                <!-- Danh sách lịch sử quét -->
+                <div class="mo-scan-history-section">
+                    <h3>📊 LỊCH SỬ QUÉT:</h3>
+                    <div id="moScanHistoryList" class="scan-history-list">
+                        <p style="text-align: center; color: #95a5a6;">Đang tải...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CHỌN WORK CENTER -->
+    <div id="modalSelectWorkCenter" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header modal-header-info">
+                <h2>📋 CHỌN WORK CENTER ĐỂ HIỂN THỊ</h2>
+                <button class="btn-close" onclick="document.getElementById('modalSelectWorkCenter').classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Thanh điều khiển -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; justify-content: space-between; align-items: center;">
+                    <input type="text" id="wcSearchInput" class="input-field" placeholder="🔍 Tìm Work Center..." style="flex: 1; margin: 0;">
+                    <button id="btnSelectAllWC" class="btn btn-primary" style="width: auto; padding: 10px 15px; font-size: 13px;">✓ Chọn tất cả</button>
+                    <button id="btnDeselectAllWC" class="btn btn-secondary" style="width: auto; padding: 10px 15px; font-size: 13px;">✗ Bỏ chọn tất cả</button>
+                </div>
+
+                <!-- Thống kê -->
+                <div style="text-align: center; margin-bottom: 15px; color: #bdc3c7; font-size: 14px;">
+                    Đã chọn: <strong id="selectedWcCount" style="color: #3498db;">0</strong> / <strong id="totalWcCount">0</strong> Work Center
+                </div>
+
+                <!-- Grid các ô Work Center -->
+                <div id="wcGridContainer" class="wc-grid-container">
+                    <p style="text-align: center; color: #95a5a6;">Đang tải...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnApplyWcFilter" class="btn btn-primary" style="width: auto; padding: 12px 30px; font-size: 15px;">✓ Áp dụng</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
+    <script src="/js/tracking.js"></script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Tiến Độ Giao Nhận</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="/js/theme.js"></script> 
+    <style>
+        /* Tùy chỉnh riêng cho Dashboard */
+        .dash-row { cursor: pointer; transition: 0.2s; }
+        .dash-row:hover { background: rgba(102, 126, 234, 0.2) !important; transform: scale(1.01); box-shadow: 0 4px 10px rgba(0,0,0,0.2); z-index: 10; position: relative; }
+        html.simple-view .dash-row:hover { background: #e0f2fe !important; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        
+        /* Checkbox cho Biểu đồ */
+        .chart-filter-group { display: flex; gap: 15px; margin-top: 10px; }
+        .chart-cb-label { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: bold; cursor: pointer; }
+        .cb-ontime { color: #00b894; } .cb-late { color: #e74c3c; } .cb-pending { color: #95a5a6; }
+        html.simple-view .cb-ontime { color: #16a34a; } html.simple-view .cb-late { color: #dc2626; } html.simple-view .cb-pending { color: #64748b; }
+    </style>
+</head>
+<body>
+    <button id="scrollToTopBtn" title="Lên đầu trang">↑</button>
+
+    <!-- HEADER -->
+    <div class="dash-header" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 30px; background: #141e30; border-bottom: 2px solid #2c3e50; flex-wrap: wrap; gap: 15px;">
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <a href="/wip-wnk3" class="btn-back-home">⬅️ Quay lại Giao Nhận</a>
+            <h1 style="margin: 0; font-size: 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: bold;">📊 DASHBOARD TIẾN ĐỘ</h1>
+        </div>
+        
+        <div class="dash-controls" style="display: flex; gap: 15px; align-items: center;">
+            <input type="text" id="searchInput" class="search-box" placeholder="🔍 Tìm MX, FITEM...">
+            <div class="time-filter-group">
+                <label>📅 Khung giờ:</label>
+                <select id="timeWindowFilter" class="time-select"><option value="">-- Tất cả --</option></select>
+            </div>
+            <input type="date" id="dashDate" class="input-field" style="width: 150px; padding: 10px; font-size: 14px;">
+            <div class="auto-refresh" id="realtimeIndicator"><div class="dot"></div> Real-time</div>
+            <select id="colCountSelect" class="btn-view-toggle" style="background: #34495e; color: white; border: none; margin-right: 5px; outline: none; appearance: none; text-align: center; cursor: pointer;">
+                <option value="1">1 Cột</option>
+                <option value="2" selected>2 Cột</option>
+                <option value="3">3 Cột</option>
+            </select>
+            <button id="btnLayoutToggle" class="btn-view-toggle" style="background: #34495e; margin-right: 5px;">🔀 View</button>
+            <button class="btn-global-toggle btn-view-toggle" style="position: static; transform: none; margin: 0;">🎨 Light</button>
+        </div>
+    </div>
+
+    <div style="padding: 20px;">
+        <!-- 4 Ô TỔNG KẾT -->
+        <div class="stats-summary">
+            <div class="stat-card total"><h3>TỔNG MX</h3><div class="number" id="statTotal">0</div></div>
+            <div class="stat-card received"><h3>ĐÃ NHẬN</h3><div class="number" id="statReceived">0</div></div>
+            <div class="stat-card lack"><h3>THIẾU HÀNG</h3><div class="number" id="statLack">0</div></div>
+            <div class="stat-card pending"><h3>CHỜ NHẬN</h3><div class="number" id="statPending">0</div></div>
+        </div>
+
+        <div class="main-dashboard-wrapper">
+            <!-- BIỂU ĐỒ -->
+            <div class="charts-container">
+                <div class="chart-card line-chart-card">
+                    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <h3>📈 Tần suất quét theo giờ</h3>
+                            <span class="chart-subtitle">Số lượng MX được xử lý</span>
+                        </div>
+                        
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                            <select id="chartTypeSelect" style="background: rgba(0,0,0,0.3); color: #a8edea; border: 1px solid #667eea; border-radius: 4px; padding: 4px 8px; font-size: 12px; outline: none; cursor: pointer;">
+                                <option value="line">Biểu đồ Đường (Tổng)</option>
+                                <option value="bar">Biểu đồ Cột (Chi tiết)</option>
+                            </select>
+                            
+                            <!-- ✨ 3 CHECKBOX LỌC BIỂU ĐỒ ✨ -->
+                            <div id="chartCheckboxes" style="display: none; gap: 10px; font-size: 12px; color: #bdc3c7;">
+                                <label class="chart-cb-label cb-ontime"><input type="checkbox" id="cbBarOnTime" checked style="accent-color: #00b894;"> Đã giao</label>
+                                <label class="chart-cb-label cb-late"><input type="checkbox" id="cbBarLate" checked style="accent-color: #e74c3c;"> Giao trễ</label>
+                                <label class="chart-cb-label cb-pending"><input type="checkbox" id="cbBarPending" checked style="accent-color: #7f8c8d;"> Chờ nhận</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-body"><canvas id="lineChart"></canvas></div>
+                </div>
+
+                <div class="chart-card doughnut-chart-card">
+                    <div class="chart-header">
+                        <h3>📊 Tỉ lệ trạng thái MX</h3>
+                        <span class="chart-subtitle">Tiến độ giao nhận</span>
+                    </div>
+                    <div class="chart-body doughnut-wrapper">
+                        <canvas id="doughnutChart"></canvas>
+                        <div class="center-text"><span id="totalMxCenter">0</span><br><small>Tổng MX</small></div>
+                    </div>
+                </div>
+            </div>
+        
+            <!-- BẢNG DỮ LIỆU (TỰ ĐỘNG CHIA CỘT) -->
+            <div class="dashboard-container" id="dynamicDashboardGrid">
+                
+                <div class="column" style="grid-column: 1 / -1;">
+                    <div class="column-body" style="padding: 0;">
+                        <!-- Container chứa các thẻ MX -->
+                        <div id="dynamicDashBody" class="dynamic-grid-container grid-cols-2">
+                            <div style="grid-column: 1/-1; text-align: center; padding: 50px; color: #95a5a6;">Đang tải...</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    
+    <!-- MODAL CHI TIẾT MX -->
+    <div id="modalMxDetail" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header modal-header-info">
+                <h2 id="mxDetailTitle">📋 CHI TIẾT MX</h2>
+                <button class="btn-close" id="btnCloseMxDetail" onclick="document.getElementById('modalMxDetail').classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="mx-detail-header">
+                    <div class="mx-info-row">
+                        <div class="mx-info-item"><label>Mã MX:</label><span id="mxDetailOdrno" class="mx-value">-</span></div>
+                        <div class="mx-info-item"><label>Tổng số Items:</label><span id="mxDetailTotalItems" class="mx-value">-</span></div>
+                    </div>
+                </div>
+                <div class="mx-items-section">
+                    <h3>📦 Danh sách Items trong MX</h3>
+                    <div id="mxItemsList" class="mx-items-list"></div>
+                </div>
+                <div class="mx-parts-section">
+                    <h3>🔧 Chi tiết Parts</h3>
+                    <div id="mxPartsList" class="mx-parts-list"><div class="loading-text">Đang tải...</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>
