@@ -2325,3 +2325,154 @@ html.simple-view .wc-grid-item.selected .wc-grid-info {
     font-size: 12px;
     font-weight: bold;
 }
+
+/* Nút Details mới */
+.btn-details {
+    padding: 10px 15px;
+    font-size: 13px;
+    font-weight: bold;
+    border: 2px solid #8e44ad;
+    background: rgba(142, 68, 173, 0.15);
+    color: #9b59b6;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+    text-decoration: none;
+    display: none; /* Mặc định ẩn, chỉ hiện ở chế độ WC */
+}
+
+.btn-details:hover {
+    background: #8e44ad;
+    color: #fff;
+    transform: translateY(-2px);
+}
+
+/* ==================== GIAO DIỆN CHI TIẾT WC (TIMELINE VIEW) ==================== */
+.filter-section {
+    padding: 15px;
+    background: #1a1a1a;
+    border-bottom: 1px solid #333;
+    position: sticky;
+    top: 68px; /* Chiều cao của header */
+    z-index: 1000;
+}
+#timeFilterContainer { top: 137px; } /* Header + Filter Section 1 */
+
+.filter-title {
+    display: block;
+    font-size: 16px;
+    font-weight: bold;
+    color: #a8edea;
+    margin-bottom: 10px;
+}
+
+.filter-bar { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 10px; 
+}
+
+.filter-btn {
+    padding: 8px 15px;
+    font-size: 13px;
+    font-weight: bold;
+    border: 1px solid #444;
+    background: #2c3e50;
+    color: #ecf0f1;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filter-btn:hover {
+    background: #34495e;
+}
+
+.filter-btn.active {
+    background: #3498db;
+    border-color: #3498db;
+    color: #fff;
+    box-shadow: 0 0 10px rgba(52, 152, 219, 0.5);
+}
+
+.timeline-view {
+    padding: 20px;
+}
+
+.timeline-row {
+    display: flex;
+    border-bottom: 1px solid #333;
+}
+.timeline-row:last-child { border-bottom: none; }
+
+.timeline-label {
+    flex-shrink: 0;
+    width: 120px;
+    padding: 20px 10px;
+    background: #1a1a1a;
+    color: #bdc3c7;
+    font-weight: bold;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: sticky;
+    left: 0;
+    z-index: 10;
+}
+
+.timeline-mo-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    flex-grow: 1;
+    overflow-x: auto; /* Cho phép cuộn ngang */
+    min-width: 0;
+}
+
+.mo-detail-card {
+    flex-shrink: 0; /* Ngăn thẻ bị co lại */
+    width: 180px;
+    background: #181818;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    text-align: center;
+}
+
+.mo-detail-card .card-header { /* Hiển thị MX */
+    font-size: 16px;
+    font-weight: bold;
+    color: #f39c12;
+    border-bottom: 1px solid #444;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+.mo-detail-card .card-body { /* Hiển thị MO và Tiến độ */
+    font-size: 14px;
+    color: #ecf0f1;
+    font-weight: 600;
+}
+
+.mo-detail-card .card-footer { /* Hiển thị Leadtime */
+    font-size: 14px;
+    font-weight: bold;
+    margin-top: 8px;
+}
+
+/* Tô màu cho cả card-body và card-footer */
+.mo-detail-card.status-pending .card-body,
+.mo-detail-card.status-pending .card-footer { color: #95a5a6; }
+
+.mo-detail-card.status-in-progress .card-body,
+.mo-detail-card.status-in-progress .card-footer { color: #f39c12; }
+
+.mo-detail-card.status-done .card-body,
+.mo-detail-card.status-done .card-footer { color: #27ae60; }
+
+.mo-detail-card.status-late .card-body,
+.mo-detail-card.status-late .card-footer { color: #e74c3c; }

@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnApplyWcFilter = document.getElementById('btnApplyWcFilter');
 
     const btnShowProgressSummary = document.getElementById('btnShowProgressSummary');
+    const btnDetails = document.getElementById('btnWcDetails');
 
     let allTrackingData = [];
     let isWcView = false;
@@ -26,16 +27,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Ẩn/hiện 2 nút theo chế độ
     function updateTopButtonsVisibility() {
-        if (isWcView) {
+        if (isWcView) { // HIỆN NÚT
             if (btnFilterInProgress) btnFilterInProgress.style.display = 'flex';
             if (btnFilterLate) btnFilterLate.style.display = 'flex';
             if (btnSelectWorkCenter) btnSelectWorkCenter.style.display = 'flex';
-            if (btnShowProgressSummary) btnShowProgressSummary.style.display = 'block'; // HIỆN NÚT
-        } else {
+            if (btnShowProgressSummary) btnShowProgressSummary.style.display = 'block';
+            if (btnDetails) btnDetails.style.display = 'inline-block';
+        } else { // ẨN NÚT
             if (btnFilterInProgress) btnFilterInProgress.style.display = 'none';
             if (btnFilterLate) btnFilterLate.style.display = 'none';
             if (btnSelectWorkCenter) btnSelectWorkCenter.style.display = 'none';
-            if (btnShowProgressSummary) btnShowProgressSummary.style.display = 'none'; // ẨN NÚT
+            if (btnShowProgressSummary) btnShowProgressSummary.style.display = 'none';
+            if (btnDetails) btnDetails.style.display = 'none';
         }
     }
 

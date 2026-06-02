@@ -1388,6 +1388,11 @@ app.MapGet("/dashboard", async ctx => {
     ctx.Response.ContentType = "text/html";
     await ctx.Response.SendFileAsync("wwwroot/dashboard.html");
 });
+// 6. Trang Chi Tiết Work Center (Mới)
+app.MapGet("/wc-details", async ctx => {
+    ctx.Response.ContentType = "text/html";
+    await ctx.Response.SendFileAsync("wwwroot/wc-details.html");
+});
 // Các trang trống (Placeholder cho tương lai)
 app.MapGet("/kho1", async ctx => { await ctx.Response.WriteAsync("<h1>KHO 1 - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });
 app.MapGet("/kho3", async ctx => { await ctx.Response.WriteAsync("<h1>KHO 3 - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });

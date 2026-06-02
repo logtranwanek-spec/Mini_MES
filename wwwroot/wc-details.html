@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chi Tiết Work Center - Dạng Timeline</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="/js/theme.js"></script>
+</head>
+<body>
+    <div class="dash-header" style="position: sticky; top: 0; z-index: 1001; display: flex; justify-content: space-between; align-items: center;">
+        <h1 style="background: none; color: #fff; margin: 0;">📊 CHI TIẾT WORK CENTER</h1>
+        <a href="/tracking" class="btn-back-home">⬅️ Quay lại Tracking</a>
+    </div>
+
+    <div class="wc-details-container">
+        <!-- Hàng 1: Lọc theo Work Center -->
+        <div class="filter-section">
+            <strong class="filter-title">Work Center</strong>
+            <div id="wcFilterContainer" class="filter-bar">
+                <!-- Nút lọc WC sẽ được thêm vào đây -->
+            </div>
+        </div>
+
+        <!-- Hàng 2: Lọc (Cuộn) theo Leadtime -->
+        <div class="filter-section">
+            <strong class="filter-title">Lead Time</strong>
+            <div id="timeFilterContainer" class="filter-bar">
+                <!-- Nút lọc thời gian sẽ được thêm vào đây -->
+            </div>
+        </div>
+
+        <!-- Timeline hiển thị kết quả -->
+        <div id="timelineView" class="timeline-view">
+            <!-- Các dòng thời gian sẽ được vẽ ở đây -->
+        </div>
+    </div>
+
+    <script src="/js/wc-details.js"></script>
+</body>
+</html>
