@@ -36,6 +36,10 @@
                 📋 Chọn WC
             </button>
 
+            <button id="btnShowProgressSummary" class="btn-progress-summary" title="Xem tổng quan tiến độ">
+                📈 Tiến độ
+            </button>
+
             <input type="text" id="trackSearch" class="input-field" placeholder="🔍 Tìm mã MX..." style="width: 250px; margin-left: auto;">
 
             <button id="viewToggleBtn" class="btn-primary" style="width: auto; padding: 10px 15px; font-size: 13px;">
@@ -114,6 +118,26 @@
             </div>
             <div class="modal-footer">
                 <button id="btnApplyWcFilter" class="btn btn-primary" style="width: auto; padding: 12px 30px; font-size: 15px;">✓ Áp dụng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL TỔNG QUAN TIẾN ĐỘ -->
+    <div id="modalProgressSummary" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header modal-header-info">
+                <h2>📈 TỔNG QUAN TIẾN ĐỘ</h2>
+                <button class="btn-close" onclick="document.getElementById('modalProgressSummary').classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Tiến độ toàn xưởng -->
+                <div id="factoryProgressContainer" class="factory-progress-container">
+                    <!-- Sẽ được vẽ bằng JS -->
+                </div>
+                <!-- Tiến độ từng Work Center -->
+                <div id="wcProgressContainer" class="wc-progress-list">
+                    <p style="text-align: center; color: #95a5a6;">Đang tải...</p>
+                </div>
             </div>
         </div>
     </div>

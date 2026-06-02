@@ -1,0 +1,24 @@
+ODORDR - MO
+ODPN - Item Number
+ODQTYC - Quality Good
+ODWKCN - Work Center Number
+ODDATE - Ngày quét
+JOBNO - 
+REFNO - 
+FITEM - 
+ODSQN - Routing Sequence Number
+ODTSTP - Time Stamp - Thời gian quét gần nhất
+
+A.
+1. Data source dùng giống như của macro excel ấy User/Password going như của WNKRND luôn, về workcenter thì lấy toàn bộ workcenter có trong database
+2. Dùng cái nào ổn hơn, sau này tôi muốn nó real-time lên hệ thống, mỗi lần có người quét thì nó sẽ cập nhật ngay lập tức lên màn hình cho tôi
+B. 
+3. ORDORDR = MO , 
+MX bạn dung theo file kế hoạch.
+4. Với mỗi MO thì plannedQty = số kit kế hoạch
+actualQty = sum(ODQTYC)
+-> progress = actualQty/PlannedQty
+C. 
+5. Bạn có thể làm nó real-time được không, mỗi lần có người quét thì nó sẽ cập nhật ngay lên trang web cho tôi luôn
+6. Phạm vi lọc ODORDR trong web là sẽ lấy danh sách MO trong workcenter của MX đó theo kế hoạch
+D. 7. Như cách bạn trình bày, có hiển thị từng lần quét trong web

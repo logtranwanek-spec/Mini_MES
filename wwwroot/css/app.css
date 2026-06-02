@@ -2260,3 +2260,68 @@ html.simple-view .wc-grid-info {
 html.simple-view .wc-grid-item.selected .wc-grid-info {
     color: rgba(255, 255, 255, 0.9);
 }
+
+/* ==================== NÚT VÀ MODAL XEM TIẾN ĐỘ ==================== */
+.btn-progress-summary {
+    padding: 10px 15px;
+    font-size: 13px;
+    font-weight: bold;
+    border: 2px solid #27ae60;
+    background: rgba(39, 174, 96, 0.15);
+    color: #27ae60;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+
+.btn-progress-summary:hover {
+    background: #27ae60;
+    color: #fff;
+}
+
+.factory-progress-container {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wc-progress-list {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.progress-item {
+    margin-bottom: 15px;
+}
+
+.progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    color: #ecf0f1;
+    margin-bottom: 8px;
+}
+
+.progress-label strong {
+    font-size: 16px;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 20px;
+    background: #1a1a1a;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2980b9);
+    transition: width 0.5s ease-in-out;
+    text-align: center;
+    line-height: 20px;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}

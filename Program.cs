@@ -1,4 +1,3 @@
-
 using ClosedXML.Excel;
 using ExcelDataReader;
 using System.Text.Json;
@@ -9,6 +8,7 @@ using Microsoft.AspNetCore.SignalR;
 using OrderTrackingWeb.Hubs;
 using System.Data.Odbc;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 var builder = WebApplication.CreateBuilder(args);
 // ===== SETUP DATABASE (ENTITY FRAMEWORK CORE) =====
@@ -25,6 +25,8 @@ string vDrivePath = @"V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\RUN KIT - 
 string rootMssPath = @"V:\Prod & Inv Control\Public\P&IC UPH\01.MSS for UPH\2026";
 string schedulePath = @"V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\LEADTIME UPH SUPPORT";
 string localData = @"D:\logtran\1. Project\CI Project\OrderTrackingWeb\Data";
+builder.Configuration["SchedulePath"] = schedulePath;
+
 if (!Directory.Exists(localData))
     Directory.CreateDirectory(localData);
 // Tự động tạo Database nếu chưa có
@@ -1017,11 +1019,11 @@ app.MapHub<OrderHub>("/orderHub");
 // ==================== TRACKING API ====================
 app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
 {
-    try
+    try // <--- KHỐI TRY BÊN NGOÀI
     {
         // 1. Tìm đúng file Excel theo ngày
         DateTime targetDate;
-        if (!DateTime.TryParse(date, out targetDate)) 
+        if (!DateTime.TryParse(date, out targetDate))
             return Results.BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
         string fileName = $"UPH Support Schedule {targetDate:ddMMyyyy}.xlsx";
@@ -1037,79 +1039,89 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
 
         using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var reader = ExcelReaderFactory.CreateReader(stream);
-        var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration() { 
-            ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false } 
+        var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration()
+        {
+            ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
         });
 
         // 3. Lặp qua tất cả các Sheet (Work Centers)
         foreach (DataTable table in dataSet.Tables)
         {
             string workCenterName = table.TableName;
-            
-            // Bỏ qua các sheet không phải là Work Center
             if (workCenterName.ToLower().Contains("pivot") || workCenterName.ToLower().Contains("summary")) continue;
 
-            // Đọc từ hàng thứ 2 (bỏ qua tiêu đề)
             for (int i = 1; i < table.Rows.Count; i++)
             {
                 var row = table.Rows[i];
-                
-                // Cột B(1), F(5), I(8), M(12) - index bắt đầu từ 0
-                string mx = GetCellValue(row, 1); 
+                string mx = GetCellValue(row, 1);
                 if (string.IsNullOrWhiteSpace(mx)) continue;
 
                 string mo = GetCellValue(row, 5);
                 string qty = GetCellValue(row, 8);
                 string leadtime = GetCellValue(row, 12);
-                
-                // Gộp dữ liệu theo từng mã MX
+
                 if (!dataByMx.ContainsKey(mx))
                     dataByMx[mx] = new List<WorkCenterStep>();
-                
-                dataByMx[mx].Add(new WorkCenterStep(workCenterName, mo, qty, leadtime));
+
+                var alreadyExists = dataByMx[mx].Any(step =>
+                    step.WorkCenter == workCenterName &&
+                    step.Mo == mo &&
+                    step.Qty == qty &&
+                    step.Leadtime == leadtime);
+
+                if (!alreadyExists)
+                {
+                    dataByMx[mx].Add(new WorkCenterStep(workCenterName, mo, qty, leadtime));
+                }
             }
         }
-        
+
         // 4. Chuyển đổi sang định dạng để trả về
         var result = dataByMx.Select(kvp => new TrackingData(kvp.Key, kvp.Value))
-                             .OrderBy(t => t.Mx) // Sắp xếp theo tên MX
+                             .OrderBy(t => t.Mx)
                              .ToList();
 
         Console.WriteLine($"✅ Đã xử lý xong {result.Count} mã MX.");
-        // 🚀 TẠO/CẬP NHẬT MoProgress TỪ DỮ LIỆU KẾ HOẠCH
+
+        // 🚀 TẠO MỚI MoProgress NẾU CHƯA CÓ (LOGIC TỐI GIẢN VÀ ĐÚNG)
         try
         {
             var allSteps = result.SelectMany(r => r.Steps.Select(s => new { Mx = r.Mx, Step = s })).ToList();
-            
-            // Lấy tất cả MoProgress hiện có để so sánh
-            var existingProgress = await db.MoProgresses.ToListAsync();
+            // Lấy danh sách các key (MO|WorkCenter) đã tồn tại để so sánh nhanh
+            var existingMoKeys = (await db.MoProgresses.Select(p => p.MO + "|" + p.WorkCenter).ToListAsync()).ToHashSet();
+
+            var newProgressEntries = new List<MoProgress>();
 
             foreach (var item in allSteps)
             {
-                var existing = existingProgress.FirstOrDefault(p => p.MO == item.Step.Mo && p.WorkCenter == item.Step.WorkCenter);
-                if (existing == null)
+                // Bỏ qua nếu không có mã MO
+                if (string.IsNullOrWhiteSpace(item.Step.Mo)) continue;
+
+                var key = item.Step.Mo + "|" + item.Step.WorkCenter;
+                if (!existingMoKeys.Contains(key))
                 {
-                    // Nếu chưa có, tạo mới
-                    db.MoProgresses.Add(new MoProgress
+                    // Chỉ tạo mới nếu key chưa tồn tại
+                    newProgressEntries.Add(new MoProgress
                     {
                         MO = item.Step.Mo,
                         MX = item.Mx,
                         WorkCenter = item.Step.WorkCenter,
                         PlannedQty = int.TryParse(item.Step.Qty, out int q) ? q : 0,
-                        ActualQty = 0,
-                        Status = "Pending",
+                        ActualQty = 0, // Luôn bắt đầu từ 0
+                        Status = "pending",
                         LeadtimeString = item.Step.Leadtime
                     });
-                }
-                else
-                {
-                    // Nếu có, cập nhật kế hoạch (nếu thay đổi)
-                    existing.MX = item.Mx;
-                    existing.PlannedQty = int.TryParse(item.Step.Qty, out int q) ? q : 0;
+                    // Thêm key mới vào danh sách đã kiểm tra để tránh thêm trùng lặp trong cùng một lần chạy
+                    existingMoKeys.Add(key);
                 }
             }
-            await db.SaveChangesAsync();
-            Console.WriteLine($"✅ Đã cập nhật {allSteps.Count} MO vào bảng MoProgress.");
+
+            if(newProgressEntries.Any())
+            {
+                db.MoProgresses.AddRange(newProgressEntries);
+                await db.SaveChangesAsync();
+                Console.WriteLine($"✅ Đã tạo mới {newProgressEntries.Count} MO trong bảng MoProgress.");
+            }
         }
         catch (Exception ex)
         {
@@ -1117,8 +1129,9 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
         }
 
         return Results.Ok(result);
-    }
-    catch (Exception ex)
+
+    } // <--- KẾT THÚC KHỐI TRY BÊN NGOÀI
+    catch (Exception ex) // <--- THÊM KHỐI CATCH NÀY CHO KHỐI TRY BÊN NGOÀI
     {
         Console.WriteLine($"❌ Lỗi đọc file Tracking: {ex.Message}");
         return Results.Problem(ex.Message);
@@ -1275,6 +1288,80 @@ app.MapGet("/api/test-as400", async () =>
     }
 });
 
+// ==================== API DEBUG: LẤY DỮ LIỆU THÔ TỪ AS/400 CHO 1 MO ====================
+app.MapGet("/api/debug/mo-scan-raw/{mo}", async (string mo, AppDbContext db) =>
+{
+    try
+    {
+        var moUpper = mo.ToUpper();
+        
+        // 1. Kiểm tra xem MO này có trong kế hoạch (bảng MoProgresses) không
+        var localMoProgress = await db.MoProgresses.FirstOrDefaultAsync(p => p.MO == moUpper);
+        var isInSchedule = localMoProgress != null;
+
+        // 2. Lấy tất cả log đã được lưu trong DB cục bộ cho MO này
+        var localScanLogs = await db.ScanLogs.Where(l => l.MO == moUpper).ToListAsync();
+
+        // 3. Truy vấn thô lên AS/400, bỏ qua bộ lọc thời gian để xem tất cả
+        var as400RawScans = new List<object>();
+        using (var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;TRANSLATE=1;"))
+        {
+            await conn.OpenAsync();
+
+            // Câu SQL này join giống hệt macro để có đầy đủ bộ lọc
+            string sql = $@"
+                SELECT 
+                    TRIM(A.ODORDR) AS ODORDR, TRIM(B.REFNO) AS MX_REFNO,
+                    TRIM(A.ODPN) AS ODPN, A.ODQTYC,
+                    TRIM(A.ODWKCN) AS ODWKCN, A.ODTSTP
+                FROM WWDCF.GRPORDH A
+                LEFT JOIN AMFLIBW.MOMAST B ON A.ODORDR = B.ORDNO
+                WHERE TRIM(A.ODORDR) = ? 
+                  AND A.ODWKCN IN ('UPGL2','UPGL1','UPGL3','UPGL4','UCFCM','UCFHS','UCFCS','UCFCO','UCFCH')
+                  AND B.OSTAT NOT IN ('99')
+                  AND SUBSTR(B.REFNO, 1, 2) = 'MX'
+                ORDER BY A.ODTSTP";
+
+            using var cmd = new OdbcCommand(sql, conn);
+            cmd.Parameters.Add("?", OdbcType.VarChar).Value = moUpper;
+
+            using var reader = await cmd.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                as400RawScans.Add(new
+                {
+                    mo = reader.GetString(0),
+                    mx = reader.IsDBNull(1) ? "" : reader.GetString(1),
+                    item = reader.IsDBNull(2) ? "" : reader.GetString(2),
+                    qty = reader.IsDBNull(3) ? 0 : (int)reader.GetDecimal(3),
+                    wc = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                    scanTime = reader.GetDateTime(5)
+                });
+            }
+        }
+
+        return Results.Ok(new {
+            moSearched = moUpper,
+            isInSchedule = isInSchedule,
+            as400RawScans = as400RawScans,
+            localScanLogs = localScanLogs,
+            localMoProgress = localMoProgress
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.ToString());
+    }
+});
+
+// ==================== API DEBUG: XEM BẢNG MoProgresses ====================
+app.MapGet("/api/debug/mo-progress", async (AppDbContext db) =>
+{
+    var allProgress = await db.MoProgresses.OrderBy(p => p.WorkCenter).ThenBy(p => p.MO).ToListAsync();
+    return Results.Ok(allProgress);
+});
+
 // ==================== WEB ROUTES ====================
 // 1. Trang chủ (Bản đồ 2D)
 app.MapGet("/", async ctx => {
@@ -1324,6 +1411,7 @@ public class AppDbContext : DbContext
     public DbSet<Kho2_Inventory> Kho2_Inventory { get; set; }
     public DbSet<ScanLog> ScanLogs { get; set; }    
     public DbSet<MoProgress> MoProgresses { get; set; }
+    public DbSet<AppSetting> AppSettings { get; set; }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1374,11 +1462,12 @@ public class MxDetail
     public string LastUpdate { get; set; } = "";
 }
 
+// ==================== BACKGROUND SERVICE POLLING AS400 (PHIÊN BẢN TỐI ƯU) ====================
 public class As400ScanPollingService : BackgroundService
 {
     private readonly IServiceProvider _services;
     private readonly ILogger<As400ScanPollingService> _logger;
-    private DateTime _lastScanTime = DateTime.UtcNow.AddMinutes(-10);
+    private const string LastScanTimeKey = "LastScanTime";
 
     public As400ScanPollingService(IServiceProvider services, ILogger<As400ScanPollingService> logger)
     {
@@ -1389,104 +1478,172 @@ public class As400ScanPollingService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("AS400 Scan Polling Service started");
+        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 using var scope = _services.CreateScope();
-                await PollOnceAsync(scope, stoppingToken); // Sửa ở đây
+                await PollOnceAsync(scope, stoppingToken);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while polling AS400 scan data");
             }
-
-            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
         }
     }
 
-    private async Task PollOnceAsync(IServiceScope scope, CancellationToken token) // Sửa ở đây
+    private async Task PollOnceAsync(IServiceScope scope, CancellationToken token)
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<OrderHub>>();
         var _logger = scope.ServiceProvider.GetRequiredService<ILogger<As400ScanPollingService>>();
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
-        var moList = await db.MoProgresses
-            .Select(m => new { m.MO, m.WorkCenter })
-            .Distinct()
-            .ToListAsync(token);
-        
-        if (moList.Count == 0) return;
+        var lastScanTimeSetting = await db.AppSettings.FirstOrDefaultAsync(s => s.Key == LastScanTimeKey, token);
+        var _lastScanTime = lastScanTimeSetting != null ? DateTime.Parse(lastScanTimeSetting.Value) : DateTime.UtcNow.AddYears(-1);
 
-        var moInList = string.Join(",", moList.Select(m => $"'{m.MO}'").Distinct());
-        var wcInList = string.Join(",", moList.Select(m => $"'{m.WorkCenter}'").Distinct());
-
-        var newRows = new List<(string MO, string Item, string Wc, int Qty, DateTime ScanTime)>();
-
+        var moList = new List<(string MO, string WorkCenter)>();
         try
         {
-            using (var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;"))
+            var schedulePath = configuration["SchedulePath"];
+            if (string.IsNullOrEmpty(schedulePath))
             {
-                await conn.OpenAsync(token);
+                _logger.LogError("[AS400 Polling] SchedulePath is not configured.");
+                return;
+            }
 
-                string sql = $@"
-                    SELECT TRIM(A.ODORDR) AS ODORDR, TRIM(A.ODPN) AS ODPN, A.ODQTYC,
-                           TRIM(A.ODWKCN) AS ODWKCN, A.ODTSTP
-                    FROM WWDCF.GRPORDH A
-                    WHERE A.ODORDR IN ({moInList})
-                      AND A.ODWKCN IN ({wcInList})
-                      AND A.ODTSTP > ?
-                    ORDER BY A.ODTSTP";
+            string fileName = $"UPH Support Schedule {DateTime.Now:ddMMyyyy}.xlsx";
+            string filePath = Path.Combine(schedulePath, fileName);
 
-                using var cmd = new OdbcCommand(sql, conn);
-                cmd.Parameters.Add("?", OdbcType.VarChar).Value = _lastScanTime.ToString("yyyy-MM-dd-HH.mm.ss.ffffff");
+            if (File.Exists(filePath))
+            {
+                using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var reader = ExcelReaderFactory.CreateReader(stream);
+                var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration() { ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false } });
 
-                using var reader = await cmd.ExecuteReaderAsync(token);
-
-                while (await reader.ReadAsync(token))
+                foreach (DataTable table in dataSet.Tables)
                 {
-                    string mo = reader.GetString(0);
-                    string item = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                    int qty = reader.IsDBNull(2) ? 0 : (int)reader.GetDecimal(2);
-                    string wc = reader.IsDBNull(3) ? "" : reader.GetString(3);
-                    DateTime scanTime = reader.GetDateTime(4);
-
-                    newRows.Add((mo, item, wc, qty, scanTime));
-
-                    if (scanTime > _lastScanTime)
-                        _lastScanTime = scanTime;
+                    string workCenterName = table.TableName;
+                    if (workCenterName.ToLower().Contains("pivot") || workCenterName.ToLower().Contains("summary")) continue;
+                    for (int i = 1; i < table.Rows.Count; i++)
+                    {
+                        string mo = table.Rows[i][5]?.ToString()?.Trim() ?? "";
+                        if (!string.IsNullOrEmpty(mo)) moList.Add((mo, workCenterName));
+                    }
                 }
+                moList = moList.Distinct().ToList();
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[AS400 Polling] Exception during DB2 query.");
+            _logger.LogError(ex, "[AS400 Polling] Error reading schedule file.");
             return;
         }
 
-        if (newRows.Count == 0) return;
+        if (moList.Count == 0) return;
 
-        foreach (var row in newRows)
+        var allNewRows = new List<(string MO, string MX, string Item, string Wc, int Qty, DateTime ScanTime)>();
+        DateTime latestScanTimeInBatch = _lastScanTime;
+        const int batchSize = 100;
+
+        var batches = moList.Chunk(batchSize);
+        _logger.LogInformation($"[AS400 Polling] Processing {moList.Count} MOs in {batches.Count()} batches of {batchSize}.");
+
+        foreach (var batch in batches)
         {
-            db.ScanLogs.Add(new ScanLog { MO = row.MO, Item = row.Item, WorkCenter = row.Wc, Qty = row.Qty, ScanTime = row.ScanTime });
-            var mp = await db.MoProgresses.FirstOrDefaultAsync(m => m.MO == row.MO && m.WorkCenter == row.Wc, token);
-            if (mp != null)
+            var conditions = batch.Select(item => $"(TRIM(A.ODORDR) = '{item.MO}' AND TRIM(A.ODWKCN) = '{item.WorkCenter}')");
+            var whereClause = string.Join(" OR ", conditions);
+
+            try
             {
-                mp.ActualQty += row.Qty;
-                mp.LastScanTime = row.ScanTime;
-                mp.Status = ComputeStatus(mp);
+                using (var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;TRANSLATE=1;"))
+                {
+                    await conn.OpenAsync(token);
+                    string sql = $@"
+                        SELECT 
+                            TRIM(A.ODORDR) AS ODORDR, TRIM(B.REFNO) AS MX_REFNO,
+                            TRIM(A.ODPN) AS ODPN, A.ODQTYC,
+                            TRIM(A.ODWKCN) AS ODWKCN, A.ODTSTP
+                        FROM WWDCF.GRPORDH A
+                        LEFT JOIN AMFLIBW.MOMAST B ON A.ODORDR = B.ORDNO
+                        WHERE ({whereClause})
+                          AND A.ODTSTP > ?
+                          AND B.OSTAT NOT IN ('99')
+                          AND SUBSTR(B.REFNO, 1, 2) = 'MX'
+                        ORDER BY A.ODTSTP";
+
+                    using var cmd = new OdbcCommand(sql, conn);
+                    cmd.Parameters.Add("?", OdbcType.VarChar).Value = _lastScanTime.ToString("yyyy-MM-dd-HH.mm.ss.ffffff");
+                    using var reader = await cmd.ExecuteReaderAsync(token);
+
+                    while (await reader.ReadAsync(token))
+                    {
+                        string mo = reader.GetString(0);
+                        string mx = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                        string item = reader.IsDBNull(2) ? "" : reader.GetString(2);
+                        int qty = reader.IsDBNull(3) ? 0 : (int)reader.GetDecimal(3);
+                        string wc = reader.IsDBNull(4) ? "" : reader.GetString(4);
+                        DateTime scanTime = reader.GetDateTime(5);
+                        allNewRows.Add((mo, mx, item, wc, qty, scanTime));
+                        if (scanTime > latestScanTimeInBatch) latestScanTimeInBatch = scanTime;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[AS400 Polling] Exception during DB2 query batch.");
+                continue;
             }
         }
 
+        if (allNewRows.Count == 0) 
+        {
+            _logger.LogInformation("[AS400 Polling] No new scan records found.");
+            return;
+        }
+        _logger.LogInformation($"[AS400 Polling] Found {allNewRows.Count} total new scan records.");
+
+        // Lưu log và cập nhật tiến độ
+        var updatedMoGroups = allNewRows.GroupBy(r => new { r.MO, r.Wc });
+        foreach (var group in updatedMoGroups)
+        {
+            var mp = await db.MoProgresses.FirstOrDefaultAsync(m => m.MO == group.Key.MO && m.WorkCenter == group.Key.Wc, token);
+            if (mp != null)
+            {
+                foreach (var row in group)
+                {
+                    var logExists = await db.ScanLogs.AnyAsync(l => l.MO == row.MO && l.WorkCenter == row.Wc && l.ScanTime == row.ScanTime, token);
+                    if (!logExists)
+                    {
+                        db.ScanLogs.Add(new ScanLog { MO = row.MO, Item = row.Item, WorkCenter = row.Wc, Qty = row.Qty, ScanTime = row.ScanTime });
+                    }
+                }
+                await db.SaveChangesAsync(token); // Lưu log trước khi tính toán
+
+                mp.ActualQty = await db.ScanLogs.Where(s => s.MO == group.Key.MO && s.WorkCenter == group.Key.Wc).SumAsync(s => s.Qty, token);
+                mp.LastScanTime = await db.ScanLogs.Where(s => s.MO == group.Key.MO && s.WorkCenter == group.Key.Wc).MaxAsync(s => (DateTime?)s.ScanTime, token);
+                mp.Status = AppHelpers.ComputeStatus(mp);
+            }
+        }
+        
+        if (lastScanTimeSetting == null)
+        {
+            db.AppSettings.Add(new AppSetting { Key = LastScanTimeKey, Value = latestScanTimeInBatch.ToString("o") });
+        }
+        else
+        {
+            lastScanTimeSetting.Value = latestScanTimeInBatch.ToString("o");
+        }
         await db.SaveChangesAsync(token);
 
-        var updatedMoList = newRows.Select(r => new { r.MO, r.Wc }).Distinct();
-        _logger.LogInformation($"[AS400 Polling] Found {updatedMoList.Count()} updated MOs. Broadcasting via SignalR...");
-
-        foreach (var item in updatedMoList)
+        // Bắn SignalR
+        _logger.LogInformation($"[AS400 Polling] Broadcasting updates for {updatedMoGroups.Count()} MOs via SignalR...");
+        foreach (var group in updatedMoGroups)
         {
-            var mp = await db.MoProgresses.FirstOrDefaultAsync(m => m.MO == item.MO && m.WorkCenter == item.Wc, token);
+            var mp = await db.MoProgresses.FirstOrDefaultAsync(m => m.MO == group.Key.MO && m.WorkCenter == group.Key.Wc, token);
             if (mp != null)
             {
                 await hubContext.Clients.All.SendAsync("MoProgressUpdated", new
@@ -1498,68 +1655,8 @@ public class As400ScanPollingService : BackgroundService
             }
         }
     }
-    
-    private string ComputeStatus(MoProgress mp)
-    {
-        if (mp.ActualQty <= 0) return "pending";
-        if (mp.ActualQty < mp.PlannedQty) return "in-progress";
-
-        // Khi đã quét đủ (ActualQty >= PlannedQty)
-        if (mp.LastScanTime.HasValue)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(mp.LeadtimeString) || !mp.LeadtimeString.Contains('-'))
-                {
-                    return "done"; // Nếu không có leadtime, mặc định là Done
-                }
-
-                var parts = mp.LeadtimeString.Split('-');
-                var endStr = parts[1].Trim();
-                var endParts = endStr.Split(':');
-                int endHour = int.Parse(endParts[0]);
-                int endMin = int.Parse(endParts[1]);
-
-                // Lấy ngày của lần quét cuối cùng
-                DateTime targetDate = mp.LastScanTime.Value.Date;
-                DateTime leadtimeEnd = targetDate.AddHours(endHour).AddMinutes(endMin);
-
-                // Xử lý ca đêm (VD: 20:00 - 05:00)
-                var startParts = parts[0].Trim().Split(':');
-                int startHour = int.Parse(startParts[0]);
-                if (endHour < startHour)
-                {
-                    // Nếu giờ kết thúc nhỏ hơn giờ bắt đầu, có thể là ngày hôm sau
-                    // Giả định nếu quét sau nửa đêm nhưng trước giờ kết thúc, nó vẫn thuộc ca hôm trước
-                    if(mp.LastScanTime.Value.TimeOfDay.TotalHours < endHour)
-                    {
-                        // Đã sang ngày mới
-                    }
-                    else
-                    {
-                        // Vẫn trong ngày cũ, nhưng leadtime end là ngày mai
-                        leadtimeEnd = leadtimeEnd.AddDays(1);
-                    }
-                }
-
-                if (mp.LastScanTime.Value <= leadtimeEnd)
-                {
-                    return "done"; // Hoàn thành đúng hạn
-                }
-                else
-                {
-                    return "late"; // Hoàn thành trễ
-                }
-            }
-            catch
-            {
-                return "done"; // Lỗi parse leadtime, mặc định là Done
-            }
-        }
-
-        return "done"; // Mặc định nếu không có LastScanTime
-    }
 }
+
 
 // ==================== DTO MODELS ====================
 record UpdateRequest(string Odrno, string Status, string Note);
@@ -1604,3 +1701,43 @@ public class MoProgress
     public string LeadtimeString { get; set; } = ""; 
 }
 
+public class AppSetting
+{
+    [Key]
+    public string Key { get; set; } = "";
+    public string Value { get; set; } = "";
+}
+
+// ==================== GLOBAL HELPER FUNCTIONS ====================
+public static class AppHelpers
+{
+    public static string ComputeStatus(MoProgress mp)
+    {
+        if (mp.ActualQty <= 0) return "pending";
+        if (mp.ActualQty < mp.PlannedQty) return "in-progress";
+
+        if (mp.LastScanTime.HasValue)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(mp.LeadtimeString) || !mp.LeadtimeString.Contains('-')) return "done";
+                var parts = mp.LeadtimeString.Split('-');
+                var endStr = parts[1].Trim();
+                var endParts = endStr.Split(':');
+                int endHour = int.Parse(endParts[0]);
+                int endMin = int.Parse(endParts[1]);
+                DateTime targetDate = mp.LastScanTime.Value.Date;
+                DateTime leadtimeEnd = targetDate.AddHours(endHour).AddMinutes(endMin);
+                var startParts = parts[0].Trim().Split(':');
+                int startHour = int.Parse(startParts[0]);
+                if (endHour < startHour && mp.LastScanTime.Value.TimeOfDay.TotalHours >= startHour)
+                {
+                    leadtimeEnd = leadtimeEnd.AddDays(1);
+                }
+                return mp.LastScanTime.Value <= leadtimeEnd ? "done" : "late";
+            }
+            catch { return "done"; }
+        }
+        return "done";
+    }
+}

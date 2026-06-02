@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnDeselectAllWC = document.getElementById('btnDeselectAllWC');
     const btnApplyWcFilter = document.getElementById('btnApplyWcFilter');
 
+    const btnShowProgressSummary = document.getElementById('btnShowProgressSummary');
+
     let allTrackingData = [];
     let isWcView = false;
     let progressData = {};
@@ -26,12 +28,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateTopButtonsVisibility() {
         if (isWcView) {
             if (btnFilterInProgress) btnFilterInProgress.style.display = 'flex';
-            if (btnFilterLate)        btnFilterLate.style.display = 'flex';       // 👈 THÊM
-            if (btnSelectWorkCenter)  btnSelectWorkCenter.style.display = 'flex';
+            if (btnFilterLate) btnFilterLate.style.display = 'flex';
+            if (btnSelectWorkCenter) btnSelectWorkCenter.style.display = 'flex';
+            if (btnShowProgressSummary) btnShowProgressSummary.style.display = 'block'; // HIỆN NÚT
         } else {
             if (btnFilterInProgress) btnFilterInProgress.style.display = 'none';
-            if (btnFilterLate)        btnFilterLate.style.display = 'none';       // 👈 THÊM
-            if (btnSelectWorkCenter)  btnSelectWorkCenter.style.display = 'none';
+            if (btnFilterLate) btnFilterLate.style.display = 'none';
+            if (btnSelectWorkCenter) btnSelectWorkCenter.style.display = 'none';
+            if (btnShowProgressSummary) btnShowProgressSummary.style.display = 'none'; // ẨN NÚT
         }
     }
 
@@ -67,7 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     status: item.status,         // pending / in-progress / done / late
                     progress: item.progress,     // "5/36"
                     currentQty: item.currentQty,
-                    plannedQty: item.plannedQty
+                    plannedQty: item.plannedQty,
+                    workCenter: item.workCenter
                 };
             });
 
@@ -358,23 +363,19 @@ document.addEventListener('DOMContentLoaded', () => {
             historyListEl.innerHTML = data.scans.map((scan, index) => {
                 const scanDate = new Date(scan.scanTime);
                 const formattedTime = scanDate.toLocaleString('vi-VN', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    day: '2-digit', month: '2-digit', year: 'numeric'
                 });
 
                 return `
                     <div class="scan-history-item">
                         <span class="scan-kit-number">${index + 1}️⃣ Lần quét #${index + 1}</span>
-                        <span class="scan-qty" style="font-weight: bold; color: #f39c12;">SL: ${scan.qty}</span>
                         <span class="scan-time">⏱️ ${formattedTime}</span>
                         <span class="scan-by">👤 ${scan.scannedBy || 'N/A'}</span>
                     </div>
                 `;
             }).join('');
+
 
         } catch (error) {
             console.error("❌ Lỗi tải chi tiết quét:", error);
@@ -683,6 +684,79 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("❌ SignalR Connection Failed: ", err);
             setTimeout(startSignalR, 5000); // Thử lại sau 5 giây
         }
+    }
+
+    if (btnShowProgressSummary) {
+        btnShowProgressSummary.addEventListener('click', showProgressSummaryModal);
+    }
+
+    function showProgressSummaryModal() {
+        const modal = document.getElementById('modalProgressSummary');
+        const wcContainer = document.getElementById('wcProgressContainer');
+        const factoryContainer = document.getElementById('factoryProgressContainer');
+
+        // 1. TÍNH TOÁN LẠI TIẾN ĐỘ DỰA TRÊN SỐ LƯỢNG MO
+        const progressByWc = {};
+        allWorkCentersData.forEach(wc => {
+            progressByWc[wc.name] = { totalMOs: 0, completedMOs: 0 };
+        });
+
+        // Đếm tổng số MO và số MO đã hoàn thành cho mỗi Work Center
+        Object.values(progressData).forEach(mo => {
+            if (progressByWc[mo.workCenter]) {
+                progressByWc[mo.workCenter].totalMOs++;
+                // Một MO được coi là hoàn thành nếu status là 'done' hoặc 'late'
+                if (mo.status === 'done' || mo.status === 'late') {
+                    progressByWc[mo.workCenter].completedMOs++;
+                }
+            }
+        });
+
+        // 2. Vẽ HTML cho từng Work Center
+        let wcHtml = '';
+        let factoryTotalMOs = 0;
+        let factoryCompletedMOs = 0;
+
+        Object.keys(progressByWc).sort().forEach(wcName => {
+            const data = progressByWc[wcName];
+            factoryTotalMOs += data.totalMOs;
+            factoryCompletedMOs += data.completedMOs;
+            
+            // Tính phần trăm dựa trên số lượng MO
+            const percentage = data.totalMOs > 0 ? ((data.completedMOs / data.totalMOs) * 100).toFixed(1) : 0;
+            
+            wcHtml += `
+                <div class="progress-item">
+                    <div class="progress-label">
+                        <strong>${wcName}</strong>
+                        <span>${data.completedMOs} / ${data.totalMOs} MOs</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" style="width: ${percentage}%;">${percentage}%</div>
+                    </div>
+                </div>
+            `;
+        });
+        wcContainer.innerHTML = wcHtml;
+
+        // 3. Vẽ HTML cho toàn xưởng
+        const factoryPercentage = factoryTotalMOs > 0 ? ((factoryCompletedMOs / factoryTotalMOs) * 100).toFixed(1) : 0;
+        factoryContainer.innerHTML = `
+            <div class="progress-item">
+                <div class="progress-label" style="font-size: 18px;">
+                    <strong>TOÀN XƯỞNG</strong>
+                    <span>${factoryCompletedMOs} / ${factoryTotalMOs} MOs</span>
+                </div>
+                <div class="progress-bar-container" style="height: 30px;">
+                    <div class="progress-bar-fill" style="width: ${factoryPercentage}%; height: 30px; line-height: 30px; font-size: 16px;">
+                        ${factoryPercentage}%
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // 4. Mở Modal
+        modal.classList.add('active');
     }
 
     // Khởi động
