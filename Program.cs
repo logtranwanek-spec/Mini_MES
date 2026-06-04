@@ -256,6 +256,7 @@ app.MapGet("/sync", async (AppDbContext db, IHubContext<OrderHub> hubContext) =>
             }
 
             string monthName = parsedDate.ToString("MMM", new System.Globalization.CultureInfo("en-US"));
+            if (monthName == "Jun" && parsedDate.Month == 6) monthName = "June";
             var searchPatterns = new[]
             {
                 $"{monthName} {parsedDate.Day}",
@@ -1436,22 +1437,31 @@ app.MapGet("/api/tracking/kit-progress", async (string date, AppDbContext db) =>
 });
 
 // ==================== API LẤY CHI TIẾT QUÉT CỦA 1 MO ====================
-app.MapGet("/api/tracking/mo-scan-detail", async (string mo, AppDbContext db) =>
+app.MapGet("/api/tracking/mo-scan-detail", async (string mo, string workCenter, AppDbContext db) =>
 {
     try
     {
-        if (string.IsNullOrEmpty(mo)) return Results.BadRequest("Missing MO");
+        if (string.IsNullOrEmpty(mo) || string.IsNullOrEmpty(workCenter)) 
+            return Results.BadRequest("Missing MO or WorkCenter");
 
-        var scans = await db.ScanLogs
+        // Chuẩn hóa WC chi tiết từ frontend thành WC gốc
+        string baseWc = NormalizeWcForAs400(workCenter);
+
+        // Lấy tất cả log của MO đó
+        var logsForMo = await db.ScanLogs
             .Where(s => s.MO == mo)
-            .OrderBy(s => s.ScanTime)
             .ToListAsync();
+
+        // Lọc trong memory theo WC gốc
+        var scans = logsForMo
+            .Where(s => NormalizeWcForAs400(s.WorkCenter) == baseWc)
+            .OrderBy(s => s.ScanTime)
+            .ToList();
 
         int totalScannedQty = scans.Sum(s => s.Qty);
 
-        return Results.Ok(new
-        {
-            mo = mo,
+        return Results.Ok(new { 
+            mo = mo, 
             scans = scans,
             totalScannedQty = totalScannedQty
         });
@@ -1777,8 +1787,8 @@ public class As400ScanPollingService : BackgroundService
     {
         "UBF03", "UBF04", "UBF05", "UBF06", "UBF12", "UBF13",
         "UPHD1", "UCFBP", "UCFHS", "UCFHM", "UCFCH", "UCFCT",
-        "UCFCM", "UCFCS", "UPGL1", "UPGL4", "UPGL6", "UPGL2",
-        "WLGL2", "UCFCO"
+        "UCFCM", "UCFCS", "UCFCV", "UPGL1", "UPGL4", "UPGL6", 
+        "WLGL2", "UCFCO", "UPGL2", "UFGL2", "UPHD1", "WLGL2"
     };
 
     public As400ScanPollingService(IServiceProvider services, ILogger<As400ScanPollingService> logger)
@@ -2103,17 +2113,24 @@ public class As400ScanPollingService : BackgroundService
             string mo = group.Key.MO;
             string baseWc = group.Key.BaseWc;
 
-            // Lấy lại record MoProgress đã được cập nhật
-            var mp = await db.MoProgresses
-                .FirstOrDefaultAsync(m => m.MO == mo && m.WorkCenter == baseWc, token);
+            // 1. Lấy tất cả MoProgress có MO này
+            var allMpForMo = await db.MoProgresses
+                .Where(m => m.MO == mo)
+                .ToListAsync(token);
 
-            if (mp != null)
+            // 2. Lọc ra những MoProgress có WC chi tiết thuộc WC gốc này
+            var relatedMp = allMpForMo
+                .Where(m => NormalizeWcForAs400(m.WorkCenter) == baseWc)
+                .ToList();
+
+            // 3. BROADCAST CHO TỪNG RECORD (để JS biết WC chi tiết nào được cập nhật)
+            foreach (var mp in relatedMp)
             {
                 await hubContext.Clients.All.SendAsync("MoProgressUpdated", new
                 {
                     mo = mp.MO,
                     mx = mp.MX,
-                    workCenter = mp.WorkCenter,   // WC gốc
+                    workCenter = mp.WorkCenter,   // ✅ GỬI WC CHI TIẾT (UPGL2_I, UPGL2_III, ...)
                     planned = mp.PlannedQty,
                     actual = mp.ActualQty,
                     status = mp.Status,

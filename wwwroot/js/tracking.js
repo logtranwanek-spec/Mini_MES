@@ -130,22 +130,22 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const stepsHtml = group.steps.map(step => {
-                // lấy tiến độ
                 const moKey  = (step.mo || "").toUpperCase();
-                const baseWc = normalizeWcForAs400(step.workCenter || step.WorkCenter || workCenterName);
+                const baseWc = normalizeWcForAs400(step.workCenter);
                 const key    = `${moKey}|${baseWc}`;
 
+                const planned = parseInt(step.qty) || 0;
                 const moProgress = progressData[key] || {
                     status: 'pending',
-                    progress: `0/${parseInt(step.qty) || 0}`,
+                    progress: `0/${planned}`,
                     currentQty: 0,
-                    plannedQty: parseInt(step.qty) || 0
+                    plannedQty: planned
                 };
 
                 const statusClass = `status-${moProgress.status}`;
 
                 return `
-                <div class="wc-card wc-card-clickable" data-mo="${step.mo.toLowerCase()}" onclick="showMoScanDetail('${step.mo}', ${step.qty}, '${step.leadtime}')">
+                <div class="wc-card wc-card-clickable" data-mo="${step.mo.toLowerCase()}" onclick="showMoScanDetail('${step.mo}', ${planned}, '${step.leadtime}', '${step.workCenter}')">
                     <div class="wc-name">${step.workCenter}</div>
                     <div class="wc-mo-with-progress ${statusClass}">${step.mo}, ${moProgress.progress}</div>
                     <div class="wc-leadtime ${statusClass}">${step.leadtime}</div>
@@ -223,20 +223,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="wc-mo-list">
                         ${moList.map(mo => {
                             const moKey  = (mo.mo || "").toUpperCase();
-                            const baseWc = normalizeWcForAs400(wcName);   // wcName là tên sheet / work center group
+                            const baseWc = normalizeWcForAs400(wcName);
                             const key    = `${moKey}|${baseWc}`;
 
+                            const planned = parseInt(mo.qty) || 0;
                             const moProgress = progressData[key] || {
                                 status: 'pending',
-                                progress: `0/${parseInt(mo.qty) || 0}`,
+                                progress: `0/${planned}`,
                                 currentQty: 0,
-                                plannedQty: parseInt(mo.qty) || 0
+                                plannedQty: planned
                             };
 
                             const statusClass = `status-${moProgress.status}`;
 
                             return `
-                            <div class="mo-item ${statusClass}" data-mo-item="${mo.mo.toLowerCase()}" onclick="showMoScanDetail('${mo.mo}', ${mo.qty}, '${mo.leadtime}')" style="cursor: pointer;">
+                            <div class="mo-item ${statusClass}" data-mo-item="${mo.mo.toLowerCase()}" onclick="showMoScanDetail('${mo.mo}', ${planned}, '${mo.leadtime}', '${wcName}')" style="cursor: pointer;">
                                 <span class="mo-info">${mo.mo} (${mo.qty})</span>
                                 <span class="mo-progress">${moProgress.progress}</span>
                                 <span class="mo-leadtime ${statusClass}">${mo.leadtime}</span>
@@ -301,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==================== HÀM HIỂN THỊ CHI TIẾT QUÉT MO ====================
-    window.showMoScanDetail = async function (mo, plannedQty, leadtime) {
+    window.showMoScanDetail = async function (mo, plannedQty, leadtime, wcDetail) {
         const modal = document.getElementById('modalMoScanDetail');
         const titleEl = document.getElementById('moDetailTitle');
         const plannedQtyEl = document.getElementById('moPlannedQty');
@@ -375,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const response = await fetch(`/api/tracking/mo-scan-detail?mo=${encodeURIComponent(mo)}`); 
+            const response = await fetch(`/api/tracking/mo-scan-detail?mo=${encodeURIComponent(mo)}&workCenter=${encodeURIComponent(wcDetail)}`); 
             if (!response.ok) throw new Error("Không thể tải dữ liệu");
 
             const data = await response.json();
@@ -401,6 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return `
                     <div class="scan-history-item">
                         <span class="scan-kit-number">${index + 1}️⃣ Lần quét #${index + 1}</span>
+                        <span class="scan-wc">📋 ${scan.workCenter}</span>
                         <span class="scan-time">⏱️ ${formattedTime}</span>
                         <span class="scan-by">👤 ${scan.scannedBy || 'N/A'}</span>
                     </div>
@@ -696,6 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Lắng nghe sự kiện "MoProgressUpdated" từ server
     connection.on("MoProgressUpdated", (data) => {
+        console.log("📡 SignalR: Received MoProgressUpdated", data);
         const moKey    = (data.mo || "").toUpperCase();
         const wcDetail = (data.workCenter || "").toUpperCase(); // ✅ backend gửi WC chi tiết
         const wcBase   = normalizeWcForAs400(wcDetail);
@@ -709,7 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
             plannedQty : data.planned,
             workCenter : data.workCenter
         };
-
+        showTempMessage(`MO: ${data.mo} -> ${data.actual}/${data.planned}`, 'success');
         renderTrackingData();
     });
 

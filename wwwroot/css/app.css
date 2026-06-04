@@ -2476,3 +2476,17 @@ html.simple-view .wc-grid-item.selected .wc-grid-info {
 
 .mo-detail-card.status-late .card-body,
 .mo-detail-card.status-late .card-footer { color: #e74c3c; }
+
+/* Style cho WorkCenter trong lịch sử quét */
+.scan-wc {
+    font-size: 15px;
+    font-weight: bold;
+    color: #f39c12; /* màu vàng cho nổi bật */
+    min-width: 100px;
+    text-align: center;
+}
+
+/* Căn chỉnh lại các item cho đều */
+.scan-history-item {
+    justify-content: space-around; /* hoặc space-between nếu muốn giãn ra */
+}
