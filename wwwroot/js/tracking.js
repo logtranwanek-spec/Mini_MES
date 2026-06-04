@@ -42,6 +42,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function normalizeWcForAs400(wc) {
+        if (!wc) return wc;
+        wc = wc.trim().toUpperCase();
+        const underscoreIndex = wc.indexOf('_');
+        if (underscoreIndex > 0) {
+            return wc.substring(0, underscoreIndex);
+        }
+        return wc;
+    }
 
     async function loadTrackingData() {
         const selectedDate = dateInput.value;
@@ -70,7 +79,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             progressData = {};
             data.forEach(item => {
-                progressData[item.mo] = {
+                const moKey  = item.mo ? item.mo.toUpperCase() : "";
+                const wcBase = item.workCenter ? item.workCenter.toUpperCase() : "";
+                const key    = `${moKey}|${wcBase}`;
+                progressData[key] = {
                     status: item.status,         // pending / in-progress / done / late
                     progress: item.progress,     // "5/36"
                     currentQty: item.currentQty,
@@ -119,12 +131,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const stepsHtml = group.steps.map(step => {
                 // lấy tiến độ
-                const moProgress = progressData[step.mo] || {
+                const moKey  = (step.mo || "").toUpperCase();
+                const baseWc = normalizeWcForAs400(step.workCenter || step.WorkCenter || workCenterName);
+                const key    = `${moKey}|${baseWc}`;
+
+                const moProgress = progressData[key] || {
                     status: 'pending',
-                    progress: '0/' + (step.qty || '0'),
+                    progress: `0/${parseInt(step.qty) || 0}`,
                     currentQty: 0,
                     plannedQty: parseInt(step.qty) || 0
                 };
+
                 const statusClass = `status-${moProgress.status}`;
 
                 return `
@@ -164,20 +181,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // LƯU danh sách đầy đủ WC (để dùng cho modal chọn WC)
         allWorkCentersData = sortedWcNames.map(wcName => {
-            const moList = dataByWc[wcName];
-            let inProgressCount = 0;
-            moList.forEach(mo => {
-                const moProgress = progressData[mo.mo];
-                if (moProgress && moProgress.status === 'in-progress') {
-                    inProgressCount++;
-                }
-            });
-            return {
-                name: wcName,
-                totalMOs: moList.length,
-                inProgressMOs: inProgressCount
-            };
+        const moList = dataByWc[wcName];
+        let inProgressCount = 0;
+
+        moList.forEach(mo => {
+            const moKey  = (mo.mo || "").toUpperCase();
+            const baseWc = normalizeWcForAs400(wcName);   // wcName là tên sheet / WC group
+            const key    = `${moKey}|${baseWc}`;
+
+            const moProgress = progressData[key];
+            if (moProgress && moProgress.status === 'in-progress') {
+                inProgressCount++;
+            }
         });
+
+        return {
+            name: wcName,
+            totalMOs: moList.length,
+            inProgressMOs: inProgressCount
+        };
+    });
 
         // Nếu đã chọn filter WC, chỉ hiển thị những WC được chọn
         if (selectedWorkCenters.size > 0) {
@@ -199,12 +222,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="wc-group-header">${wcName} (${moList.length} MOs)</div>
                     <div class="wc-mo-list">
                         ${moList.map(mo => {
-                            const moProgress = progressData[mo.mo] || {
+                            const moKey  = (mo.mo || "").toUpperCase();
+                            const baseWc = normalizeWcForAs400(wcName);   // wcName là tên sheet / work center group
+                            const key    = `${moKey}|${baseWc}`;
+
+                            const moProgress = progressData[key] || {
                                 status: 'pending',
-                                progress: '0/' + (mo.qty || '0'),
+                                progress: `0/${parseInt(mo.qty) || 0}`,
                                 currentQty: 0,
                                 plannedQty: parseInt(mo.qty) || 0
                             };
+
                             const statusClass = `status-${moProgress.status}`;
 
                             return `
@@ -408,7 +436,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 wcCard.querySelectorAll('.mo-item').forEach(moItem => {
                     const moName = moItem.dataset.moItem.toUpperCase();
-                    const moData = progressData[moName];
+                    const wcName = wcCard.dataset.wc.toUpperCase();
+                    const baseWc = normalizeWcForAs400(wcName);
+                    const key    = `${moName}|${baseWc}`;
+
+                    const moData = progressData[key];
 
                     if (moData && moData.status === 'in-progress') {
                         const leadtimeEl = moItem.querySelector('.mo-leadtime');
@@ -417,6 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         inProgressMOs.push({ moName, element: moItem, startTime });
                     }
                 });
+
 
                 if (inProgressMOs.length > 0) {
                     totalInProgress += inProgressMOs.length;
@@ -464,7 +497,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 wcCard.querySelectorAll('.mo-item').forEach(moItem => {
                     const moName = moItem.dataset.moItem.toUpperCase();
-                    const moData = progressData[moName];
+                    const wcName = wcCard.dataset.wc.toUpperCase();
+                    const baseWc = normalizeWcForAs400(wcName);
+                    const key    = `${moName}|${baseWc}`;
+
+                    const moData = progressData[key];
 
                     if (moData && moData.status === 'late') {
                         const leadtimeEl = moItem.querySelector('.mo-leadtime');
@@ -473,6 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         lateMOs.push({ moName, element: moItem, startTime });
                     }
                 });
+
 
                 if (lateMOs.length > 0) {
                     totalLate += lateMOs.length;
@@ -658,24 +696,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Lắng nghe sự kiện "MoProgressUpdated" từ server
     connection.on("MoProgressUpdated", (data) => {
-        console.log("📡 SignalR: Received MO Progress Update", data);
+        const moKey    = (data.mo || "").toUpperCase();
+        const wcDetail = (data.workCenter || "").toUpperCase(); // ✅ backend gửi WC chi tiết
+        const wcBase   = normalizeWcForAs400(wcDetail);
+        const key      = `${moKey}|${wcBase}`;
 
-        if (data && data.mo) {
-            // Cập nhật lại dữ liệu tiến độ trong biến progressData
-            progressData[data.mo] = {
-                status: data.status,
-                progress: `${data.actual}/${data.planned}`,
-                currentQty: data.actual,
-                plannedQty: data.planned
-            };
+        if (!progressData) progressData = {};
+        progressData[key] = {
+            status     : data.status,
+            progress   : `${data.actual}/${data.planned}`,
+            currentQty : data.actual,
+            plannedQty : data.planned,
+            workCenter : data.workCenter
+        };
 
-            // Vẽ lại toàn bộ giao diện để cập nhật thay đổi
-            // (Cách đơn giản và hiệu quả nhất lúc này)
-            renderTrackingData();
-
-            // Hiển thị thông báo nhỏ
-            showTempMessage(`Cập nhật: ${data.mo} → ${data.actual}/${data.planned}`, 'success');
-        }
+        renderTrackingData();
     });
 
     // Bắt đầu kết nối
@@ -698,21 +733,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const wcContainer = document.getElementById('wcProgressContainer');
         const factoryContainer = document.getElementById('factoryProgressContainer');
 
-        // 1. TÍNH TOÁN LẠI TIẾN ĐỘ DỰA TRÊN SỐ LƯỢNG MO
+        // 1. TÍNH LẠI TIẾN ĐỘ TỪ allTrackingData
         const progressByWc = {};
+        
+        // Khởi tạo progressByWc với WC CHI TIẾT
         allWorkCentersData.forEach(wc => {
             progressByWc[wc.name] = { totalMOs: 0, completedMOs: 0 };
         });
 
-        // Đếm tổng số MO và số MO đã hoàn thành cho mỗi Work Center
-        Object.values(progressData).forEach(mo => {
-            if (progressByWc[mo.workCenter]) {
-                progressByWc[mo.workCenter].totalMOs++;
-                // Một MO được coi là hoàn thành nếu status là 'done' hoặc 'late'
-                if (mo.status === 'done' || mo.status === 'late') {
-                    progressByWc[mo.workCenter].completedMOs++;
+        // Lặp qua allTrackingData để đếm
+        allTrackingData.forEach(mxData => {
+            mxData.steps.forEach(step => {
+                const wcDetail = step.workCenter;
+                if (progressByWc[wcDetail]) {
+                    const moKey  = (step.mo || "").toUpperCase();
+                    const baseWc = normalizeWcForAs400(wcDetail);
+                    const key    = `${moKey}|${baseWc}`;
+
+                    const moProgress = progressData[key];
+
+                    progressByWc[wcDetail].totalMOs++;
+                    if (moProgress && (moProgress.status === 'done' || moProgress.status === 'late')) {
+                        progressByWc[wcDetail].completedMOs++;
+                    }
                 }
-            }
+            });
         });
 
         // 2. Vẽ HTML cho từng Work Center
@@ -720,12 +765,12 @@ document.addEventListener('DOMContentLoaded', () => {
         let factoryTotalMOs = 0;
         let factoryCompletedMOs = 0;
 
+        // Sắp xếp theo tên WC chi tiết
         Object.keys(progressByWc).sort().forEach(wcName => {
             const data = progressByWc[wcName];
             factoryTotalMOs += data.totalMOs;
             factoryCompletedMOs += data.completedMOs;
             
-            // Tính phần trăm dựa trên số lượng MO
             const percentage = data.totalMOs > 0 ? ((data.completedMOs / data.totalMOs) * 100).toFixed(1) : 0;
             
             wcHtml += `

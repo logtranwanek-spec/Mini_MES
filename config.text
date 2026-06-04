@@ -13,3 +13,8 @@ dotnet add package System.Data.Odbc
 
 
 http://localhost:5050/api/debug/workcenters?date=2026-06-01
+debug MO:
+http://localhost:5050/api/debug/mo-scan-raw/M9HCP90
+
+
+đang xử lý chỗ cập nhật dữ liệu Scan lên trên MOProgress, đang không đẩy được giá trị Scan lên trên MOProgress

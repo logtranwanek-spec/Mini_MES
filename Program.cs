@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 
 var builder = WebApplication.CreateBuilder(args);
+
 // ===== SETUP DATABASE (ENTITY FRAMEWORK CORE) =====
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -18,8 +19,10 @@ builder.Services.AddSignalR();
 builder.Services.AddHostedService<As400ScanPollingService>();
 
 var app = builder.Build();
+
 // ===== REGISTER ENCODING PROVIDER =====
 System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
 // ===== CONFIGURATION =====
 string vDrivePath = @"V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\RUN KIT - NHẬN KIT";
 string rootMssPath = @"V:\Prod & Inv Control\Public\P&IC UPH\01.MSS for UPH\2026";
@@ -29,6 +32,7 @@ builder.Configuration["SchedulePath"] = schedulePath;
 
 if (!Directory.Exists(localData))
     Directory.CreateDirectory(localData);
+
 // Tự động tạo Database nếu chưa có
 using (var scope = app.Services.CreateScope())
 {
@@ -45,13 +49,13 @@ string GetCellValue(DataRow row, int columnIndex)
         if (columnIndex >= row.Table.Columns.Count) return "";
         var value = row[columnIndex];
         if (value == null || value == DBNull.Value) return "";
-        
+
         if (value is DateTime dt)
         {
             if (dt.TimeOfDay.TotalSeconds > 0) return dt.ToString("HH:mm");
             else return dt.ToString("dd/MM/yyyy");
         }
-        
+
         if (value is double || value is float || value is decimal)
         {
             double numValue = Convert.ToDouble(value);
@@ -63,6 +67,21 @@ string GetCellValue(DataRow row, int columnIndex)
     catch { return ""; }
 }
 
+static string NormalizeWcForAs400(string wcFromExcel)
+{
+    if (string.IsNullOrWhiteSpace(wcFromExcel)) return wcFromExcel;
+
+    wcFromExcel = wcFromExcel.Trim().ToUpper();
+
+    int underscoreIndex = wcFromExcel.IndexOf('_');
+    if (underscoreIndex > 0)
+    {
+        return wcFromExcel.Substring(0, underscoreIndex);
+    }
+
+    return wcFromExcel;
+}
+
 // ===== FUNCTION: READ EXCEL FILE (XLSX/XLSB) =====
 List<Order> ReadExcelFile(string filePath, string fileType, string dateKey)
 {
@@ -72,18 +91,18 @@ List<Order> ReadExcelFile(string filePath, string fileType, string dateKey)
         using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var reader = ExcelReaderFactory.CreateReader(stream, new ExcelReaderConfiguration() { LeaveOpen = false, FallbackEncoding = Encoding.GetEncoding(1252) });
         var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration() { ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false } });
-        
+
         if (dataSet.Tables.Count == 0) return result;
         var table = dataSet.Tables[0];
-        
+
         for (int i = 4; i < table.Rows.Count; i++)
         {
             var row = table.Rows[i];
             if (table.Columns.Count < 4) continue;
-            
+
             string odrno = GetCellValue(row, 3);
             if (string.IsNullOrWhiteSpace(odrno)) continue;
-            
+
             result.Add(new Order
             {
                 OdrNo = odrno,
@@ -94,7 +113,7 @@ List<Order> ReadExcelFile(string filePath, string fileType, string dateKey)
                 DeliveryTime = GetCellValue(row, 8),
                 FileType = fileType,
                 DateKey = dateKey,
-                Status = "Pending", // Mặc định là Pending
+                Status = "Pending",
                 Time = ""
             });
         }
@@ -110,25 +129,32 @@ app.MapGet("/sync", async (AppDbContext db, IHubContext<OrderHub> hubContext) =>
     try
     {
         Console.WriteLine("🔄 Starting sync to Database...");
+
         var files = Directory.GetFiles(vDrivePath)
-            .Where(f => f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".xls", StringComparison.OrdinalIgnoreCase))
+            .Where(f => f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
+                        f.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase) ||
+                        f.EndsWith(".xls", StringComparison.OrdinalIgnoreCase))
             .Where(f => !Path.GetFileName(f).StartsWith("~"))
             .Select(f => new FileInfo(f))
             .ToList();
+
         var fileGroups = new Dictionary<string, FileInfo>();
         foreach (var fileInfo in files)
         {
             var fileName = Path.GetFileNameWithoutExtension(fileInfo.Name);
             var match = System.Text.RegularExpressions.Regex.Match(fileName, @"(\d{2}[\.\-]\d{2})");
             if (!match.Success) continue;
+
             string dateKey = match.Value.Replace("-", ".");
             string fileType = fileName.Contains("Console Lid", StringComparison.OrdinalIgnoreCase) ? "Console Lid" : "Other";
             string groupKey = $"{dateKey}_{fileType}";
+
             if (!fileGroups.ContainsKey(groupKey) || fileInfo.LastWriteTime > fileGroups[groupKey].LastWriteTime)
             {
                 fileGroups[groupKey] = fileInfo; // Chỉ giữ lại file mới nhất
             }
         }
+
         var allNewOrders = new List<Order>();
         foreach (var group in fileGroups)
         {
@@ -138,13 +164,16 @@ app.MapGet("/sync", async (AppDbContext db, IHubContext<OrderHub> hubContext) =>
             var fileData = ReadExcelFile(group.Value.FullName, fileType, dateKey);
             allNewOrders.AddRange(fileData);
         }
+
         // Xử lý lưu vào DB: Giữ nguyên trạng thái (Status) và Ghi chú (Note) của các Order đã tồn tại
         using var transaction = await db.Database.BeginTransactionAsync();
         try
         {
             foreach (var newOrder in allNewOrders)
             {
-                var existingOrder = await db.Orders.FirstOrDefaultAsync(o => o.OdrNo == newOrder.OdrNo && o.DateKey == newOrder.DateKey);
+                var existingOrder = await db.Orders
+                    .FirstOrDefaultAsync(o => o.OdrNo == newOrder.OdrNo && o.DateKey == newOrder.DateKey);
+
                 if (existingOrder != null)
                 {
                     existingOrder.FItem = newOrder.FItem;
@@ -159,28 +188,32 @@ app.MapGet("/sync", async (AppDbContext db, IHubContext<OrderHub> hubContext) =>
                     db.Orders.Add(newOrder);
                 }
             }
+
             var processedDates = allNewOrders.Select(o => o.DateKey).Distinct().ToList();
             foreach (var date in processedDates)
             {
-                // Lấy tất cả Order đang có trong DB của ngày này
                 var existingOrdersInDb = await db.Orders.Where(o => o.DateKey == date).ToListAsync();
-                // Lấy các Order mới đọc từ file Excel của ngày này
                 var newOrdersForDate = allNewOrders.Where(o => o.DateKey == date).ToList();
-                // Tìm những MX có trong DB nhưng KHÔNG CÓ trong file Excel mới
+
                 var ordersToDelete = existingOrdersInDb
-                    .Where(dbOrder => !newOrdersForDate.Any(newO => newO.OdrNo == dbOrder.OdrNo && newO.FileType == dbOrder.FileType))
+                    .Where(dbOrder => !newOrdersForDate.Any(newO =>
+                        newO.OdrNo == dbOrder.OdrNo && newO.FileType == dbOrder.FileType))
                     .ToList();
+
                 if (ordersToDelete.Any())
                 {
-                    // Xóa khỏi bảng Orders
                     db.Orders.RemoveRange(ordersToDelete);
-                    // Xóa luôn chi tiết của các MX này khỏi bảng MxDetails (để tránh rác Database)
+
                     var mxToDelete = ordersToDelete.Select(o => o.OdrNo).ToList();
-                    var detailsToDelete = await db.MxDetails.Where(d => mxToDelete.Contains(d.OdrNo)).ToListAsync();
+                    var detailsToDelete = await db.MxDetails
+                        .Where(d => mxToDelete.Contains(d.OdrNo))
+                        .ToListAsync();
                     db.MxDetails.RemoveRange(detailsToDelete);
-                    Console.WriteLine($"  🗑️ ĐÃ DỌN DẸP: Xóa {ordersToDelete.Count} MX không còn tồn tại trong file Excel của ngày {date}");
+
+                    Console.WriteLine($"  🗑️ ĐÃ DỌN DẸP: Xóa {ordersToDelete.Count} MX không còn trong file Excel ngày {date}");
                 }
             }
+
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
         }
@@ -190,126 +223,137 @@ app.MapGet("/sync", async (AppDbContext db, IHubContext<OrderHub> hubContext) =>
             Console.WriteLine($"❌ Sync error: {ex.Message}");
             throw;
         }
+
         Console.WriteLine($"✅ Synced Orders to Database!");
+
         // 🚀 Tra cứu chi tiết MX dựa trên NGÀY CỦA FILE DANH SÁCH (DateKey)
         Console.WriteLine("📊 Parsing MX details based on List File Date (DateKey)...");
-        
-        // Nhóm các đơn hàng theo Ngày của File danh sách (VD: "20.05")
+
         var ordersByFileDate = allNewOrders.GroupBy(o => o.DateKey);
         foreach (var group in ordersByFileDate)
         {
-            string dateKey = group.Key; // VD: "20.05"
+            string dateKey = group.Key;
             var odrnos = group.Select(o => o.OdrNo).Distinct().ToList();
-            Console.WriteLine($"  📅 Đang xử lý file danh sách ngày: {dateKey} → Có {odrnos.Count} MX");
+            Console.WriteLine($"  📅 Đang xử lý danh sách ngày: {dateKey} → {odrnos.Count} MX");
+
             DateTime parsedDate;
-            try 
+            try
             {
-                // Chuyển "20.05" thành DateTime
                 var parts = dateKey.Split('.');
                 parsedDate = new DateTime(DateTime.Now.Year, int.Parse(parts[1]), int.Parse(parts[0]));
-            } 
-            catch 
-            { 
-                Console.WriteLine($"    ⚠️ Không thể parse ngày từ DateKey: {dateKey}");
-                continue; 
             }
-            // SỬ DỤNG HÀM TÌM THƯ MỤC THÔNG MINH
+            catch
+            {
+                Console.WriteLine($"    ⚠️ Không parse được ngày từ DateKey: {dateKey}");
+                continue;
+            }
+
             string? exactInhousePath = FindInhouseFolder(parsedDate, rootMssPath);
-            
-            if (exactInhousePath == null) 
+            if (exactInhousePath == null)
             {
                 Console.WriteLine($"    ⚠️ Bỏ qua ngày {dateKey} vì không tìm thấy folder INHOUSE.");
                 continue;
             }
-            // Tạo pattern tìm file XLSB (VD: "May 20")
+
             string monthName = parsedDate.ToString("MMM", new System.Globalization.CultureInfo("en-US"));
-            var searchPatterns = new[] { $"{monthName} {parsedDate.Day}", $"{monthName} {parsedDate.Day:D2}", $"{monthName}{parsedDate.Day}" };
-            
+            var searchPatterns = new[]
+            {
+                $"{monthName} {parsedDate.Day}",
+                $"{monthName} {parsedDate.Day:D2}",
+                $"{monthName}{parsedDate.Day}"
+            };
+
             FileInfo? xlsbFile = null;
             foreach (var pattern in searchPatterns)
             {
                 var foundFiles = Directory.GetFiles(exactInhousePath)
-                    .Where(f => f.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase) && !Path.GetFileName(f).StartsWith("~") && Path.GetFileName(f).Contains(pattern, StringComparison.OrdinalIgnoreCase))
-                    .Select(f => new FileInfo(f)).OrderByDescending(f => f.LastWriteTime).ToList();
-                
+                    .Where(f => f.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase) &&
+                                !Path.GetFileName(f).StartsWith("~") &&
+                                Path.GetFileName(f).Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                    .Select(f => new FileInfo(f))
+                    .OrderByDescending(f => f.LastWriteTime)
+                    .ToList();
+
                 if (foundFiles.Count > 0)
                 {
                     xlsbFile = foundFiles.First();
                     break;
                 }
             }
-            if (xlsbFile == null) 
+
+            if (xlsbFile == null)
             {
-                Console.WriteLine($"    ⚠️ Không tìm thấy file XLSB nào có chữ '{searchPatterns[0]}' trong folder {exactInhousePath}");
+                Console.WriteLine($"    ⚠️ Không tìm thấy file XLSB có '{searchPatterns[0]}' trong {exactInhousePath}");
                 continue;
             }
+
             Console.WriteLine($"    ✅ Tìm thấy file chi tiết: {xlsbFile.Name}");
             var details = await ParseMxDetailsFromXlsb(xlsbFile.FullName, odrnos);
-            
-            // Xóa cache cũ của các MX này và lưu cache mới
+
             var oldDetails = db.MxDetails.Where(m => odrnos.Contains(m.OdrNo));
             db.MxDetails.RemoveRange(oldDetails);
             db.MxDetails.AddRange(details);
             await db.SaveChangesAsync();
         }
+
         await hubContext.Clients.All.SendAsync("MasterFileSynced", new
         {
             message = "Master file has been updated",
             time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
         });
-        
+
         Console.WriteLine("📡 Broadcasted sync completion to all clients");
+
         // =====================================================================
-        // 🧹 TỰ ĐỘNG DỌN DẸP DỮ LIỆU CŨ (LƯU LỊCH SỬ 21 NGÀY)
+        // 🧹 TỰ ĐỘNG DỌN DẸP DỮ LIỆU CŨ (LƯU 21 NGÀY)
         // =====================================================================
         Console.WriteLine("🧹 Đang dọn dẹp dữ liệu cũ hơn 21 ngày...");
         try
         {
             DateTime cutoffDate = DateTime.Now.Date.AddDays(-21);
-            
-            // 1. Dọn dẹp bảng Orders & MxDetails
+
             var allDbOrders = await db.Orders.ToListAsync();
-            var ordersToDelete = new List<Order>();
+            var ordersOld = new List<Order>();
+
             foreach (var o in allDbOrders)
             {
                 try
                 {
-                    // Chuyển DateKey (VD: "18.05") thành DateTime để so sánh
                     var dateParts = o.DateKey.Split('.');
                     int day = int.Parse(dateParts[0]);
                     int month = int.Parse(dateParts[1]);
                     int year = DateTime.Now.Year;
-                    // Xử lý chuyển giao năm 
                     if (DateTime.Now.Month < 6 && month > 6) year--;
+
                     DateTime orderDate = new DateTime(year, month, day);
-                    // Nếu ngày của Order cũ hơn 21 ngày -> Đưa vào danh sách xóa
                     if (orderDate < cutoffDate)
                     {
-                        ordersToDelete.Add(o);
+                        ordersOld.Add(o);
                     }
                 }
                 catch { }
             }
-            if (ordersToDelete.Any())
+
+            if (ordersOld.Any())
             {
-                // Xóa chi tiết MX trước
-                var mxToDelete = ordersToDelete.Select(o => o.OdrNo).ToList();
+                var mxToDelete = ordersOld.Select(o => o.OdrNo).ToList();
                 var detailsToDelete = await db.MxDetails.Where(d => mxToDelete.Contains(d.OdrNo)).ToListAsync();
                 db.MxDetails.RemoveRange(detailsToDelete);
-                // Xóa Orders
-                db.Orders.RemoveRange(ordersToDelete);
-                
-                Console.WriteLine($"   🗑️ Đã xóa {ordersToDelete.Count} MX và {detailsToDelete.Count} chi tiết cũ.");
+                db.Orders.RemoveRange(ordersOld);
+
+                Console.WriteLine($"   🗑️ Đã xóa {ordersOld.Count} MX và {detailsToDelete.Count} chi tiết cũ.");
             }
-            // 2. Dọn dẹp bảng Kho 2 (Chỉ xóa những xe ĐÃ XUẤT KHO quá 21 ngày)
+
             var kho2ToDelete = await db.Kho2_Inventory
                 .Where(k => k.Status == "Out" && k.OutTime != null && k.OutTime < cutoffDate)
                 .ToListAsync();
+
             if (kho2ToDelete.Any())
             {
                 db.Kho2_Inventory.RemoveRange(kho2ToDelete);
-                Console.WriteLine($"   🗑️ Đã xóa lịch sử {kho2ToDelete.Count} xe xuất khỏi Kho 2 cũ.");
+                Console.WriteLine($"   🗑️ Đã xóa lịch sử {kho2ToDelete.Count} xe xuất Kho 2 cũ.");
             }
+
             await db.SaveChangesAsync();
             Console.WriteLine("✅ Dọn dẹp hoàn tất!");
         }
@@ -317,9 +361,8 @@ app.MapGet("/sync", async (AppDbContext db, IHubContext<OrderHub> hubContext) =>
         {
             Console.WriteLine($"❌ Lỗi khi dọn dẹp dữ liệu cũ: {ex.Message}");
         }
-        // =====================================================================
+
         return Results.Ok(new { message = "✅ Đồng bộ Database thành công" });
-        
     }
     catch (Exception ex)
     {
@@ -335,12 +378,14 @@ app.MapGet("/orders", async (string date, string fileType, AppDbContext db) =>
     {
         if (string.IsNullOrEmpty(date)) return Results.BadRequest("Missing date parameter");
         var query = db.Orders.Where(o => o.DateKey == date);
-        
+
         if (!string.IsNullOrEmpty(fileType))
         {
             query = query.Where(o => o.FileType == fileType);
         }
-        var list = await query.Select(o => new {
+
+        var list = await query.Select(o => new
+        {
             odrno = o.OdrNo,
             fitem = o.FItem,
             mw = o.Mw,
@@ -351,20 +396,23 @@ app.MapGet("/orders", async (string date, string fileType, AppDbContext db) =>
             time = o.Time,
             note = o.Note
         }).ToListAsync();
+
         return Results.Ok(list);
     }
     catch (Exception ex) { return Results.Problem(ex.Message); }
 });
 
-// UPDATE STATUS ENDPOINT (Cập nhật trực tiếp vào Database & Bắn SignalR)
+// UPDATE STATUS ENDPOINT
 app.MapPost("/update", async (UpdateRequest data, AppDbContext db, IHubContext<OrderHub> hubContext) =>
 {
     try
     {
-        if (data == null || string.IsNullOrEmpty(data.Odrno)) return Results.BadRequest("Invalid request");
-        
-        var order = await db.Orders.FirstOrDefaultAsync(o => o.OdrNo.ToUpper() == data.Odrno.ToUpper());
-        
+        if (data == null || string.IsNullOrEmpty(data.Odrno))
+            return Results.BadRequest("Invalid request");
+
+        var order = await db.Orders
+            .FirstOrDefaultAsync(o => o.OdrNo.ToUpper() == data.Odrno.ToUpper());
+
         if (order != null)
         {
             order.Status = data.Status;
@@ -373,7 +421,8 @@ app.MapPost("/update", async (UpdateRequest data, AppDbContext db, IHubContext<O
         }
         else if (data.Status == "NOT FOUND")
         {
-            db.Orders.Add(new Order {
+            db.Orders.Add(new Order
+            {
                 OdrNo = data.Odrno.ToUpper(),
                 Status = "NOT FOUND",
                 Note = data.Note ?? "",
@@ -382,19 +431,22 @@ app.MapPost("/update", async (UpdateRequest data, AppDbContext db, IHubContext<O
                 FileType = "Other"
             });
         }
+
         await db.SaveChangesAsync();
-        // 🚀 BẮN TÍN HIỆU REAL-TIME CHO TẤT CẢ CÁC TRANG WEB ĐANG MỞ
-        await hubContext.Clients.All.SendAsync("OrderUpdated", new { 
-            odrno = data.Odrno, 
-            status = data.Status, 
-            note = data.Note ?? "" 
+
+        await hubContext.Clients.All.SendAsync("OrderUpdated", new
+        {
+            odrno = data.Odrno,
+            status = data.Status,
+            note = data.Note ?? ""
         });
+
         return Results.Ok(new { message = "✅ Updated successfully" });
     }
     catch (Exception ex) { return Results.Problem(ex.Message); }
 });
 
-// UPLOAD FILE ENDPOINT (NATIVE C#)
+// UPLOAD FILE ENDPOINT
 app.MapPost("/upload", async (HttpContext ctx, AppDbContext db) =>
 {
     try
@@ -402,39 +454,48 @@ app.MapPost("/upload", async (HttpContext ctx, AppDbContext db) =>
         var form = await ctx.Request.ReadFormAsync();
         var file = form.Files.GetFile("file");
         if (file == null || file.Length == 0) return Results.BadRequest("No file uploaded");
+
         Console.WriteLine($"📥 Received upload: {file.FileName} ({file.Length / 1024}KB)");
+
         using var processStream = file.OpenReadStream();
-        
+
         var fileName = Path.GetFileNameWithoutExtension(file.FileName);
         var match = System.Text.RegularExpressions.Regex.Match(fileName, @"(\d{2}[\.\-]\d{2})");
         string dateKey = match.Success ? match.Value.Replace("-", ".") : DateTime.Now.ToString("dd.MM");
         string fileType = fileName.Contains("Console Lid", StringComparison.OrdinalIgnoreCase) ? "Console Lid" : "Other";
+
         using var reader = ExcelReaderFactory.CreateReader(processStream, new ExcelReaderConfiguration() { FallbackEncoding = Encoding.GetEncoding(1252) });
         var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration() { ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false } });
-        
+
         if (dataSet.Tables.Count == 0) return Results.BadRequest("File Excel trống");
         var table = dataSet.Tables[0];
+
         int count = 0;
-        var uploadedOdrNos = new List<string>(); 
+        var uploadedOdrNos = new List<string>();
+
         for (int i = 4; i < table.Rows.Count; i++)
         {
             var row = table.Rows[i];
             if (table.Columns.Count < 4) continue;
-            string odrno = GetCellValue(row, 3); 
+
+            string odrno = GetCellValue(row, 3);
             if (string.IsNullOrWhiteSpace(odrno)) continue;
-            // Đưa mã MX vào danh sách vừa upload
+
             uploadedOdrNos.Add(odrno);
-            var existingOrder = await db.Orders.FirstOrDefaultAsync(o => o.OdrNo == odrno && o.DateKey == dateKey);
+
+            var existingOrder = await db.Orders
+                .FirstOrDefaultAsync(o => o.OdrNo == odrno && o.DateKey == dateKey);
+
             if (existingOrder == null)
             {
                 db.Orders.Add(new Order
                 {
                     OdrNo = odrno,
-                    FItem = GetCellValue(row, 4), 
-                    Mw = GetCellValue(row, 5),    
-                    Qty = GetCellValue(row, 9),   
-                    DeliveryDate = GetCellValue(row, 7), 
-                    DeliveryTime = GetCellValue(row, 8), 
+                    FItem = GetCellValue(row, 4),
+                    Mw = GetCellValue(row, 5),
+                    Qty = GetCellValue(row, 9),
+                    DeliveryDate = GetCellValue(row, 7),
+                    DeliveryTime = GetCellValue(row, 8),
                     FileType = fileType,
                     DateKey = dateKey,
                     Status = "Pending",
@@ -444,21 +505,37 @@ app.MapPost("/upload", async (HttpContext ctx, AppDbContext db) =>
                 count++;
             }
         }
-        // Đoạn dọn dẹp MX cũ
-        var oldOrdersInDb = await db.Orders.Where(o => o.DateKey == dateKey && o.FileType == fileType).ToListAsync();
-        var ordersToRemove = oldOrdersInDb.Where(o => !uploadedOdrNos.Contains(o.OdrNo)).ToList();
+
+        var oldOrdersInDb = await db.Orders
+            .Where(o => o.DateKey == dateKey && o.FileType == fileType)
+            .ToListAsync();
+
+        var ordersToRemove = oldOrdersInDb
+            .Where(o => !uploadedOdrNos.Contains(o.OdrNo))
+            .ToList();
+
         if (ordersToRemove.Any())
         {
             db.Orders.RemoveRange(ordersToRemove);
-            
+
             var mxToRemove = ordersToRemove.Select(o => o.OdrNo).ToList();
-            var detailsToRemove = await db.MxDetails.Where(d => mxToRemove.Contains(d.OdrNo)).ToListAsync();
+            var detailsToRemove = await db.MxDetails
+                .Where(d => mxToRemove.Contains(d.OdrNo))
+                .ToListAsync();
             db.MxDetails.RemoveRange(detailsToRemove);
-            
-            Console.WriteLine($"  🗑️ Upload Dọn dẹp: Đã xóa {ordersToRemove.Count()} MX cũ.");
+
+            Console.WriteLine($"  🗑️ Upload dọn dẹp: Đã xóa {ordersToRemove.Count} MX cũ.");
         }
+
         await db.SaveChangesAsync();
-        return Results.Ok(new { message = "✅ Upload thành công", date = dateKey, fileType = fileType, orderCount = count });
+
+        return Results.Ok(new
+        {
+            message = "✅ Upload thành công",
+            date = dateKey,
+            fileType = fileType,
+            orderCount = count
+        });
     }
     catch (Exception ex) { return Results.Problem(ex.Message); }
 });
@@ -469,127 +546,162 @@ app.MapGet("/mx-detail", async (string odrno, string date, AppDbContext db) =>
     try
     {
         Console.WriteLine($"\n🔍 Đang tìm chi tiết cho MX: {odrno}");
-        
-        // SỬA LỖI: So sánh không phân biệt hoa thường bằng .ToUpper()
+
         var details = await db.MxDetails
             .Where(m => m.OdrNo.ToUpper() == odrno.ToUpper())
             .ToListAsync();
-        
+
         Console.WriteLine($"📊 Tìm thấy {details.Count} dòng dữ liệu trong Database");
+
         if (details.Count == 0)
         {
-            // Kiểm tra xem trong DB có bất kỳ dữ liệu detail nào không để báo lỗi cho chuẩn
             var totalDetailsInDb = await db.MxDetails.CountAsync();
-            Console.WriteLine($"⚠️ Tổng số dòng detail trong toàn bộ DB hiện tại: {totalDetailsInDb}");
-            
+            Console.WriteLine($"⚠️ Tổng số dòng detail trong DB: {totalDetailsInDb}");
+
             if (totalDetailsInDb == 0)
             {
-                return Results.NotFound($"Database chưa có dữ liệu chi tiết. Vui lòng bấm nút 'Cập Nhật Master File' để đồng bộ.");
+                return Results.NotFound("Database chưa có dữ liệu chi tiết. Vui lòng bấm 'Cập Nhật Master File'.");
             }
-            return Results.NotFound($"Không tìm thấy chi tiết cho MX {odrno} trong Database.");
+            return Results.NotFound($"Không tìm thấy chi tiết cho MX {odrno}.");
         }
-        var itemsList = details.GroupBy(d => d.ItemCode)
-                               .Select(g => new MxItemData { ItemCode = g.Key, Quantity = g.First().ItemQty })
-                               .ToList();
-        var partsList = details.GroupBy(d => new { d.PartName, d.PartOrder })
-                               .Select(g => new PartDetailData { 
-                                   PartName = g.Key.PartName, 
-                                   Order = g.Key.PartOrder, 
-                                   Quantity = g.Sum(x => x.PartQty) 
-                               })
-                               .OrderBy(p => p.Order)
-                               .ToList();
-        Console.WriteLine($"✅ Đã đóng gói xong: {itemsList.Count} Items và {partsList.Count} Parts");
-        return Results.Ok(new { odrno = odrno, items = itemsList, parts = partsList });
+
+        var itemsList = details
+            .GroupBy(d => d.ItemCode)
+            .Select(g => new MxItemData { ItemCode = g.Key, Quantity = g.First().ItemQty })
+            .ToList();
+
+        var partsList = details
+            .GroupBy(d => new { d.PartName, d.PartOrder })
+            .Select(g => new PartDetailData
+            {
+                PartName = g.Key.PartName,
+                Order = g.Key.PartOrder,
+                Quantity = g.Sum(x => x.PartQty)
+            })
+            .OrderBy(p => p.Order)
+            .ToList();
+
+        Console.WriteLine($"✅ Đã đóng gói: {itemsList.Count} Items, {partsList.Count} Parts");
+
+        return Results.Ok(new
+        {
+            odrno = odrno,
+            items = itemsList,
+            parts = partsList
+        });
     }
-    catch (Exception ex) 
-    { 
+    catch (Exception ex)
+    {
         Console.WriteLine($"❌ Lỗi API mx-detail: {ex.Message}");
-        return Results.Problem(ex.Message); 
+        return Results.Problem(ex.Message);
     }
 });
 
-// ==================== EXPORT REPORT ENDPOINT (XUẤT XLSB BẰNG LATE BINDING) ====================
+// ==================== EXPORT REPORT ENDPOINT ====================
 app.MapPost("/export", async (ExportRequest request) =>
 {
     try
     {
         if (request == null || request.Orders == null || request.Orders.Count == 0)
             return Results.BadRequest("No data to export");
+
         Console.WriteLine($"\n📊 Bắt đầu xuất báo cáo XLSB cho ngày: {request.Date}");
+
         var receivedOdrnos = request.Orders
             .Where(o => o.ContainsKey("status") && o["status"]?.ToString() == "Received")
             .Select(o => o["odrno"]?.ToString()?.ToUpper())
             .Where(o => !string.IsNullOrEmpty(o))
             .ToHashSet();
-        // 1. Tìm file danh sách gốc trong V Drive
-        string dateKey = request.Date; 
-        string dateKeyDash = dateKey.Replace(".", "-"); 
+
+        string dateKey = request.Date;
+        string dateKeyDash = dateKey.Replace(".", "-");
         string fileType = request.FileType ?? "";
+
         var allFilesInDrive = Directory.GetFiles(vDrivePath)
-            .Where(f => f.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            .Where(f => f.EndsWith(".xlsb", StringComparison.OrdinalIgnoreCase) ||
+                        f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
             .Where(f => !Path.GetFileName(f).StartsWith("~"))
             .ToList();
+
         var matchedFiles = allFilesInDrive
-            .Where(f => Path.GetFileName(f).Contains(dateKey) || Path.GetFileName(f).Contains(dateKeyDash))
+            .Where(f => Path.GetFileName(f).Contains(dateKey) ||
+                        Path.GetFileName(f).Contains(dateKeyDash))
             .Select(f => new FileInfo(f))
             .ToList();
+
         FileInfo? originalFile = null;
+
         if (matchedFiles.Count > 0)
         {
             if (fileType.Equals("Console Lid", StringComparison.OrdinalIgnoreCase))
-                originalFile = matchedFiles.Where(f => f.Name.Contains("Console Lid", StringComparison.OrdinalIgnoreCase)).OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
+                originalFile = matchedFiles
+                    .Where(f => f.Name.Contains("Console Lid", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(f => f.LastWriteTime)
+                    .FirstOrDefault();
             else
-                originalFile = matchedFiles.Where(f => !f.Name.Contains("Console Lid", StringComparison.OrdinalIgnoreCase)).OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
-            if (originalFile == null) originalFile = matchedFiles.OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
+                originalFile = matchedFiles
+                    .Where(f => !f.Name.Contains("Console Lid", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(f => f.LastWriteTime)
+                    .FirstOrDefault();
+
+            if (originalFile == null)
+                originalFile = matchedFiles.OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
         }
-        if (originalFile == null) 
-            return Results.BadRequest($"Không tìm thấy file danh sách gốc của ngày {request.Date} trong V Drive.");
+
+        if (originalFile == null)
+            return Results.BadRequest($"Không tìm thấy file danh sách gốc ngày {request.Date}.");
+
         Console.WriteLine($"  📄 Đã chọn file gốc: {originalFile.Name}");
+
         string tempDir = Path.Combine(Path.GetTempPath(), "MES_Exports");
         Directory.CreateDirectory(tempDir);
         string outputPath = Path.Combine(tempDir, $"BaoCao_GiaoNhan_{request.Date}_{DateTime.Now:HHmmss}.xlsb");
-        // 2. TUYỆT CHIÊU LATE BINDING: Gọi Excel ngầm mà không cần thư viện Interop
+
         Type? excelType = Type.GetTypeFromProgID("Excel.Application");
         if (excelType == null)
         {
-            return Results.BadRequest("Máy chủ không cài đặt Microsoft Excel. Không thể xuất file .xlsb!");
+            return Results.BadRequest("Máy chủ không cài Microsoft Excel. Không thể xuất .xlsb!");
         }
-        Console.WriteLine("  ⚙️ Đang mở Excel ngầm để tạo file .xlsb...");
+
+        Console.WriteLine("  ⚙️ Đang mở Excel ngầm...");
+
         dynamic excelApp = Activator.CreateInstance(excelType)!;
-        
+
         try
         {
             excelApp.Visible = false;
             excelApp.DisplayAlerts = false;
             excelApp.AskToUpdateLinks = false;
+
             dynamic workbooks = excelApp.Workbooks;
-            dynamic wb = workbooks.Open(originalFile.FullName, 0, true); 
+            dynamic wb = workbooks.Open(originalFile.FullName, 0, true);
             dynamic ws = wb.Sheets[1];
             dynamic cells = ws.Cells;
             dynamic lastCell = cells[ws.Rows.Count, 4];
             int lastRow = lastCell.End(-4162).Row;
-            Console.WriteLine($"  ✍️ Đang điền chữ OK từ dòng 5 đến {lastRow}...");
+
+            Console.WriteLine($"  ✍️ Ghi 'OK' từ dòng 5 đến {lastRow}...");
+
             for (int r = 5; r <= lastRow; r++)
             {
                 dynamic mxCell = cells[r, 4];
                 var cellValue = mxCell.Value;
-                
+
                 if (cellValue != null)
                 {
                     string mxCode = cellValue.ToString().Trim().ToUpper();
                     if (receivedOdrnos.Contains(mxCode))
                     {
-                        dynamic cellK = cells[r, 11]; 
+                        dynamic cellK = cells[r, 11];
                         cellK.Value = "OK";
                         cellK.Font.Bold = true;
-                        cellK.Font.Color = 32768; 
+                        cellK.Font.Color = 32768;
                     }
                 }
             }
+
             Console.WriteLine("  💾 Đang lưu file .xlsb...");
-            // Lưu file với định dạng .xlsb (Mã format 50 = xlExcel12)
-            wb.SaveAs(outputPath, 50); 
+            wb.SaveAs(outputPath, 50);
             wb.Close(false);
             excelApp.Quit();
         }
@@ -598,20 +710,20 @@ app.MapPost("/export", async (ExportRequest request) =>
             excelApp.Quit();
             throw new Exception("Lỗi khi điều khiển Excel: " + ex.Message);
         }
-        // 3. Trả file .xlsb về cho trình duyệt
+
         if (File.Exists(outputPath))
         {
             var fileBytes = File.ReadAllBytes(outputPath);
-            File.Delete(outputPath); 
-            
-            Console.WriteLine($"  ✅ Xuất báo cáo XLSB thành công!");
+            File.Delete(outputPath);
+
+            Console.WriteLine("  ✅ Xuất báo cáo XLSB thành công!");
             return Results.File(
                 fileBytes,
                 "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
                 Path.GetFileName(outputPath)
             );
         }
-        
+
         return Results.Problem("Lỗi không xác định khi lưu file.");
     }
     catch (Exception ex)
@@ -621,32 +733,34 @@ app.MapPost("/export", async (ExportRequest request) =>
     }
 });
 
-// ==================== HELPER: TÌM THƯ MỤC INHOUSE THÔNG MINH ====================
+// ==================== HELPER: TÌM THƯ MỤC INHOUSE ====================
 string? FindInhouseFolder(DateTime targetDate, string rootPath)
 {
     Console.WriteLine($"\n  🔍 Đang tìm folder INHOUSE cho ngày: {targetDate:dd/MM/yyyy}");
+
     if (!Directory.Exists(rootPath))
     {
         Console.WriteLine($"  ❌ Không tìm thấy thư mục gốc: {rootPath}");
         return null;
     }
-    // 1. Lấy danh sách các folder MSS (VD: MSS0513, MSS0520, MSS0527...)
+
     var mssDirs = Directory.GetDirectories(rootPath, "MSS*");
     string? selectedMssDir = null;
     DateTime? closestDate = null;
+
     foreach (var dir in mssDirs)
     {
-        string folderName = new DirectoryInfo(dir).Name; // "MSS0527"
+        string folderName = new DirectoryInfo(dir).Name; // MSS0527
         if (folderName.Length >= 7)
         {
             string monthStr = folderName.Substring(3, 2);
             string dayStr = folderName.Substring(5, 2);
+
             if (int.TryParse(monthStr, out int m) && int.TryParse(dayStr, out int d))
             {
                 try
                 {
                     DateTime folderDate = new DateTime(targetDate.Year, m, d);
-
                     if (folderDate >= targetDate.Date)
                     {
                         if (closestDate == null || folderDate < closestDate)
@@ -660,175 +774,225 @@ string? FindInhouseFolder(DateTime targetDate, string rootPath)
             }
         }
     }
+
     if (selectedMssDir == null)
     {
-        Console.WriteLine($"  ❌ Không tìm thấy folder MSS nào bao phủ ngày {targetDate:dd/MM/yyyy}");
+        Console.WriteLine($"  ❌ Không tìm thấy folder MSS bao phủ ngày {targetDate:dd/MM/yyyy}");
         return null;
     }
-    Console.WriteLine($"  ✅ Đã chọn folder tuần: {new DirectoryInfo(selectedMssDir).Name}");
-    // 2. Tìm folder INHOUSE bên trong
+
+    Console.WriteLine($"  ✅ Folder tuần: {new DirectoryInfo(selectedMssDir).Name}");
+
     string path1 = Path.Combine(selectedMssDir, @"Sub Schedule\kit Schedule\WIP\2.KIT STACK OUT\INHOUSE");
     string path2 = Path.Combine(selectedMssDir, @"kit Schedule\WIP\2.KIT STACK OUT\INHOUSE");
+
     if (Directory.Exists(path1))
     {
-        Console.WriteLine($"  ✅ Tìm thấy INHOUSE tại cấu trúc 1.");
+        Console.WriteLine("  ✅ INHOUSE tại cấu trúc 1.");
         return path1;
     }
     else if (Directory.Exists(path2))
     {
-        Console.WriteLine($"  ✅ Tìm thấy INHOUSE tại cấu trúc 2.");
+        Console.WriteLine("  ✅ INHOUSE tại cấu trúc 2.");
         return path2;
     }
     else
     {
-        Console.WriteLine($"  ⚠️ Không thấy cấu trúc chuẩn, đang quét sâu toàn bộ folder {new DirectoryInfo(selectedMssDir).Name}...");
+        Console.WriteLine($"  ⚠️ Không thấy cấu trúc chuẩn, đang quét sâu {new DirectoryInfo(selectedMssDir).Name}...");
         try
         {
-            // Quét dự phòng tất cả thư mục con nếu ai đó đổi tên folder
             var fallbackDirs = Directory.GetDirectories(selectedMssDir, "INHOUSE", SearchOption.AllDirectories);
             if (fallbackDirs.Length > 0)
             {
-                Console.WriteLine($"  ✅ Đã tìm thấy INHOUSE bằng cách quét sâu.");
+                Console.WriteLine("  ✅ Tìm thấy INHOUSE bằng quét sâu.");
                 return fallbackDirs[0];
             }
         }
         catch { }
     }
-    Console.WriteLine("  ❌ Không tìm thấy thư mục INHOUSE nào trong tuần này!");
+
+    Console.WriteLine("  ❌ Không tìm thấy INHOUSE trong tuần này!");
     return null;
 }
-// ==================== FUNCTION: PARSE MX DETAILS NATIVELY (NO PYTHON) ====================
+
+// ==================== FUNCTION: PARSE MX DETAILS NATIVELY ====================
 async Task<List<MxDetail>> ParseMxDetailsFromXlsb(string xlsbFile, List<string> odrnos)
 {
     var result = new List<MxDetail>();
-    
-    string CleanStr(string? input) {
+
+    string CleanStr(string? input)
+    {
         if (string.IsNullOrWhiteSpace(input)) return "";
         return input.Replace("*", "").Replace("\u00A0", "").Replace("\u200B", "").Trim().ToUpper();
     }
+
     try
     {
-        Console.WriteLine($"  ⚡ Parsing MX details NATIVELY from: {Path.GetFileName(xlsbFile)}");
-        
-        // ĐỌC TRỰC TIẾP FILE XLSB BẰNG C# (KHÔNG CẦN PYTHON)
+        Console.WriteLine($"  ⚡ Parsing MX details from: {Path.GetFileName(xlsbFile)}");
+
         using var stream = File.Open(xlsbFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var reader = ExcelReaderFactory.CreateReader(stream, new ExcelReaderConfiguration() { FallbackEncoding = Encoding.GetEncoding(1252) });
-        
-        var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration() { 
-            ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false } 
+
+        var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration()
+        {
+            ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
         });
-        if (!dataSet.Tables.Contains("Print") || !dataSet.Tables.Contains("4") || 
-            !dataSet.Tables.Contains("13") || !dataSet.Tables.Contains("17")) 
+
+        if (!dataSet.Tables.Contains("Print") ||
+            !dataSet.Tables.Contains("4") ||
+            !dataSet.Tables.Contains("13") ||
+            !dataSet.Tables.Contains("17"))
         {
             Console.WriteLine("  ❌ Missing required sheets (Print, 4, 13, or 17)");
             return result;
         }
+
         var sheetPrint = dataSet.Tables["Print"];
         var sheet4 = dataSet.Tables["4"];
         var sheet13 = dataSet.Tables["13"];
         var sheet17 = dataSet.Tables["17"];
+
         var partMapping = GetPartMapping();
-        // Hàm lấy dữ liệu an toàn (Index bắt đầu từ 0)
-        string GetCell(DataTable dt, int rowIdx, int colIdx) {
+
+        string GetCell(DataTable dt, int rowIdx, int colIdx)
+        {
             if (rowIdx >= dt.Rows.Count || colIdx >= dt.Columns.Count) return "";
             return dt.Rows[rowIdx][colIdx]?.ToString() ?? "";
         }
-        // 1. Đọc Sheet Print (Dòng 6 -> index 5, Cột S(19) -> index 18)
+
         var mxInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int r = 5; r < sheetPrint.Rows.Count; r++)
         {
-            var mx = CleanStr(GetCell(sheetPrint, r, 18));
+            var mx = CleanStr(GetCell(sheetPrint, r, 18)); // col S (index 18)
             if (!string.IsNullOrEmpty(mx)) mxInFile.Add(mx);
         }
-        var mxToProcess = odrnos.Where(mx => mxInFile.Contains(CleanStr(mx))).Select(m => CleanStr(m)).ToList();
-        // 2. Đọc Sheet 17 (Dòng 2 -> index 1, Cột B(2) -> index 1, Cột AY(51) -> index 50)
+
+        var mxToProcess = odrnos
+            .Where(mx => mxInFile.Contains(CleanStr(mx)))
+            .Select(m => CleanStr(m))
+            .ToList();
+
         var fallbackItems = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         for (int r = 1; r < sheet17.Rows.Count; r++)
         {
             string mx = CleanStr(GetCell(sheet17, r, 1));
             string fallbackItem = CleanStr(GetCell(sheet17, r, 50));
-            if (!string.IsNullOrEmpty(mx) && !string.IsNullOrEmpty(fallbackItem)) fallbackItems[mx] = fallbackItem;
+            if (!string.IsNullOrEmpty(mx) && !string.IsNullOrEmpty(fallbackItem))
+                fallbackItems[mx] = fallbackItem;
         }
-        // 3. Đọc Sheet 13 (Dòng 1 -> index 0, Cột A(1) -> index 0)
-        var sheet13Rows = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase); // Lưu lại index dòng
+
+        var sheet13Rows = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         for (int r = 0; r < sheet13.Rows.Count; r++)
         {
             string item = CleanStr(GetCell(sheet13, r, 0));
-            if (!string.IsNullOrEmpty(item) && !sheet13Rows.ContainsKey(item)) sheet13Rows[item] = r;
+            if (!string.IsNullOrEmpty(item) && !sheet13Rows.ContainsKey(item))
+                sheet13Rows[item] = r;
         }
-        // 4. Đọc Sheet 4 (Dòng 2 -> index 1, Cột A(1)->0, K(11)->10, R(18)->17)
+
         var sheet4Items = new Dictionary<string, List<(string ItemCode, int Qty)>>(StringComparer.OrdinalIgnoreCase);
         string lastValidItemCode = "";
         int lastValidQty = 0;
+
         for (int r = 1; r < sheet4.Rows.Count; r++)
         {
             string rawMx = CleanStr(GetCell(sheet4, r, 0));
             if (string.IsNullOrWhiteSpace(rawMx)) continue;
-            var mxList = rawMx.Split(new[] { '/', ',', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                              .Select(m => CleanStr(m)).Where(m => !string.IsNullOrEmpty(m));
+
+            var mxList = rawMx
+                .Split(new[] { '/', ',', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(m => CleanStr(m))
+                .Where(m => !string.IsNullOrEmpty(m));
+
             string currentItemCode = CleanStr(GetCell(sheet4, r, 10));
             string qtyStr = CleanStr(GetCell(sheet4, r, 17));
-            
+
             int currentQty = 0;
             if (int.TryParse(qtyStr, out int q)) currentQty = q;
             else if (double.TryParse(qtyStr, out double qd)) currentQty = (int)qd;
-            if (string.IsNullOrEmpty(currentItemCode)) currentItemCode = lastValidItemCode;
-            else lastValidItemCode = currentItemCode;
-            if (currentQty <= 0) currentQty = lastValidQty;
-            else lastValidQty = currentQty;
-            if (!string.IsNullOrEmpty(currentItemCode) && currentQty > 0) {
-                foreach (var mx in mxList) {
-                    if (!sheet4Items.ContainsKey(mx)) sheet4Items[mx] = new List<(string, int)>();
+
+            if (string.IsNullOrEmpty(currentItemCode))
+                currentItemCode = lastValidItemCode;
+            else
+                lastValidItemCode = currentItemCode;
+
+            if (currentQty <= 0)
+                currentQty = lastValidQty;
+            else
+                lastValidQty = currentQty;
+
+            if (!string.IsNullOrEmpty(currentItemCode) && currentQty > 0)
+            {
+                foreach (var mx in mxList)
+                {
+                    if (!sheet4Items.ContainsKey(mx))
+                        sheet4Items[mx] = new List<(string, int)>();
                     sheet4Items[mx].Add((currentItemCode, currentQty));
                 }
             }
         }
-        // XỬ LÝ TỪNG MX
+
         foreach (var odrno in mxToProcess)
         {
             if (!sheet4Items.TryGetValue(odrno, out var items)) continue;
-            
+
             foreach (var (originalItemCode, itemQty) in items)
             {
                 int itemRowIdx = -1;
                 string finalItemCode = originalItemCode;
-                if (sheet13Rows.TryGetValue(originalItemCode, out int row13)) {
+
+                if (sheet13Rows.TryGetValue(originalItemCode, out int row13))
+                {
                     itemRowIdx = row13;
-                } else {
-                    if (fallbackItems.TryGetValue(odrno, out var fallbackItemCode)) {
+                }
+                else
+                {
+                    if (fallbackItems.TryGetValue(odrno, out var fallbackItemCode))
+                    {
                         finalItemCode = fallbackItemCode;
-                        if (sheet13Rows.TryGetValue(fallbackItemCode, out int fallbackRow13)) itemRowIdx = fallbackRow13;
+                        if (sheet13Rows.TryGetValue(fallbackItemCode, out int fallbackRow13))
+                            itemRowIdx = fallbackRow13;
                     }
                 }
-                
+
                 if (itemRowIdx == -1) continue;
-                
+
                 foreach (var part in partMapping)
                 {
                     int partQtyPerItem = 0;
-                    try {
-                        // Cột trong partMapping là index 1-based (Excel), nên trừ 1 để ra 0-based
+                    try
+                    {
                         var cellVal = CleanStr(GetCell(sheet13, itemRowIdx, part.ColumnIndex - 1));
                         if (int.TryParse(cellVal, out int p)) partQtyPerItem = p;
                         else if (double.TryParse(cellVal, out double pd)) partQtyPerItem = (int)pd;
-                    } catch { }
-                    
+                    }
+                    catch { }
+
                     if (partQtyPerItem > 0)
                     {
-                        result.Add(new MxDetail {
-                            OdrNo = odrno, ItemCode = finalItemCode, ItemQty = itemQty,
-                            PartName = part.PartName, PartQty = partQtyPerItem * itemQty,
-                            PartOrder = part.Order, LastUpdate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                        result.Add(new MxDetail
+                        {
+                            OdrNo = odrno,
+                            ItemCode = finalItemCode,
+                            ItemQty = itemQty,
+                            PartName = part.PartName,
+                            PartQty = partQtyPerItem * itemQty,
+                            PartOrder = part.Order,
+                            LastUpdate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
                         });
                     }
                 }
             }
         }
-        Console.WriteLine($"  ✅ Đã xử lý xong {result.Count} dòng chi tiết Part (Native C# Mode).");
+
+        Console.WriteLine($"  ✅ Đã xử lý xong {result.Count} dòng chi tiết Part.");
     }
-    catch (Exception ex) { Console.WriteLine($"❌ Error ParseMxDetailsFromXlsb: {ex.Message}"); }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Error ParseMxDetailsFromXlsb: {ex.Message}");
+    }
     return result;
 }
+
 List<PartMappingData> GetPartMapping()
 {
     return new List<PartMappingData> {
@@ -879,25 +1043,21 @@ List<PartMappingData> GetPartMapping()
     };
 }
 
-// ==================== HELPER: PHÂN LOẠI XE (VEHICLE MAPPING) ====================
+// ==================== HELPER: PHÂN LOẠI XE ====================
 string AssignVehicle(string partName)
 {
     var p = partName.ToLower();
-    
-    // XE 1: Arm, Back, Panel, Flap...
-    if (p.Contains("arm") || p.Contains("back") || p.Contains("panel") || p.Contains("flap")) 
+
+    if (p.Contains("arm") || p.Contains("back") || p.Contains("panel") || p.Contains("flap"))
         return "Xe 1";
-        
-    // XE 2: Pillow, Cushion, Seat, Ottoman...
-    if (p.Contains("pillow") || p.Contains("cushion") || p.Contains("seat") || p.Contains("ottoman")) 
+
+    if (p.Contains("pillow") || p.Contains("cushion") || p.Contains("seat") || p.Contains("ottoman"))
         return "Xe 2";
-        
-    // XE 3: Fiber, Cotton, Sack...
-    if (p.Contains("fiber") || p.Contains("sack") || p.Contains("hair")) 
+
+    if (p.Contains("fiber") || p.Contains("sack") || p.Contains("hair"))
         return "Xe 3";
-        
-    // Mặc định nếu không thuộc 3 loại trên
-    return "Xe 1"; 
+
+    return "Xe 1";
 }
 
 // ==================== DASHBOARD API ENDPOINT ====================
@@ -906,21 +1066,22 @@ app.MapGet("/api/dashboard", async (string date, AppDbContext db) =>
     try
     {
         if (string.IsNullOrEmpty(date)) return Results.BadRequest("Missing date");
-        // Lấy tất cả Orders của ngày đó
+
         var orders = await db.Orders.Where(o => o.DateKey == date).ToListAsync();
-        
-        // Lấy tất cả Details của ngày đó
+
         var odrnos = orders.Select(o => o.OdrNo).ToList();
         var allDetails = await db.MxDetails.Where(d => odrnos.Contains(d.OdrNo)).ToListAsync();
+
         var dashboardData = new List<object>();
+
         foreach (var order in orders)
         {
             var mxDetails = allDetails.Where(d => d.OdrNo == order.OdrNo).ToList();
-            
-            // Nhóm các Part theo Xe
+
             var xe1Parts = new List<string>();
             var xe2Parts = new List<string>();
             var xe3Parts = new List<string>();
+
             foreach (var detail in mxDetails)
             {
                 string vehicle = AssignVehicle(detail.PartName);
@@ -928,11 +1089,11 @@ app.MapGet("/api/dashboard", async (string date, AppDbContext db) =>
                 else if (vehicle == "Xe 2" && !xe2Parts.Contains(detail.PartName)) xe2Parts.Add(detail.PartName);
                 else if (vehicle == "Xe 3" && !xe3Parts.Contains(detail.PartName)) xe3Parts.Add(detail.PartName);
             }
-            // Phân tích trạng thái từng xe dựa vào Ghi chú (Note) của Order
+
             string xe1Status = order.Status == "Pending" ? "Pending" : "Received";
             string xe2Status = order.Status == "Pending" ? "Pending" : "Received";
             string xe3Status = order.Status == "Pending" ? "Pending" : "Received";
-            
+
             string xe1Note = ""; string xe2Note = ""; string xe3Note = "";
             if (order.Status == "Lack" && !string.IsNullOrEmpty(order.Note))
             {
@@ -940,19 +1101,21 @@ app.MapGet("/api/dashboard", async (string date, AppDbContext db) =>
                 foreach (var lack in lackItems)
                 {
                     var cleanLack = lack.Trim();
-                    var partNameOnly = cleanLack.Split('(')[0].Trim(); // Lấy tên part
-                    
+                    var partNameOnly = cleanLack.Split('(')[0].Trim();
+
                     string v = AssignVehicle(partNameOnly);
                     if (v == "Xe 1") { xe1Status = "Lack"; xe1Note += cleanLack + " "; }
                     if (v == "Xe 2") { xe2Status = "Lack"; xe2Note += cleanLack + " "; }
                     if (v == "Xe 3") { xe3Status = "Lack"; xe3Note += cleanLack + " "; }
                 }
             }
-            // Nếu xe không có hàng, set status là N/A
+
             if (xe1Parts.Count == 0) xe1Status = "N/A";
             if (xe2Parts.Count == 0) xe2Status = "N/A";
             if (xe3Parts.Count == 0) xe3Status = "N/A";
-            dashboardData.Add(new {
+
+            dashboardData.Add(new
+            {
                 odrno = order.OdrNo,
                 fitem = order.FItem,
                 mw = order.Mw,
@@ -960,13 +1123,13 @@ app.MapGet("/api/dashboard", async (string date, AppDbContext db) =>
                 timeWindow = order.DeliveryTime,
                 status = order.Status,
                 updateTime = order.Time,
-                
                 note = order.Note,
                 xe1 = new { parts = string.Join(", ", xe1Parts), status = xe1Status, note = xe1Note },
                 xe2 = new { parts = string.Join(", ", xe2Parts), status = xe2Status, note = xe2Note },
                 xe3 = new { parts = string.Join(", ", xe3Parts), status = xe3Status, note = xe3Note }
             });
         }
+
         return Results.Ok(dashboardData);
     }
     catch (Exception ex) { return Results.Problem(ex.Message); }
@@ -975,43 +1138,69 @@ app.MapGet("/api/dashboard", async (string date, AppDbContext db) =>
 // ==================== KHO 2 API ENDPOINTS ====================
 app.MapPost("/api/kits-inv/scan", async (Kho2ScanRequest req, AppDbContext db) =>
 {
-    try {
-        if (string.IsNullOrEmpty(req.Odrno) || string.IsNullOrEmpty(req.ZoneCode)) return Results.BadRequest("Thiếu mã MX hoặc mã Ô");
+    try
+    {
+        if (string.IsNullOrEmpty(req.Odrno) || string.IsNullOrEmpty(req.ZoneCode))
+            return Results.BadRequest("Thiếu mã MX hoặc mã Ô");
+
         string mx = req.Odrno.ToUpper().Trim();
         string zone = req.ZoneCode.ToUpper().Trim();
-        var existing = await db.Kho2_Inventory.FirstOrDefaultAsync(x => x.OdrNo == mx && x.Status == "In");
-        if (existing != null) {
+
+        var existing = await db.Kho2_Inventory
+            .FirstOrDefaultAsync(x => x.OdrNo == mx && x.Status == "In");
+
+        if (existing != null)
+        {
             string oldZone = existing.ZoneCode;
             existing.ZoneCode = zone;
             existing.UpdateTime = DateTime.Now;
             await db.SaveChangesAsync();
             return Results.Ok(new { message = $"🔄 Đã dời {mx} từ ô {oldZone} sang ô {zone}" });
-        } else {
-            db.Kho2_Inventory.Add(new Kho2_Inventory { OdrNo = mx, ZoneCode = zone, InTime = DateTime.Now, UpdateTime = DateTime.Now, Status = "In" });
+        }
+        else
+        {
+            db.Kho2_Inventory.Add(new Kho2_Inventory
+            {
+                OdrNo = mx,
+                ZoneCode = zone,
+                InTime = DateTime.Now,
+                UpdateTime = DateTime.Now,
+                Status = "In"
+            });
             await db.SaveChangesAsync();
             return Results.Ok(new { message = $"✅ Đã cất {mx} vào ô {zone}" });
         }
-    } catch (Exception ex) { return Results.Problem(ex.Message); }
+    }
+    catch (Exception ex) { return Results.Problem(ex.Message); }
 });
+
 app.MapGet("/api/kits-inv/find", async (string odrno, AppDbContext db) =>
 {
     string mx = odrno.ToUpper().Trim();
-    var item = await db.Kho2_Inventory.FirstOrDefaultAsync(x => x.OdrNo == mx && x.Status == "In");
+    var item = await db.Kho2_Inventory
+        .FirstOrDefaultAsync(x => x.OdrNo == mx && x.Status == "In");
     if (item == null) return Results.NotFound($"❌ MX {mx} không có trong Kho 2");
     return Results.Ok(item);
 });
+
 app.MapPost("/api/kits-inv/out", async (Kho2ScanRequest req, AppDbContext db) =>
 {
     string mx = req.Odrno.ToUpper().Trim();
-    var item = await db.Kho2_Inventory.FirstOrDefaultAsync(x => x.OdrNo == mx && x.Status == "In");
+    var item = await db.Kho2_Inventory
+        .FirstOrDefaultAsync(x => x.OdrNo == mx && x.Status == "In");
     if (item == null) return Results.BadRequest("Không tìm thấy hàng trong kho");
-    item.Status = "Out"; item.OutTime = DateTime.Now;
+    item.Status = "Out";
+    item.OutTime = DateTime.Now;
     await db.SaveChangesAsync();
     return Results.Ok(new { message = $"📤 Đã xuất kho thành công {mx}" });
 });
+
 app.MapGet("/api/kits-inv/inventory", async (AppDbContext db) =>
 {
-    var list = await db.Kho2_Inventory.Where(x => x.Status == "In").OrderByDescending(x => x.UpdateTime).ToListAsync();
+    var list = await db.Kho2_Inventory
+        .Where(x => x.Status == "In")
+        .OrderByDescending(x => x.UpdateTime)
+        .ToListAsync();
     return Results.Ok(list);
 });
 
@@ -1024,7 +1213,6 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
 {
     try
     {
-        // 1. Tìm đúng file Excel theo ngày
         DateTime targetDate;
         if (!DateTime.TryParse(date, out targetDate))
             return Results.BadRequest("Invalid date format. Use yyyy-MM-dd.");
@@ -1037,7 +1225,6 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
 
         Console.WriteLine($"🔍 Đang đọc file tracking: {fileName}");
 
-        // 2. Đọc file và xử lý
         var dataByMx = new Dictionary<string, List<WorkCenterStep>>();
 
         using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -1047,11 +1234,12 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
             ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
         });
 
-        // 3. Lặp qua tất cả các Sheet (Work Centers)
         foreach (DataTable table in dataSet.Tables)
         {
             string workCenterName = table.TableName;
-            if (workCenterName.ToLower().Contains("pivot") || workCenterName.ToLower().Contains("summary")) continue;
+            if (workCenterName.ToLower().Contains("pivot") ||
+                workCenterName.ToLower().Contains("summary"))
+                continue;
 
             for (int i = 1; i < table.Rows.Count; i++)
             {
@@ -1079,48 +1267,84 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
             }
         }
 
-        // 4. Chuyển đổi sang định dạng để trả về
-        var result = dataByMx.Select(kvp => new TrackingData(kvp.Key, kvp.Value))
-                             .OrderBy(t => t.Mx)
-                             .ToList();
+        var result = dataByMx
+            .Select(kvp => new TrackingData(kvp.Key, kvp.Value))
+            .OrderBy(t => t.Mx)
+            .ToList();
 
         Console.WriteLine($"✅ Đã xử lý xong {result.Count} mã MX.");
 
-        // 🚀 TẠO MỚI MoProgress NẾU CHƯA CÓ (LOGIC TỐI GIẢN VÀ ĐÚNG)
+        // TẠO/CẬP NHẬT MoProgress THEO CẶP (MO, WC GỐC)
         try
         {
-            var allSteps = result.SelectMany(r => r.Steps.Select(s => new { Mx = r.Mx, Step = s })).ToList();
-            var existingMoKeys = (await db.MoProgresses.Select(p => p.MO + "|" + p.WorkCenter).ToListAsync()).ToHashSet();
-
-            var newProgressEntries = new List<MoProgress>();
-
-            foreach (var item in allSteps)
-            {
-                if (string.IsNullOrWhiteSpace(item.Step.Mo)) continue;
-                
-                var key = item.Step.Mo;
-                if (!existingMoKeys.Contains(key))
+            var allSteps = result
+                .SelectMany(r => r.Steps.Select(s => new
                 {
-                    newProgressEntries.Add(new MoProgress
-                    {
-                        MO = item.Step.Mo,
-                        MX = item.Mx,
-                        WorkCenter = item.Step.WorkCenter,
-                        PlannedQty = int.TryParse(item.Step.Qty, out int q) ? q : 0,
-                        ActualQty = 0, // Luôn bắt đầu từ 0
-                        Status = "pending",
-                        LeadtimeString = item.Step.Leadtime
-                    });
+                    Mx = r.Mx,
+                    WcExcel = s.WorkCenter,
+                    WcBase = NormalizeWcForAs400(s.WorkCenter),
+                    Step = s
+                }))
+                .ToList();
 
-                    existingMoKeys.Add(key);
+            // Lấy hết MoProgress hiện có, key theo (MO, WC GỐC)
+            var existing = await db.MoProgresses.ToListAsync();
+            var existingMap = existing
+                .GroupBy(p => (MO: p.MO.ToUpper(), WC: p.WorkCenter.ToUpper()))
+                .ToDictionary(g => g.Key, g => g.First());
+
+            // Gom planned Qty theo (MO, WC GỐC) trước
+            var mergedPlan = allSteps
+                .GroupBy(item => (MO: item.Step.Mo.Trim().ToUpper(), WC: item.WcBase.Trim().ToUpper()))
+                .ToDictionary(
+                    g => g.Key,
+                    g => new
+                    {
+                        PlannedQty = g.Sum(x => int.TryParse(x.Step.Qty, out int q) ? q : 0),
+                        Leadtime = g.Last().Step.Leadtime, // Lấy leadtime cuối
+                        Mx = g.Last().Mx
+                    }
+                );
+
+            var addedCount = 0;
+            var updatedCount = 0;
+
+            foreach (var kvp in mergedPlan)
+            {
+                var key = kvp.Key;
+                var plan = kvp.Value;
+
+                if (existingMap.TryGetValue(key, out var mp))
+                {
+                    // Ghi đè kế hoạch theo file mới
+                    mp.PlannedQty = plan.PlannedQty;
+                    mp.LeadtimeString = plan.Leadtime;
+                    mp.MX = plan.Mx;
+                    updatedCount++;
+                }
+                else
+                {
+                    var newMp = new MoProgress
+                    {
+                        MO = key.MO,
+                        MX = plan.Mx,
+                        WorkCenter = key.WC, // ✅ LƯU WC GỐC
+                        PlannedQty = plan.PlannedQty,
+                        ActualQty = 0,
+                        Status = "pending",
+                        LeadtimeString = plan.Leadtime
+                    };
+
+                    db.MoProgresses.Add(newMp);
+                    existingMap[key] = newMp;
+                    addedCount++;
                 }
             }
 
-            if(newProgressEntries.Any())
+            if (addedCount > 0 || updatedCount > 0)
             {
-                db.MoProgresses.AddRange(newProgressEntries);
                 await db.SaveChangesAsync();
-                Console.WriteLine($"✅ Đã tạo mới {newProgressEntries.Count} MO trong bảng MoProgress.");
+                Console.WriteLine($"✅ MoProgress Sync: Thêm {addedCount}, Cập nhật {updatedCount} (MO + WC gốc).");
             }
         }
         catch (Exception ex)
@@ -1129,8 +1353,7 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
         }
 
         return Results.Ok(result);
-
-    } 
+    }
     catch (Exception ex)
     {
         Console.WriteLine($"❌ Lỗi đọc file Tracking: {ex.Message}");
@@ -1138,14 +1361,13 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
     }
 });
 
-// ==================== API DEBUG: LẤY DANH SÁCH WORK CENTER ĐÃ ĐỌC ====================
+// ==================== API DEBUG: LẤY DANH SÁCH WORK CENTER ====================
 app.MapGet("/api/debug/workcenters", (string date) =>
 {
     try
     {
-        // 1. Tìm đúng file Excel theo ngày
         DateTime targetDate;
-        if (!DateTime.TryParse(date, out targetDate)) 
+        if (!DateTime.TryParse(date, out targetDate))
             return Results.BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
         string fileName = $"UPH Support Schedule {targetDate:ddMMyyyy}.xlsx";
@@ -1154,31 +1376,27 @@ app.MapGet("/api/debug/workcenters", (string date) =>
         if (!File.Exists(filePath))
             return Results.NotFound($"Không tìm thấy file kế hoạch: {fileName}");
 
-        // 2. Đọc file và chỉ lấy tên Sheet
         var workCenterNames = new List<string>();
 
         using (var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
         using (var reader = ExcelReaderFactory.CreateReader(stream))
         {
             var dataSet = reader.AsDataSet();
-            
+
             foreach (DataTable table in dataSet.Tables)
             {
                 string workCenterName = table.TableName;
-                
-                // Bỏ qua các sheet không phải là Work Center
-                if (workCenterName.ToLower().Contains("pivot") || workCenterName.ToLower().Contains("summary"))
-                {
+                if (workCenterName.ToLower().Contains("pivot") ||
+                    workCenterName.ToLower().Contains("summary"))
                     continue;
-                }
-                
+
                 workCenterNames.Add(workCenterName);
             }
         }
-        
-        // 3. Sắp xếp và trả về
+
         workCenterNames.Sort();
-        return Results.Ok(new {
+        return Results.Ok(new
+        {
             file = fileName,
             count = workCenterNames.Count,
             workCenters = workCenterNames
@@ -1195,7 +1413,6 @@ app.MapGet("/api/tracking/kit-progress", async (string date, AppDbContext db) =>
 {
     try
     {
-        // TODO: sau này cần lọc theo ngày
         var progressData = await db.MoProgresses
             .Select(p => new
             {
@@ -1204,7 +1421,7 @@ app.MapGet("/api/tracking/kit-progress", async (string date, AppDbContext db) =>
                 workCenter = p.WorkCenter,
                 plannedQty = p.PlannedQty,
                 currentQty = p.ActualQty,
-                leadtime = "", 
+                leadtime = p.LeadtimeString,
                 status = p.Status,
                 progress = $"{p.ActualQty}/{p.PlannedQty}"
             })
@@ -1218,7 +1435,7 @@ app.MapGet("/api/tracking/kit-progress", async (string date, AppDbContext db) =>
     }
 });
 
-// ==================== API LẤY CHI TIẾT QUÉT CỦA 1 MO TỪ DB SQLITE ====================
+// ==================== API LẤY CHI TIẾT QUÉT CỦA 1 MO ====================
 app.MapGet("/api/tracking/mo-scan-detail", async (string mo, AppDbContext db) =>
 {
     try
@@ -1230,11 +1447,11 @@ app.MapGet("/api/tracking/mo-scan-detail", async (string mo, AppDbContext db) =>
             .OrderBy(s => s.ScanTime)
             .ToListAsync();
 
-        // TÍNH TỔNG SỐ LƯỢT ĐÃ QUÉT
         int totalScannedQty = scans.Sum(s => s.Qty);
 
-        return Results.Ok(new { 
-            mo = mo, 
+        return Results.Ok(new
+        {
+            mo = mo,
             scans = scans,
             totalScannedQty = totalScannedQty
         });
@@ -1250,11 +1467,9 @@ app.MapGet("/api/test-as400", async () =>
 {
     try
     {
-        // Sử dụng connection string giống như trong Macro và Service
         using var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;");
         await conn.OpenAsync();
 
-        // Câu SQL đơn giản để lấy 10 dòng đầu tiên từ bảng scan
         string sql = "SELECT TRIM(ODORDR) AS ODORDR, TRIM(ODPN) AS ODPN, ODQTYC, TRIM(ODWKCN) AS ODWKCN, CHAR(ODTSTP) AS ODTSTP " +
                      "FROM WWDCF.GRPORDH FETCH FIRST 10 ROWS ONLY";
 
@@ -1266,11 +1481,11 @@ app.MapGet("/api/test-as400", async () =>
         {
             list.Add(new
             {
-                mo   = reader.GetString(0),
+                mo = reader.GetString(0),
                 item = reader.IsDBNull(1) ? "" : reader.GetString(1),
-                qty  = reader.IsDBNull(2) ? 0 : (int)reader.GetDecimal(2), // Dùng GetDecimal cho an toàn
-                wc   = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                ts   = reader.IsDBNull(4) ? "" : reader.GetString(4)
+                qty = reader.IsDBNull(2) ? 0 : (int)reader.GetDecimal(3),
+                wc = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                ts = reader.IsDBNull(4) ? "" : reader.GetString(4)
             });
         }
 
@@ -1278,11 +1493,10 @@ app.MapGet("/api/test-as400", async () =>
     }
     catch (Exception ex)
     {
-        // Nếu có lỗi, trả về chi tiết lỗi để dễ dàng debug
         return Results.Problem(new ProblemDetails
         {
             Title = "Lỗi kết nối AS/400",
-            Detail = ex.ToString(), // Trả về đầy đủ stack trace
+            Detail = ex.ToString(),
             Status = 500
         });
     }
@@ -1294,21 +1508,20 @@ app.MapGet("/api/debug/mo-scan-raw/{mo}", async (string mo, AppDbContext db) =>
     try
     {
         var moUpper = mo.ToUpper();
-        
-        // 1. Kiểm tra xem MO này có trong kế hoạch (bảng MoProgresses) không
-        var localMoProgress = await db.MoProgresses.FirstOrDefaultAsync(p => p.MO == moUpper);
+
+        var localMoProgress = await db.MoProgresses
+            .FirstOrDefaultAsync(p => p.MO == moUpper);
         var isInSchedule = localMoProgress != null;
 
-        // 2. Lấy tất cả log đã được lưu trong DB cục bộ cho MO này
-        var localScanLogs = await db.ScanLogs.Where(l => l.MO == moUpper).ToListAsync();
+        var localScanLogs = await db.ScanLogs
+            .Where(l => l.MO == moUpper)
+            .ToListAsync();
 
-        // 3. Truy vấn thô lên AS/400, bỏ qua bộ lọc thời gian để xem tất cả
         var as400RawScans = new List<object>();
         using (var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;TRANSLATE=1;"))
         {
             await conn.OpenAsync();
 
-            // Câu SQL này join giống hệt macro để có đầy đủ bộ lọc
             string sql = $@"
                 SELECT 
                     TRIM(A.ODORDR) AS ODORDR, TRIM(B.REFNO) AS MX_REFNO,
@@ -1341,7 +1554,8 @@ app.MapGet("/api/debug/mo-scan-raw/{mo}", async (string mo, AppDbContext db) =>
             }
         }
 
-        return Results.Ok(new {
+        return Results.Ok(new
+        {
             moSearched = moUpper,
             isInSchedule = isInSchedule,
             as400RawScans = as400RawScans,
@@ -1358,84 +1572,126 @@ app.MapGet("/api/debug/mo-scan-raw/{mo}", async (string mo, AppDbContext db) =>
 // ==================== API DEBUG: XEM BẢNG MoProgresses ====================
 app.MapGet("/api/debug/mo-progress", async (AppDbContext db) =>
 {
-    var allProgress = await db.MoProgresses.OrderBy(p => p.WorkCenter).ThenBy(p => p.MO).ToListAsync();
+    var allProgress = await db.MoProgresses
+        .OrderBy(p => p.WorkCenter)
+        .ThenBy(p => p.MO)
+        .ToListAsync();
     return Results.Ok(allProgress);
 });
 
 // ==================== WEB ROUTES ====================
-// 1. Trang chủ (Bản đồ 2D)
-app.MapGet("/", async ctx => {
+
+app.MapGet("/", async ctx =>
+{
     ctx.Response.ContentType = "text/html";
-    await ctx.Response.SendFileAsync("wwwroot/index.html"); // Lát nữa ta sẽ tạo file index.html mới
+    await ctx.Response.SendFileAsync("wwwroot/index.html");
 });
-// 2. Trang WIP WNK3 (Đã đổi tên từ index cũ)
-app.MapGet("/wip-wnk3", async ctx => {
+
+app.MapGet("/wip-wnk3", async ctx =>
+{
     ctx.Response.ContentType = "text/html";
     await ctx.Response.SendFileAsync("wwwroot/wip-wnk3.html");
 });
-// 3. Trang Kho 2
-app.MapGet("/kits-inv", async ctx => {
+
+app.MapGet("/kits-inv", async ctx =>
+{
     ctx.Response.ContentType = "text/html";
     await ctx.Response.SendFileAsync("wwwroot/kits-inv.html");
 });
-// 4. Trang Tracking Hành trình
-app.MapGet("/tracking", async ctx => {
+
+app.MapGet("/tracking", async ctx =>
+{
     ctx.Response.ContentType = "text/html";
-    await ctx.Response.SendFileAsync("wwwroot/tracking.html"); // Lát nữa ta sẽ tạo file tracking.html
+    await ctx.Response.SendFileAsync("wwwroot/tracking.html");
 });
-// 5. Trang Dashboard
-app.MapGet("/dashboard", async ctx => {
+
+app.MapGet("/dashboard", async ctx =>
+{
     ctx.Response.ContentType = "text/html";
     await ctx.Response.SendFileAsync("wwwroot/dashboard.html");
 });
-// 6. Trang Chi Tiết Work Center (Mới)
-app.MapGet("/wc-details", async ctx => {
+
+app.MapGet("/wc-details", async ctx =>
+{
     ctx.Response.ContentType = "text/html";
     await ctx.Response.SendFileAsync("wwwroot/wc-details.html");
 });
-// Các trang trống (Placeholder cho tương lai)
-app.MapGet("/kho1", async ctx => { await ctx.Response.WriteAsync("<h1>KHO 1 - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });
-app.MapGet("/kho3", async ctx => { await ctx.Response.WriteAsync("<h1>KHO 3 - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });
-app.MapGet("/assemble", async ctx => { await ctx.Response.WriteAsync("<h1>ASSEMBLE - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });
 
-app.MapGet("/cnc-go", async ctx => { await ctx.Response.WriteAsync("<h1>CNC GO - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });
-app.MapGet("/ban-khung-go", async ctx => { await ctx.Response.WriteAsync("<h1>BAN KHUNG GO - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });
-app.MapGet("/blow-fill", async ctx => { await ctx.Response.WriteAsync("<h1>BLOW FILL - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });
-app.MapGet("/glue-line", async ctx => { await ctx.Response.WriteAsync("<h1>GLUE LINE - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });
-app.MapGet("/sorting-foam", async ctx => { await ctx.Response.WriteAsync("<h1>SORTING FOAM - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });
-app.MapGet("/hand-fill", async ctx => { await ctx.Response.WriteAsync("<h1>HAND FILL - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });
-app.MapGet("/feather-fill", async ctx => { await ctx.Response.WriteAsync("<h1>FEATHER FILL - Dang xay dung...</h1><a href='/'>Quay lai</a>"); });
+// Placeholder pages
+app.MapGet("/kho1", async ctx =>
+{
+    await ctx.Response.WriteAsync("<h1>KHO 1 - Dang xay dung...</h1><a href='/'>Quay lai</a>");
+});
+app.MapGet("/kho3", async ctx =>
+{
+    await ctx.Response.WriteAsync("<h1>KHO 3 - Dang xay dung...</h1><a href='/'>Quay lai</a>");
+});
+app.MapGet("/assemble", async ctx =>
+{
+    await ctx.Response.WriteAsync("<h1>ASSEMBLE - Dang xay dung...</h1><a href='/'>Quay lai</a>");
+});
+
+app.MapGet("/cnc-go", async ctx =>
+{
+    await ctx.Response.WriteAsync("<h1>CNC GO - Dang xay dung...</h1><a href='/'>Quay lai</a>");
+});
+app.MapGet("/ban-khung-go", async ctx =>
+{
+    await ctx.Response.WriteAsync("<h1>BAN KHUNG GO - Dang xay dung...</h1><a href='/'>Quay lai</a>");
+});
+app.MapGet("/blow-fill", async ctx =>
+{
+    await ctx.Response.WriteAsync("<h1>BLOW FILL - Dang xay dung...</h1><a href='/'>Quay lai</a>");
+});
+app.MapGet("/glue-line", async ctx =>
+{
+    await ctx.Response.WriteAsync("<h1>GLUE LINE - Dang xay dung...</h1><a href='/'>Quay lai</a>");
+});
+app.MapGet("/sorting-foam", async ctx =>
+{
+    await ctx.Response.WriteAsync("<h1>SORTING FOAM - Dang xay dung...</h1><a href='/'>Quay lai</a>");
+});
+app.MapGet("/hand-fill", async ctx =>
+{
+    await ctx.Response.WriteAsync("<h1>HAND FILL - Dang xay dung...</h1><a href='/'>Quay lai</a>");
+});
+app.MapGet("/feather-fill", async ctx =>
+{
+    await ctx.Response.WriteAsync("<h1>FEATHER FILL - Dang xay dung...</h1><a href='/'>Quay lai</a>");
+});
 
 app.Run("http://0.0.0.0:5050");
+
 // ==================== DATABASE MODELS ====================
 public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
     public DbSet<Order> Orders { get; set; }
     public DbSet<MxDetail> MxDetails { get; set; }
     public DbSet<Kho2_Inventory> Kho2_Inventory { get; set; }
-    public DbSet<ScanLog> ScanLogs { get; set; }    
+    public DbSet<ScanLog> ScanLogs { get; set; }
     public DbSet<MoProgress> MoProgresses { get; set; }
     public DbSet<AppSetting> AppSettings { get; set; }
-    
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        
+
         modelBuilder.Entity<Order>()
             .HasIndex(o => new { o.OdrNo, o.DateKey });
-        
+
         modelBuilder.Entity<Order>()
             .HasIndex(o => o.Status);
-        
+
         modelBuilder.Entity<MxDetail>()
             .HasIndex(m => m.OdrNo);
-            
+
         modelBuilder.Entity<ScanLog>()
             .HasIndex(s => new { s.MO, s.ScanTime });
-        
+
         modelBuilder.Entity<MoProgress>()
-            .HasIndex(m => m.MO );
+            .HasIndex(m => new { m.MO, m.WorkCenter });
     }
 }
 
@@ -1448,12 +1704,13 @@ public class Order
     public string Qty { get; set; } = "";
     public string DeliveryDate { get; set; } = "";
     public string DeliveryTime { get; set; } = "";
-    public string FileType { get; set; } = ""; 
-    public string DateKey { get; set; } = "";  
+    public string FileType { get; set; } = "";
+    public string DateKey { get; set; } = "";
     public string Status { get; set; } = "Pending";
     public string Time { get; set; } = "";
     public string Note { get; set; } = "";
 }
+
 public class MxDetail
 {
     public int Id { get; set; }
@@ -1466,16 +1723,59 @@ public class MxDetail
     public string LastUpdate { get; set; } = "";
 }
 
-// ==================== BACKGROUND SERVICE POLLING AS400 (PHIÊN BẢN TỐI ƯU) ====================
+public class Kho2_Inventory
+{
+    public int Id { get; set; }
+    public string OdrNo { get; set; } = "";
+    public string ZoneCode { get; set; } = "";
+    public DateTime InTime { get; set; }
+    public DateTime UpdateTime { get; set; }
+    public DateTime? OutTime { get; set; }
+    public string Status { get; set; } = "In";
+}
+
+public class ScanLog
+{
+    public int Id { get; set; }
+    public string MO { get; set; } = "";
+    public string Item { get; set; } = "";
+    public string WorkCenter { get; set; } = "";
+    public int Qty { get; set; }
+    public DateTime ScanTime { get; set; }
+    public string Source { get; set; } = "AS400";
+}
+
+public class MoProgress
+{
+    public int Id { get; set; }
+    public string MO { get; set; } = "";
+    public string MX { get; set; } = "";
+    public string WorkCenter { get; set; } = "";
+    public int PlannedQty { get; set; }
+    public int ActualQty { get; set; }
+    public DateTime? LastScanTime { get; set; }
+    public string Status { get; set; } = "pending";
+    public string LeadtimeString { get; set; } = "";
+}
+
+public class AppSetting
+{
+    [Key]
+    public string Key { get; set; } = "";
+    public string Value { get; set; } = "";
+}
+
+// ==================== BACKGROUND SERVICE POLLING AS400 ====================
 public class As400ScanPollingService : BackgroundService
 {
     private readonly IServiceProvider _services;
     private readonly ILogger<As400ScanPollingService> _logger;
     private const string LastScanTimeKey = "LastScanTime";
 
+    // Danh sách WC trong file kế hoạch mà bạn muốn theo dõi
     private static readonly HashSet<string> ALLOWED_WORKCENTERS = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "UBF03", "UBF04", "UBF05", "UBF06", "UBF12", "UBF13", 
+        "UBF03", "UBF04", "UBF05", "UBF06", "UBF12", "UBF13",
         "UPHD1", "UCFBP", "UCFHS", "UCFHM", "UCFCH", "UCFCT",
         "UCFCM", "UCFCS", "UPGL1", "UPGL4", "UPGL6", "UPGL2",
         "WLGL2", "UCFCO"
@@ -1485,6 +1785,25 @@ public class As400ScanPollingService : BackgroundService
     {
         _services = services;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Chuẩn hóa WorkCenter từ file Excel sang WorkCenter gốc trên AS400.
+    /// Ví dụ: UPGL2_I, UPGL2_II → UPGL2 ; UBF03_M, UBF03_S → UBF03
+    /// </summary>
+    private static string NormalizeWcForAs400(string wcFromExcel)
+    {
+        if (string.IsNullOrWhiteSpace(wcFromExcel)) return wcFromExcel;
+
+        wcFromExcel = wcFromExcel.Trim().ToUpper();
+
+        int underscoreIndex = wcFromExcel.IndexOf('_');
+        if (underscoreIndex > 0)
+        {
+            return wcFromExcel.Substring(0, underscoreIndex);
+        }
+
+        return wcFromExcel;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -1511,26 +1830,30 @@ public class As400ScanPollingService : BackgroundService
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<OrderHub>>();
-        var _logger = scope.ServiceProvider.GetRequiredService<ILogger<As400ScanPollingService>>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<As400ScanPollingService>>();
         var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
         if (token.IsCancellationRequested)
         {
-            _logger.LogInformation("[AS400 Polling] Shutdown requested, skipping poll.");
+            logger.LogInformation("[AS400 Polling] Shutdown requested, skipping poll.");
             return;
         }
 
-        var lastScanTimeSetting = await db.AppSettings.FirstOrDefaultAsync(s => s.Key == LastScanTimeKey, token);
-        var _lastScanTime = lastScanTimeSetting != null ? DateTime.Parse(lastScanTimeSetting.Value) : DateTime.UtcNow.AddYears(-1);
+        var lastScanTimeSetting = await db.AppSettings
+            .FirstOrDefaultAsync(s => s.Key == LastScanTimeKey, token);
+        var lastScanTime = lastScanTimeSetting != null
+            ? DateTime.Parse(lastScanTimeSetting.Value)
+            : DateTime.UtcNow.AddYears(-1);
 
-        var moList = new List<(string MO, string WorkCenter)>();
-        
+        // ===== 1. Đọc file kế hoạch, lấy MO + WorkCenter (chi tiết + gốc) =====
+        var moList = new List<(string MO, string WorkCenterExcel, string WorkCenterBase)>();
+
         try
         {
             var schedulePath = configuration["SchedulePath"];
             if (string.IsNullOrEmpty(schedulePath))
             {
-                _logger.LogError("[AS400 Polling] SchedulePath is not configured.");
+                logger.LogError("[AS400 Polling] SchedulePath is not configured.");
                 return;
             }
 
@@ -1541,9 +1864,9 @@ public class As400ScanPollingService : BackgroundService
             {
                 using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 using var reader = ExcelReaderFactory.CreateReader(stream);
-                var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration() 
-                { 
-                    ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false } 
+                var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration()
+                {
+                    ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
                 });
 
                 int totalSheets = 0;
@@ -1553,162 +1876,218 @@ public class As400ScanPollingService : BackgroundService
                 {
                     totalSheets++;
                     string workCenterName = table.TableName;
-                    
-                    // ✅ LỌC THEO DANH SÁCH WC
-                    if (!ALLOWED_WORKCENTERS.Contains(workCenterName))
-                    {
+
+                    string baseWcName = NormalizeWcForAs400(workCenterName); 
+
+                    if (!ALLOWED_WORKCENTERS.Contains(baseWcName))
                         continue;
-                    }
-                    
-                    // ✅ BỎ QUA SHEET ĐẶC BIỆT
-                    if (workCenterName.ToLower().Contains("pivot") || 
-                        workCenterName.ToLower().Contains("summary")) 
-                    {
+
+                    if (workCenterName.ToLower().Contains("pivot") ||
+                        workCenterName.ToLower().Contains("summary"))
                         continue;
-                    }
-                    
+
                     allowedSheets++;
-                    
+
                     for (int i = 1; i < table.Rows.Count; i++)
                     {
                         string mo = table.Rows[i][5]?.ToString()?.Trim() ?? "";
-                        if (!string.IsNullOrEmpty(mo)) 
+                        if (!string.IsNullOrEmpty(mo))
                         {
-                            moList.Add((mo, workCenterName));
+                            var baseWc = NormalizeWcForAs400(workCenterName);
+                            moList.Add((mo, workCenterName, baseWc));
                         }
                     }
                 }
-                
+
                 moList = moList.Distinct().ToList();
-                
-                _logger.LogInformation(
-                    $"[AS400 Polling] Processed {allowedSheets}/{totalSheets} sheets, found {moList.Count} MOs."
-                );
+
+                logger.LogInformation(
+                    $"[AS400 Polling] Processed {allowedSheets}/{totalSheets} sheets, found {moList.Count} MOs.");
+            }
+            else
+            {
+                logger.LogWarning($"[AS400 Polling] Schedule file not found: {filePath}");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[AS400 Polling] Error reading schedule file.");
+            logger.LogError(ex, "[AS400 Polling] Error reading schedule file.");
             return;
         }
 
-        if (moList.Count == 0) 
+        if (moList.Count == 0)
         {
-            _logger.LogInformation("[AS400 Polling] No MOs found in allowed WorkCenters.");
+            logger.LogInformation("[AS400 Polling] No MOs found in allowed WorkCenters.");
             return;
         }
+
+        // ===== 2. Query AS400 theo cặp (MO, WorkCenterBase) =====
         var allNewRows = new List<(string MO, string MX, string Item, string Wc, int Qty, DateTime ScanTime)>();
-        DateTime latestScanTimeInBatch = _lastScanTime;
+        DateTime latestScanTimeInBatch = lastScanTime;
         const int batchSize = 100;
 
         var batches = moList.Chunk(batchSize);
-        _logger.LogInformation($"[AS400 Polling] Processing {moList.Count} MOs in {batches.Count()} batches of {batchSize}.");
+        logger.LogInformation($"[AS400 Polling] Processing {moList.Count} MOs in {batches.Count()} batches of {batchSize}.");
 
         foreach (var batch in batches)
         {
             if (token.IsCancellationRequested)
             {
-                _logger.LogInformation("[AS400 Polling] Shutdown requested, stopping batch processing.");
+                logger.LogInformation("[AS400 Polling] Shutdown requested, stopping batch processing.");
                 break;
             }
 
-            // ✅ CODE MỚI - CHỈ KIỂM TRA MO
-            var moOnlyList = batch.Select(item => item.MO).Distinct();
-            var whereClause = $"TRIM(A.ODORDR) IN ({string.Join(",", moOnlyList.Select(mo => $"'{mo}'"))})";
+            // (TRIM(A.ODORDR)='M1' AND TRIM(A.ODWKCN)='UPGL2') OR ...
+            var conditions = batch
+                .Select(item =>
+                {
+                    var baseWc = NormalizeWcForAs400(item.WorkCenterExcel);
+                    return $"(TRIM(A.ODORDR) = '{item.MO}' AND TRIM(A.ODWKCN) = '{baseWc}')";
+                })
+                .Distinct();
 
-            
-            // ✅ LOG RA ĐỂ KIỂM TRA
-            _logger.LogDebug($"[AS400 Polling] WHERE clause: {whereClause}");
+            var whereClause = string.Join(" OR ", conditions);
+            if (string.IsNullOrWhiteSpace(whereClause))
+                continue;
+
+            logger.LogDebug($"[AS400 Polling] WHERE clause: {whereClause}");
 
             try
             {
-                using (var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;TRANSLATE=1;"))
+                using var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;TRANSLATE=1;");
+                await conn.OpenAsync(token);
+
+                string sql = $@"
+                    SELECT 
+                        TRIM(A.ODORDR) AS ODORDR,
+                        TRIM(B.REFNO) AS MX_REFNO,
+                        TRIM(A.ODPN) AS ODPN, A.ODQTYC,
+                        TRIM(A.ODWKCN) AS ODWKCN,
+                        A.ODTSTP
+                    FROM WWDCF.GRPORDH A
+                    LEFT JOIN AMFLIBW.MOMAST B ON A.ODORDR = B.ORDNO
+                    WHERE ({whereClause})
+                      AND A.ODTSTP > ?
+                      AND B.OSTAT NOT IN ('99')
+                      AND SUBSTR(B.REFNO, 1, 2) = 'MX'
+                    ORDER BY A.ODTSTP";
+
+                using var cmd = new OdbcCommand(sql, conn);
+                cmd.Parameters.Add("?", OdbcType.VarChar).Value =
+                    lastScanTime.ToString("yyyy-MM-dd-HH.mm.ss.ffffff");
+
+                using var reader = await cmd.ExecuteReaderAsync(token);
+
+                while (await reader.ReadAsync(token))
                 {
-                    await conn.OpenAsync(token);
-                    
-                    // ✅ SQL CHỈ KIỂM TRA MO, KHÔNG KIỂM TRA WorkCenter
-                    string sql = $@"
-                        SELECT 
-                            TRIM(A.ODORDR) AS ODORDR,    -- MO number
-                            TRIM(B.REFNO) AS MX_REFNO,   -- MX number
-                            TRIM(A.ODPN) AS ODPN,        -- Item code
-                            A.ODQTYC,                    -- Quantity scanned
-                            TRIM(A.ODWKCN) AS ODWKCN,    -- Work Center (chỉ để lưu, không dùng để filter)
-                            A.ODTSTP                     -- Scan timestamp
-                        FROM WWDCF.GRPORDH A
-                        LEFT JOIN AMFLIBW.MOMAST B ON A.ODORDR = B.ORDNO
-                        WHERE {whereClause}               -- ✅ CHỈ KIỂM TRA MO
-                        AND A.ODTSTP > ?                -- Chỉ lấy lần quét mới
-                        AND B.OSTAT NOT IN ('99')       -- Bỏ qua MO đã hủy
-                        AND SUBSTR(B.REFNO, 1, 2) = 'MX' -- Chỉ lấy MO có MX
-                        ORDER BY A.ODTSTP
-                    ";
+                    string mo = reader.GetString(0);
+                    string mx = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                    string item = reader.IsDBNull(2) ? "" : reader.GetString(2);
+                    int qty = reader.IsDBNull(3) ? 0 : (int)reader.GetDecimal(3);
+                    string wc = reader.IsDBNull(4) ? "" : reader.GetString(4); // WC thực trên AS400
+                    DateTime scanTime = reader.GetDateTime(5);
 
-                    using var cmd = new OdbcCommand(sql, conn);
-                    cmd.Parameters.Add("?", OdbcType.VarChar).Value = _lastScanTime.ToString("yyyy-MM-dd-HH.mm.ss.ffffff");
-                    
-                    using var reader = await cmd.ExecuteReaderAsync(token);
-
-                    while (await reader.ReadAsync(token))
-                    {
-                        string mo = reader.GetString(0);
-                        string mx = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                        string item = reader.IsDBNull(2) ? "" : reader.GetString(2);
-                        int qty = reader.IsDBNull(3) ? 0 : (int)reader.GetDecimal(3);
-                        string wc = reader.IsDBNull(4) ? "" : reader.GetString(4);
-                        DateTime scanTime = reader.GetDateTime(5);
-                        
-                        allNewRows.Add((mo, mx, item, wc, qty, scanTime));
-                        if (scanTime > latestScanTimeInBatch) latestScanTimeInBatch = scanTime;
-                    }
+                    allNewRows.Add((mo, mx, item, wc, qty, scanTime));
+                    if (scanTime > latestScanTimeInBatch) latestScanTimeInBatch = scanTime;
                 }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
-                _logger.LogInformation("[AS400 Polling] Query cancelled due to application shutdown.");
+                logger.LogInformation("[AS400 Polling] Query cancelled due to application shutdown.");
                 break;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[AS400 Polling] Exception during DB2 query batch.");
+                logger.LogError(ex, "[AS400 Polling] Exception during DB2 query batch.");
                 continue;
             }
         }
 
-        if (allNewRows.Count == 0) 
+        if (allNewRows.Count == 0)
         {
-            _logger.LogInformation("[AS400 Polling] No new scan records found.");
+            logger.LogInformation("[AS400 Polling] No new scan records found.");
             return;
         }
 
-        _logger.LogInformation($"[AS400 Polling] Found {allNewRows.Count} total new scan records.");
+        logger.LogInformation($"[AS400 Polling] Found {allNewRows.Count} total new scan records.");
 
-        // Lưu log và cập nhật tiến độ
-        var updatedMoGroups = allNewRows.GroupBy(r => r.MO);
-        foreach (var group in updatedMoGroups)
+        // ===== 3. Lưu ScanLogs =====
+        // (lưu theo từng bản ghi thực tế)
+        foreach (var row in allNewRows)
         {
-            var mp = await db.MoProgresses.FirstOrDefaultAsync(m => m.MO == group.Key, token);
-            if (mp != null)
+            var exists = await db.ScanLogs
+                .AnyAsync(l => l.MO == row.MO &&
+                               l.ScanTime == row.ScanTime &&
+                               l.WorkCenter == row.Wc, token);
+            if (!exists)
             {
-                foreach (var row in group)
+                db.ScanLogs.Add(new ScanLog
                 {
-                    var logExists = await db.ScanLogs.AnyAsync(l => l.MO == row.MO && l.ScanTime == row.ScanTime, token);
-                    if (!logExists)
-                    {
-                        db.ScanLogs.Add(new ScanLog { MO = row.MO, Item = row.Item, WorkCenter = row.Wc, Qty = row.Qty, ScanTime = row.ScanTime });
-                    }
-                }
-                await db.SaveChangesAsync(token);
-
-                mp.ActualQty = await db.ScanLogs.Where(s => s.MO == group.Key).SumAsync(s => s.Qty, token);
-                mp.LastScanTime = await db.ScanLogs.Where(s => s.MO == group.Key).MaxAsync(s => (DateTime?)s.ScanTime, token);
-                mp.Status = AppHelpers.ComputeStatus(mp);
+                    MO = row.MO,
+                    Item = row.Item,
+                    WorkCenter = row.Wc,
+                    Qty = row.Qty,
+                    ScanTime = row.ScanTime
+                });
             }
         }
-        
+        await db.SaveChangesAsync(token);
+
+        // ===== 4. Cập nhật MoProgress THEO CẶP (MO, WC GỐC) VÀ ÁP CHO TẤT CẢ WC CHI TIẾT =====
+        var updatedMoGroups = allNewRows
+            .GroupBy(r => new { r.MO, BaseWc = NormalizeWcForAs400(r.Wc) });
+
+        foreach (var group in updatedMoGroups)
+        {
+            string mo     = group.Key.MO;
+            string baseWc = group.Key.BaseWc;
+
+            // 4.1 Lấy tất cả ScanLogs của MO rồi lọc theo WC gốc (UPGL2, UBF03, ...)
+            var logsForMo = await db.ScanLogs
+                .Where(s => s.MO == mo)
+                .ToListAsync(token);  // từ đây là LINQ to Objects
+
+            var logsForMoAndBaseWc = logsForMo
+                .Where(s => NormalizeWcForAs400(s.WorkCenter) == baseWc)
+                .ToList();
+
+            int totalQty = logsForMoAndBaseWc.Sum(s => s.Qty);
+            DateTime? lastScanTimeForPair = logsForMoAndBaseWc
+                .OrderByDescending(s => s.ScanTime)
+                .Select(s => (DateTime?)s.ScanTime)
+                .FirstOrDefault();
+
+            // 4.2 Tìm TẤT CẢ MoProgress có MO này và WC chi tiết thuộc cùng WC gốc
+            var mpList = await db.MoProgresses
+                .Where(m => m.MO == mo)
+                .ToListAsync(token);
+
+            var relatedMp = mpList
+                .Where(m => NormalizeWcForAs400(m.WorkCenter) == baseWc)
+                .ToList();
+
+            // 4.3 Cập nhật tiến độ cho tất cả WC chi tiết này
+            foreach (var mp in relatedMp)
+            {
+                mp.ActualQty    = totalQty;            // cùng ActualQty cho UPGL2_I, UPGL2_III, ...
+                mp.LastScanTime = lastScanTimeForPair;
+                mp.Status       = AppHelpers.ComputeStatus(mp);
+            }
+
+            if (relatedMp.Count > 0)
+            {
+                await db.SaveChangesAsync(token);
+            }
+        }
+
+        // ===== 5. Cập nhật LastScanTime =====
         if (lastScanTimeSetting == null)
         {
-            db.AppSettings.Add(new AppSetting { Key = LastScanTimeKey, Value = latestScanTimeInBatch.ToString("o") });
+            db.AppSettings.Add(new AppSetting
+            {
+                Key = LastScanTimeKey,
+                Value = latestScanTimeInBatch.ToString("o")
+            });
         }
         else
         {
@@ -1716,24 +2095,34 @@ public class As400ScanPollingService : BackgroundService
         }
         await db.SaveChangesAsync(token);
 
-        // Bắn SignalR
-        _logger.LogInformation($"[AS400 Polling] Broadcasting updates for {updatedMoGroups.Count()} MOs via SignalR...");
+        // ===== 6. Bắn SignalR cho client =====
+        logger.LogInformation($"[AS400 Polling] Broadcasting updates for {updatedMoGroups.Count()} MO/WC pairs via SignalR...");
+
         foreach (var group in updatedMoGroups)
         {
-            var mp = await db.MoProgresses.FirstOrDefaultAsync(m => m.MO == group.Key, token);
+            string mo = group.Key.MO;
+            string baseWc = group.Key.BaseWc;
+
+            // Lấy lại record MoProgress đã được cập nhật
+            var mp = await db.MoProgresses
+                .FirstOrDefaultAsync(m => m.MO == mo && m.WorkCenter == baseWc, token);
+
             if (mp != null)
             {
                 await hubContext.Clients.All.SendAsync("MoProgressUpdated", new
                 {
-                    mo = mp.MO, mx = mp.MX, workCenter = mp.WorkCenter,
-                    planned = mp.PlannedQty, actual = mp.ActualQty, status = mp.Status,
+                    mo = mp.MO,
+                    mx = mp.MX,
+                    workCenter = mp.WorkCenter,   // WC gốc
+                    planned = mp.PlannedQty,
+                    actual = mp.ActualQty,
+                    status = mp.Status,
                     lastScanTime = mp.LastScanTime?.ToString("yyyy-MM-dd HH:mm:ss")
                 }, token);
             }
         }
     }
 }
-
 
 // ==================== DTO MODELS ====================
 record UpdateRequest(string Odrno, string Status, string Note);
@@ -1743,47 +2132,7 @@ record PartDetailData { public string PartName { get; set; } = ""; public int Qu
 record PartMappingData { public int Order { get; set; } public string PartName { get; set; } = ""; public int ColumnIndex { get; set; } }
 record TrackingData(string Mx, List<WorkCenterStep> Steps);
 record WorkCenterStep(string WorkCenter, string Mo, string Qty, string Leadtime);
-public class Kho2_Inventory {
-    public int Id { get; set; }
-    public string OdrNo { get; set; } = "";        
-    public string ZoneCode { get; set; } = "";     
-    public DateTime InTime { get; set; }           
-    public DateTime UpdateTime { get; set; }       
-    public DateTime? OutTime { get; set; }         
-    public string Status { get; set; } = "In";     
-}
 record Kho2ScanRequest(string Odrno, string ZoneCode);
-
-public class ScanLog
-{
-    public int Id { get; set; }
-    public string MO { get; set; } = "";
-    public string Item { get; set; } = "";        // ODPN
-    public string WorkCenter { get; set; } = "";  // ODWKCN
-    public int Qty { get; set; }                  // ODQTYC
-    public DateTime ScanTime { get; set; }        // ODTSTP
-    public string Source { get; set; } = "AS400";
-}
-
-public class MoProgress
-{
-    public int Id { get; set; }
-    public string MO { get; set; } = "";
-    public string MX { get; set; } = "";
-    public string WorkCenter { get; set; } = "";
-    public int PlannedQty { get; set; }
-    public int ActualQty { get; set; }
-    public DateTime? LastScanTime { get; set; }
-    public string Status { get; set; } = "Pending";
-    public string LeadtimeString { get; set; } = ""; 
-}
-
-public class AppSetting
-{
-    [Key]
-    public string Key { get; set; } = "";
-    public string Value { get; set; } = "";
-}
 
 // ==================== GLOBAL HELPER FUNCTIONS ====================
 public static class AppHelpers
@@ -1797,20 +2146,27 @@ public static class AppHelpers
         {
             try
             {
-                if (string.IsNullOrEmpty(mp.LeadtimeString) || !mp.LeadtimeString.Contains('-')) return "done";
+                if (string.IsNullOrEmpty(mp.LeadtimeString) ||
+                    !mp.LeadtimeString.Contains('-')) return "done";
+
                 var parts = mp.LeadtimeString.Split('-');
                 var endStr = parts[1].Trim();
                 var endParts = endStr.Split(':');
                 int endHour = int.Parse(endParts[0]);
                 int endMin = int.Parse(endParts[1]);
+
                 DateTime targetDate = mp.LastScanTime.Value.Date;
                 DateTime leadtimeEnd = targetDate.AddHours(endHour).AddMinutes(endMin);
+
                 var startParts = parts[0].Trim().Split(':');
                 int startHour = int.Parse(startParts[0]);
-                if (endHour < startHour && mp.LastScanTime.Value.TimeOfDay.TotalHours >= startHour)
+
+                if (endHour < startHour &&
+                    mp.LastScanTime.Value.TimeOfDay.TotalHours >= startHour)
                 {
                     leadtimeEnd = leadtimeEnd.AddDays(1);
                 }
+
                 return mp.LastScanTime.Value <= leadtimeEnd ? "done" : "late";
             }
             catch { return "done"; }
