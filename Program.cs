@@ -1263,7 +1263,7 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
 
                 if (!alreadyExists)
                 {
-                    dataByMx[mx].Add(new WorkCenterStep(workCenterName, mo, qty, leadtime));
+                    dataByMx[mx].Add(new WorkCenterStep(mx, workCenterName, fg_item, mo, qty, leadtime));
                 }
             }
         }
@@ -1780,7 +1780,7 @@ public class As400ScanPollingService : BackgroundService
 {
     private readonly IServiceProvider _services;
     private readonly ILogger<As400ScanPollingService> _logger;
-    private const string LastScanTimeKey = "LastScanTime";
+    // private const string LastScanTimeKey = "LastScanTime";
 
     // Danh sách WC trong file kế hoạch mà bạn muốn theo dõi
     private static readonly HashSet<string> ALLOWED_WORKCENTERS = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -1849,15 +1849,8 @@ public class As400ScanPollingService : BackgroundService
             return;
         }
 
-        var lastScanTimeSetting = await db.AppSettings
-            .FirstOrDefaultAsync(s => s.Key == LastScanTimeKey, token);
-        var lastScanTime = lastScanTimeSetting != null
-            ? DateTime.Parse(lastScanTimeSetting.Value)
-            : DateTime.UtcNow.AddYears(-1);
-
-        // ===== 1. Đọc file kế hoạch, lấy MO + WorkCenter (chi tiết + gốc) =====
+        // ===== 1. Đọc file kế hoạch và gom MO theo từng WorkCenter gốc =====
         var moList = new List<(string MO, string WorkCenterExcel, string WorkCenterBase)>();
-
         try
         {
             var schedulePath = configuration["SchedulePath"];
@@ -1866,7 +1859,6 @@ public class As400ScanPollingService : BackgroundService
                 logger.LogError("[AS400 Polling] SchedulePath is not configured.");
                 return;
             }
-
             string fileName = $"UPH Support Schedule {DateTime.Now:ddMMyyyy}.xlsx";
             string filePath = Path.Combine(schedulePath, fileName);
 
@@ -1874,49 +1866,24 @@ public class As400ScanPollingService : BackgroundService
             {
                 using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 using var reader = ExcelReaderFactory.CreateReader(stream);
-                var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration()
-                {
-                    ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
-                });
-
-                int totalSheets = 0;
-                int allowedSheets = 0;
-
+                var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration() { ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false } });
+                
                 foreach (DataTable table in dataSet.Tables)
                 {
-                    totalSheets++;
                     string workCenterName = table.TableName;
-
-                    string baseWcName = NormalizeWcForAs400(workCenterName); 
-
-                    if (!ALLOWED_WORKCENTERS.Contains(baseWcName))
-                        continue;
-
-                    if (workCenterName.ToLower().Contains("pivot") ||
-                        workCenterName.ToLower().Contains("summary"))
-                        continue;
-
-                    allowedSheets++;
-
+                    string baseWcName = NormalizeWcForAs400(workCenterName);
+                    if (!ALLOWED_WORKCENTERS.Contains(baseWcName)) continue;
+                    if (workCenterName.ToLower().Contains("pivot") || workCenterName.ToLower().Contains("summary")) continue;
+                    
                     for (int i = 1; i < table.Rows.Count; i++)
                     {
                         string mo = table.Rows[i][5]?.ToString()?.Trim() ?? "";
                         if (!string.IsNullOrEmpty(mo))
                         {
-                            var baseWc = NormalizeWcForAs400(workCenterName);
-                            moList.Add((mo, workCenterName, baseWc));
+                            moList.Add((mo, workCenterName, NormalizeWcForAs400(workCenterName)));
                         }
                     }
                 }
-
-                moList = moList.Distinct().ToList();
-
-                logger.LogInformation(
-                    $"[AS400 Polling] Processed {allowedSheets}/{totalSheets} sheets, found {moList.Count} MOs.");
-            }
-            else
-            {
-                logger.LogWarning($"[AS400 Polling] Schedule file not found: {filePath}");
             }
         }
         catch (Exception ex)
@@ -1925,220 +1892,148 @@ public class As400ScanPollingService : BackgroundService
             return;
         }
 
-        if (moList.Count == 0)
+        var plansByBaseWc = moList
+            .GroupBy(item => item.WorkCenterBase)
+            .ToDictionary(g => g.Key, g => g.Select(item => item.MO).Distinct().ToList());
+
+        if (!plansByBaseWc.Any())
         {
-            logger.LogInformation("[AS400 Polling] No MOs found in allowed WorkCenters.");
+            logger.LogInformation("[AS400 Polling] No MOs found in allowed WorkCenters from schedule.");
             return;
         }
 
-        // ===== 2. Query AS400 theo cặp (MO, WorkCenterBase) =====
-        var allNewRows = new List<(string MO, string MX, string Item, string Wc, int Qty, DateTime ScanTime)>();
-        DateTime latestScanTimeInBatch = lastScanTime;
-        const int batchSize = 100;
+        // ===== 2. Lấy tất cả LastScanTime của các WC cùng lúc =====
+        var lastScanTimeKeys = plansByBaseWc.Keys.Select(wc => $"LastScanTime_{wc}").ToList();
+        var allLastScanTimeSettings = await db.AppSettings
+            .Where(s => lastScanTimeKeys.Contains(s.Key))
+            .ToDictionaryAsync(s => s.Key, s => DateTime.Parse(s.Value), token);
 
-        var batches = moList.Chunk(batchSize);
-        logger.LogInformation($"[AS400 Polling] Processing {moList.Count} MOs in {batches.Count()} batches of {batchSize}.");
-
-        foreach (var batch in batches)
+        // ===== 3. Lặp qua từng Work Center gốc để query AS400 riêng =====
+        foreach (var kvp in plansByBaseWc)
         {
-            if (token.IsCancellationRequested)
-            {
-                logger.LogInformation("[AS400 Polling] Shutdown requested, stopping batch processing.");
-                break;
-            }
+            string baseWc = kvp.Key;
+            List<string> moInWc = kvp.Value;
 
-            // (TRIM(A.ODORDR)='M1' AND TRIM(A.ODWKCN)='UPGL2') OR ...
-            var conditions = batch
-                .Select(item =>
-                {
-                    var baseWc = NormalizeWcForAs400(item.WorkCenterExcel);
-                    return $"(TRIM(A.ODORDR) = '{item.MO}' AND TRIM(A.ODWKCN) = '{baseWc}')";
-                })
-                .Distinct();
+            if (token.IsCancellationRequested) break;
 
-            var whereClause = string.Join(" OR ", conditions);
-            if (string.IsNullOrWhiteSpace(whereClause))
-                continue;
+            // Lấy LastScanTime cho WC hiện tại, nếu chưa có thì quét 7 ngày gần nhất
+            string currentKey = $"LastScanTime_{baseWc}";
+            DateTime lastScanTime = allLastScanTimeSettings.TryGetValue(currentKey, out var time) ? time : DateTime.UtcNow.AddDays(-7);
 
-            logger.LogDebug($"[AS400 Polling] WHERE clause: {whereClause}");
+            var allNewRowsForWc = new List<(string MO, string MX, string Item, string Wc, int Qty, DateTime ScanTime)>();
+            DateTime latestScanTimeInBatch = lastScanTime;
 
             try
             {
+                var whereClause = $"TRIM(A.ODORDR) IN ({string.Join(",", moInWc.Select(mo => $"'{mo}'"))}) AND TRIM(A.ODWKCN) = '{baseWc}'";
+
                 using var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;TRANSLATE=1;");
                 await conn.OpenAsync(token);
 
                 string sql = $@"
                     SELECT 
-                        TRIM(A.ODORDR) AS ODORDR,
-                        TRIM(B.REFNO) AS MX_REFNO,
+                        TRIM(A.ODORDR) AS ODORDR, TRIM(B.REFNO) AS MX_REFNO,
                         TRIM(A.ODPN) AS ODPN, A.ODQTYC,
-                        TRIM(A.ODWKCN) AS ODWKCN,
-                        A.ODTSTP
+                        TRIM(A.ODWKCN) AS ODWKCN, A.ODTSTP
                     FROM WWDCF.GRPORDH A
                     LEFT JOIN AMFLIBW.MOMAST B ON A.ODORDR = B.ORDNO
                     WHERE ({whereClause})
-                      AND A.ODTSTP > ?
-                      AND B.OSTAT NOT IN ('99')
-                      AND SUBSTR(B.REFNO, 1, 2) = 'MX'
+                    AND A.ODTSTP > ?
+                    AND B.OSTAT NOT IN ('99')
+                    AND SUBSTR(B.REFNO, 1, 2) = 'MX'
                     ORDER BY A.ODTSTP";
 
                 using var cmd = new OdbcCommand(sql, conn);
-                cmd.Parameters.Add("?", OdbcType.VarChar).Value =
-                    lastScanTime.ToString("yyyy-MM-dd-HH.mm.ss.ffffff");
-
+                cmd.Parameters.Add("?", OdbcType.VarChar).Value = lastScanTime.ToString("yyyy-MM-dd-HH.mm.ss.ffffff");
+                
                 using var reader = await cmd.ExecuteReaderAsync(token);
-
                 while (await reader.ReadAsync(token))
                 {
                     string mo = reader.GetString(0);
                     string mx = reader.IsDBNull(1) ? "" : reader.GetString(1);
                     string item = reader.IsDBNull(2) ? "" : reader.GetString(2);
                     int qty = reader.IsDBNull(3) ? 0 : (int)reader.GetDecimal(3);
-                    string wc = reader.IsDBNull(4) ? "" : reader.GetString(4); // WC thực trên AS400
+                    string wc = reader.IsDBNull(4) ? "" : reader.GetString(4);
                     DateTime scanTime = reader.GetDateTime(5);
-
-                    allNewRows.Add((mo, mx, item, wc, qty, scanTime));
+                    
+                    allNewRowsForWc.Add((mo, mx, item, wc, qty, scanTime));
                     if (scanTime > latestScanTimeInBatch) latestScanTimeInBatch = scanTime;
                 }
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
-            {
-                logger.LogInformation("[AS400 Polling] Query cancelled due to application shutdown.");
-                break;
-            }
             catch (Exception ex)
             {
-                logger.LogError(ex, "[AS400 Polling] Exception during DB2 query batch.");
-                continue;
+                logger.LogError(ex, $"[AS400 Polling] Exception for WC {baseWc}.");
+                continue; // Lỗi WC này, tiếp tục với WC khác
             }
-        }
 
-        if (allNewRows.Count == 0)
-        {
-            logger.LogInformation("[AS400 Polling] No new scan records found.");
-            return;
-        }
+            if (allNewRowsForWc.Count == 0) continue;
 
-        logger.LogInformation($"[AS400 Polling] Found {allNewRows.Count} total new scan records.");
+            logger.LogInformation($"[AS400 Polling] Found {allNewRowsForWc.Count} new scans for WC {baseWc}.");
 
-        // ===== 3. Lưu ScanLogs =====
-        // (lưu theo từng bản ghi thực tế)
-        foreach (var row in allNewRows)
-        {
-            var exists = await db.ScanLogs
-                .AnyAsync(l => l.MO == row.MO &&
-                               l.ScanTime == row.ScanTime &&
-                               l.WorkCenter == row.Wc, token);
-            if (!exists)
+            // ===== 4. Cập nhật DB và broadcast SignalR cho WC này =====
+            var updatedMoGroups = allNewRowsForWc.GroupBy(r => new { r.MO, BaseWc = NormalizeWcForAs400(r.Wc) });
+            
+            foreach (var group in updatedMoGroups)
             {
-                db.ScanLogs.Add(new ScanLog
+                string mo = group.Key.MO;
+                string wc = group.Key.BaseWc;
+
+                foreach (var row in group)
                 {
-                    MO = row.MO,
-                    Item = row.Item,
-                    WorkCenter = row.Wc,
-                    Qty = row.Qty,
-                    ScanTime = row.ScanTime
-                });
-            }
-        }
-        await db.SaveChangesAsync(token);
-
-        // ===== 4. Cập nhật MoProgress THEO CẶP (MO, WC GỐC) VÀ ÁP CHO TẤT CẢ WC CHI TIẾT =====
-        var updatedMoGroups = allNewRows
-            .GroupBy(r => new { r.MO, BaseWc = NormalizeWcForAs400(r.Wc) });
-
-        foreach (var group in updatedMoGroups)
-        {
-            string mo     = group.Key.MO;
-            string baseWc = group.Key.BaseWc;
-
-            // 4.1 Lấy tất cả ScanLogs của MO rồi lọc theo WC gốc (UPGL2, UBF03, ...)
-            var logsForMo = await db.ScanLogs
-                .Where(s => s.MO == mo)
-                .ToListAsync(token);  // từ đây là LINQ to Objects
-
-            var logsForMoAndBaseWc = logsForMo
-                .Where(s => NormalizeWcForAs400(s.WorkCenter) == baseWc)
-                .ToList();
-
-            int totalQty = logsForMoAndBaseWc.Sum(s => s.Qty);
-            DateTime? lastScanTimeForPair = logsForMoAndBaseWc
-                .OrderByDescending(s => s.ScanTime)
-                .Select(s => (DateTime?)s.ScanTime)
-                .FirstOrDefault();
-
-            // 4.2 Tìm TẤT CẢ MoProgress có MO này và WC chi tiết thuộc cùng WC gốc
-            var mpList = await db.MoProgresses
-                .Where(m => m.MO == mo)
-                .ToListAsync(token);
-
-            var relatedMp = mpList
-                .Where(m => NormalizeWcForAs400(m.WorkCenter) == baseWc)
-                .ToList();
-
-            // 4.3 Cập nhật tiến độ cho tất cả WC chi tiết này
-            foreach (var mp in relatedMp)
-            {
-                mp.ActualQty    = totalQty;            // cùng ActualQty cho UPGL2_I, UPGL2_III, ...
-                mp.LastScanTime = lastScanTimeForPair;
-                mp.Status       = AppHelpers.ComputeStatus(mp);
-            }
-
-            if (relatedMp.Count > 0)
-            {
+                    var logExists = await db.ScanLogs.AnyAsync(l => l.MO == row.MO && l.ScanTime == row.ScanTime && l.WorkCenter == row.Wc, token);
+                    if (!logExists)
+                    {
+                        db.ScanLogs.Add(new ScanLog { MO = row.MO, Item = row.Item, WorkCenter = row.Wc, Qty = row.Qty, ScanTime = row.ScanTime });
+                    }
+                }
                 await db.SaveChangesAsync(token);
-            }
-        }
 
-        // ===== 5. Cập nhật LastScanTime =====
-        if (lastScanTimeSetting == null)
-        {
-            db.AppSettings.Add(new AppSetting
-            {
-                Key = LastScanTimeKey,
-                Value = latestScanTimeInBatch.ToString("o")
-            });
-        }
-        else
-        {
-            lastScanTimeSetting.Value = latestScanTimeInBatch.ToString("o");
-        }
-        await db.SaveChangesAsync(token);
+                var logsForMo = await db.ScanLogs.Where(s => s.MO == mo).ToListAsync(token);
+                var logsForMoAndBaseWc = logsForMo.Where(s => NormalizeWcForAs400(s.WorkCenter) == wc).ToList();
 
-        // ===== 6. Bắn SignalR cho client =====
-        logger.LogInformation($"[AS400 Polling] Broadcasting updates for {updatedMoGroups.Count()} MO/WC pairs via SignalR...");
+                int totalQty = logsForMoAndBaseWc.Sum(s => s.Qty);
+                DateTime? lastScanTimeForPair = logsForMoAndBaseWc.OrderByDescending(s => s.ScanTime).Select(s => (DateTime?)s.ScanTime).FirstOrDefault();
 
-        foreach (var group in updatedMoGroups)
-        {
-            string mo = group.Key.MO;
-            string baseWc = group.Key.BaseWc;
-
-            // 1. Lấy tất cả MoProgress có MO này
-            var allMpForMo = await db.MoProgresses
-                .Where(m => m.MO == mo)
-                .ToListAsync(token);
-
-            // 2. Lọc ra những MoProgress có WC chi tiết thuộc WC gốc này
-            var relatedMp = allMpForMo
-                .Where(m => NormalizeWcForAs400(m.WorkCenter) == baseWc)
-                .ToList();
-
-            // 3. BROADCAST CHO TỪNG RECORD (để JS biết WC chi tiết nào được cập nhật)
-            foreach (var mp in relatedMp)
-            {
-                await hubContext.Clients.All.SendAsync("MoProgressUpdated", new
+                var relatedMp = (await db.MoProgresses.Where(m => m.MO == mo).ToListAsync(token)).Where(m => NormalizeWcForAs400(m.WorkCenter) == wc).ToList();
+                
+                foreach (var mp in relatedMp)
                 {
-                    mo = mp.MO,
-                    mx = mp.MX,
-                    workCenter = mp.WorkCenter,   // ✅ GỬI WC CHI TIẾT (UPGL2_I, UPGL2_III, ...)
-                    planned = mp.PlannedQty,
-                    actual = mp.ActualQty,
-                    status = mp.Status,
-                    lastScanTime = mp.LastScanTime?.ToString("yyyy-MM-dd HH:mm:ss")
-                }, token);
+                    mp.ActualQty = totalQty;
+                    mp.LastScanTime = lastScanTimeForPair;
+                    mp.Status = AppHelpers.ComputeStatus(mp);
+                }
+                if (relatedMp.Any()) await db.SaveChangesAsync(token);
+
+                // Bắn SignalR cho từng WC chi tiết
+                foreach (var mp in relatedMp)
+                {
+                    await hubContext.Clients.All.SendAsync("MoProgressUpdated", new
+                    {
+                        mo = mp.MO,
+                        mx = mp.MX,
+                        workCenter = mp.WorkCenter,   // Gửi WC chi tiết
+                        planned = mp.PlannedQty,
+                        actual = mp.ActualQty,
+                        status = mp.Status,
+                        lastScanTime = mp.LastScanTime?.ToString("yyyy-MM-dd HH:mm:ss")
+                    }, token);
+                }
             }
+            
+            // ===== 5. Cập nhật LastScanTime cho WC này =====
+            var setting = await db.AppSettings.FirstOrDefaultAsync(s => s.Key == currentKey, token);
+            if (setting == null)
+            {
+                db.AppSettings.Add(new AppSetting { Key = currentKey, Value = latestScanTimeInBatch.ToString("o") });
+            }
+            else
+            {
+                setting.Value = latestScanTimeInBatch.ToString("o");
+            }
+            await db.SaveChangesAsync(token);
         }
     }
+
 }
 
 // ==================== DTO MODELS ====================
@@ -2148,7 +2043,7 @@ record MxItemData { public string ItemCode { get; set; } = ""; public int Quanti
 record PartDetailData { public string PartName { get; set; } = ""; public int Quantity { get; set; } public int Order { get; set; } }
 record PartMappingData { public int Order { get; set; } public string PartName { get; set; } = ""; public int ColumnIndex { get; set; } }
 record TrackingData(string Mx, List<WorkCenterStep> Steps);
-record WorkCenterStep(string WorkCenter, string Mo, string Qty, string Leadtime);
+record WorkCenterStep(string Mx, string WorkCenter, string FgItem, string Mo, string Qty, string Leadtime);
 record Kho2ScanRequest(string Odrno, string ZoneCode);
 
 // ==================== GLOBAL HELPER FUNCTIONS ====================

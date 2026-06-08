@@ -119,8 +119,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         resultsContainer.innerHTML = Object.values(groupedBySteps).map(group => {
+            // Lấy FgItem từ step đầu tiên (vì các step của cùng 1 MX sẽ có chung FgItem)
+            const fgItem = group.steps.length > 0 ? group.steps[0].fgItem : '';
+
             const mxHtml = group.mxList
-                .map(mx => `<div class="mx-card" data-mx="${mx.toLowerCase()}">${mx}</div>`)
+                .map(mx => `
+                    <div class="mx-card" data-mx="${mx.toLowerCase()}">
+                        <div class="mx-card-mx">${mx}</div>
+                        ${fgItem ? `<div class="mx-card-fgitem">${fgItem}</div>` : ''}
+                    </div>
+                `)
                 .join('');
 
             group.steps.sort((a, b) => {

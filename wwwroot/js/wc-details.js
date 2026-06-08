@@ -3,9 +3,88 @@ document.addEventListener('DOMContentLoaded', () => {
     const timeFilterContainer = document.getElementById('timeFilterContainer');
     const timelineView = document.getElementById('timelineView');
     
+    let allTrackingData = [];
     let allMoData = [];
     let progressData = {};
     let selectedWc = 'all';
+
+    // Hàm chuẩn hóa WC (giống tracking.js)
+    function normalizeWcForAs400(wc) {
+        if (!wc) return wc;
+        wc = wc.trim().toUpperCase();
+        const underscoreIndex = wc.indexOf('_');
+        if (underscoreIndex > 0) {
+            return wc.substring(0, underscoreIndex);
+        }
+        return wc;
+    }
+
+    // Hàm hiển thị modal chi tiết (copy từ tracking.js)
+    window.showMoScanDetail = async function (mo, plannedQty, leadtime, wcDetail) {
+        const modal = document.getElementById('modalMoScanDetail');
+        if (!modal) {
+            alert('Lỗi: Không tìm thấy HTML của modal chi tiết.');
+            return;
+        }
+        
+        const titleEl = document.getElementById('moDetailTitle');
+        const plannedQtyEl = document.getElementById('moPlannedQty');
+        const scannedQtyEl = document.getElementById('moScannedQty');
+        const leadtimeEl = document.getElementById('moLeadtime');
+        const moMxEl = document.getElementById('moMx');
+        const historyListEl = document.getElementById('moScanHistoryList');
+
+        // Tìm MX chứa MO này từ allTrackingData
+        let foundMx = '-';
+        for (const mxData of allTrackingData) {
+            if (mxData.steps && mxData.steps.some(step => step.mo && step.mo.toUpperCase() === mo.toUpperCase())) {
+                foundMx = mxData.mx || '-';
+                break;
+            }
+        }
+
+        if(titleEl) titleEl.textContent = mo;
+        if(moMxEl) moMxEl.textContent = foundMx;
+        if(plannedQtyEl) plannedQtyEl.textContent = `${plannedQty} kits`;
+        if(leadtimeEl) leadtimeEl.textContent = leadtime || '-';
+
+        if(historyListEl) historyListEl.innerHTML = '<p style="text-align: center; color: #a8edea;">⏳ Đang tải lịch sử quét...</p>';
+        modal.classList.add('active');
+
+        try {
+            const response = await fetch(`/api/tracking/mo-scan-detail?mo=${encodeURIComponent(mo)}&workCenter=${encodeURIComponent(wcDetail)}`);
+            if (!response.ok) throw new Error("Không thể tải dữ liệu scan");
+            const data = await response.json();
+
+            if(scannedQtyEl) scannedQtyEl.textContent = `${data.totalScannedQty} kits`;
+
+            if (!data.scans || data.scans.length === 0) {
+                if(historyListEl) historyListEl.innerHTML = `<div class="no-scan-data"><strong>Chưa có Kit nào được quét cho Work Center này.</strong></div>`;
+                return;
+            }
+
+            if(historyListEl) {
+                historyListEl.innerHTML = data.scans.map((scan, index) => {
+                    const scanDate = new Date(scan.scanTime);
+                    const formattedTime = scanDate.toLocaleString('vi-VN', {
+                        hour: '2-digit', minute: '2-digit', second: '2-digit',
+                        day: '2-digit', month: '2-digit', year: 'numeric'
+                    });
+                    return `
+                        <div class="scan-history-item">
+                            <span class="scan-kit-number">${index + 1}️⃣ Lần quét #${index + 1}</span>
+                            <span class="scan-wc">📋 ${scan.workCenter}</span>
+                            <span class="scan-time">⏱️ ${formattedTime}</span>
+                            <span class="scan-by">👤 ${scan.scannedBy || 'N/A'}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+        } catch (error) {
+            console.error("Lỗi tải chi tiết:", error);
+            if(historyListEl) historyListEl.innerHTML = `<div class="no-scan-data"><strong>❌ Lỗi tải dữ liệu</strong></div>`;
+        }
+    };
 
     async function initialize() {
         const date = new Date().toISOString().split('T')[0];
@@ -19,21 +98,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetch(`/api/tracking/journey?date=${date}`),
                 fetch(`/api/tracking/kit-progress?date=${date}`)
             ]);
-            const journeyData = await journeyRes.json();
+            
+            allTrackingData = await journeyRes.json();
             const progressRawData = await progressRes.json();
             
             progressData = {};
-            progressRawData.forEach(p => { progressData[p.mo] = p; });
+            progressRawData.forEach(p => { 
+                const key = `${p.mo.toUpperCase()}|${p.workCenter.toUpperCase()}`;
+                progressData[key] = p; 
+            });
 
+            // Tạo danh sách phẳng allMoData từ allTrackingData
             allMoData = [];
-            journeyData.forEach(mx => {
+            allTrackingData.forEach(mx => {
                 mx.steps.forEach(step => {
                     allMoData.push({
-                        mx: mx.mx, mo: step.mo, wc: step.workCenter, qty: step.qty,
-                        leadtime: step.leadtime, status: progressData[step.mo]?.status || 'pending'
+                        mx: mx.mx,
+                        mo: step.mo,
+                        wc: step.workCenter,
+                        qty: step.qty,
+                        leadtime: step.leadtime,
+                        fgItem: step.fgItem
                     });
                 });
             });
+
         } catch (error) {
             console.error("Lỗi tải dữ liệu:", error);
             timelineView.innerHTML = '<p style="color: red; text-align: center;">Lỗi tải dữ liệu.</p>';
@@ -56,8 +145,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         wcFilterContainer.querySelectorAll('.filter-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                selectedWc = btn.dataset.wc;
-                render(); // Vẽ lại toàn bộ
+                selectedWc = btn.dataset.value;
+                render();
             });
         });
     }
@@ -68,6 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
         timeFilterContainer.innerHTML = '';
 
         leadtimes.forEach(lt => {
+            if (!lt) return;
             const btn = createFilterButton(lt, lt, false);
             btn.addEventListener('click', () => {
                 scrollToLeadtime(lt);
@@ -84,7 +174,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Nhóm các MO theo Leadtime
         const mosByLeadtime = {};
         filteredMos.forEach(mo => {
             const lt = mo.leadtime || 'Chưa xác định';
@@ -95,9 +184,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const sortedLeadtimes = Object.keys(mosByLeadtime).sort();
         timelineView.innerHTML = sortedLeadtimes.map(lt => {
             const moCardsHtml = mosByLeadtime[lt].map(mo => {
-                const progress = progressData[mo.mo] || { status: 'pending', progress: `0/${mo.qty}` };
+                const baseWc = normalizeWcForAs400(mo.wc);
+                const progressKey = `${mo.mo.toUpperCase()}|${baseWc.toUpperCase()}`;
+                const progress = progressData[progressKey] || { status: 'pending', progress: `0/${mo.qty}` };
+                const plannedQty = parseInt(mo.qty) || 0;
+                
                 return `
-                    <div class="mo-detail-card status-${progress.status}">
+                    <div class="mo-detail-card status-${progress.status}" onclick="showMoScanDetail('${mo.mo}', ${plannedQty}, '${mo.leadtime}', '${mo.wc}')">
                         <div class="card-header">${mo.mx}</div>
                         <div class="card-body">${mo.mo}, ${progress.progress}</div>
                         <div class="card-footer">${mo.leadtime}</div>
@@ -117,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function createFilterButton(text, value, isActive) {
         const btn = document.createElement('button');
         btn.className = 'filter-btn' + (isActive ? ' active' : '');
-        btn.dataset.wc = value; // Dùng chung data-wc
+        btn.dataset.value = value;
         btn.textContent = text;
         return btn;
     }
@@ -127,7 +220,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetElement = document.getElementById(elementId);
         if (targetElement) {
             targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            // Thêm hiệu ứng highlight
             targetElement.style.transition = 'background-color 0.5s';
             targetElement.style.backgroundColor = 'rgba(52, 152, 219, 0.1)';
             setTimeout(() => {

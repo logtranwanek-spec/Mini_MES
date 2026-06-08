@@ -2349,15 +2349,24 @@ html.simple-view .wc-grid-item.selected .wc-grid-info {
 }
 
 /* ==================== GIAO DIỆN CHI TIẾT WC (TIMELINE VIEW) ==================== */
+/* Style chung cho cả 2 thanh filter */
 .filter-section {
     padding: 15px;
-    background: #1a1a1a;
+    background: #1a1a1a; /* Màu nền cho cả 2 */
     border-bottom: 1px solid #333;
+}
+
+/* Thanh filter Work Center (hàng 1) - KHÔNG DÍNH LẠI */
+#wcFilterSection {
+    /* Không có position: sticky */
+}
+
+/* Thanh filter Lead Time (hàng 2) - LUÔN DÍNH LẠI */
+#timeFilterSection {
     position: sticky;
-    top: 68px; /* Chiều cao của header */
+    top: 68px; /* Dính lại ngay dưới header chính */
     z-index: 1000;
 }
-#timeFilterContainer { top: 137px; } /* Header + Filter Section 1 */
 
 .filter-title {
     display: block;
@@ -2369,10 +2378,11 @@ html.simple-view .wc-grid-item.selected .wc-grid-info {
 
 .filter-bar { 
     display: flex; 
-    flex-wrap: wrap; 
+    flex-wrap: wrap; /* Giữ nguyên wrap để các nút tự xuống hàng */
     gap: 10px; 
 }
 
+/* Các style còn lại giữ nguyên */
 .filter-btn {
     padding: 8px 15px;
     font-size: 13px;
@@ -2422,25 +2432,37 @@ html.simple-view .wc-grid-item.selected .wc-grid-info {
     z-index: 10;
 }
 
+/* ✅ ĐOẠN SỬA CHÍNH NẰM Ở ĐÂY */
 .timeline-mo-container {
     display: flex;
-    align-items: center;
+    flex-wrap: wrap;
+    max-height: calc((120px * 2) + 15px + 15px);
     gap: 15px;
     padding: 15px;
-    flex-grow: 1;
-    overflow-x: auto; /* Cho phép cuộn ngang */
-    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .mo-detail-card {
-    flex-shrink: 0; /* Ngăn thẻ bị co lại */
+    flex-shrink: 0;
     width: 180px;
+    height: 120px; /* ✅ Set chiều cao cố định cho thẻ */
     background: #181818;
     border: 1px solid #444;
     border-radius: 8px;
     padding: 12px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     text-align: center;
+    display: flex; /* ✅ Dùng flexbox để căn chỉnh nội dung bên trong */
+    flex-direction: column;
+    justify-content: space-between; /* ✅ Đẩy header và footer ra 2 đầu */
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mo-detail-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.4);
 }
 
 .mo-detail-card .card-header { /* Hiển thị MX */
@@ -2449,7 +2471,7 @@ html.simple-view .wc-grid-item.selected .wc-grid-info {
     color: #f39c12;
     border-bottom: 1px solid #444;
     padding-bottom: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 0; /* Bỏ margin cũ */
 }
 
 .mo-detail-card .card-body { /* Hiển thị MO và Tiến độ */
@@ -2461,7 +2483,7 @@ html.simple-view .wc-grid-item.selected .wc-grid-info {
 .mo-detail-card .card-footer { /* Hiển thị Leadtime */
     font-size: 14px;
     font-weight: bold;
-    margin-top: 8px;
+    margin-top: 0; /* Bỏ margin cũ */
 }
 
 /* Tô màu cho cả card-body và card-footer */
@@ -2489,4 +2511,32 @@ html.simple-view .wc-grid-item.selected .wc-grid-info {
 /* Căn chỉnh lại các item cho đều */
 .scan-history-item {
     justify-content: space-around; /* hoặc space-between nếu muốn giãn ra */
+}
+
+/* Style cho thẻ MX trong trang Tracking */
+.mx-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px; /* Khoảng cách giữa MX và FG_ITEM */
+}
+
+.mx-card-mx {
+    color: #f39c12;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.mx-card-fgitem {
+    color: #a8edea; /* Màu xanh nhạt */
+    font-size: 13px;
+    font-weight: normal;
+}
+
+/* Simple view */
+html.simple-view .mx-card-mx {
+    color: #1e88e5;
+}
+html.simple-view .mx-card-fgitem {
+    color: #475569;
 }

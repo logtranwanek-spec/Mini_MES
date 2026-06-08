@@ -15,7 +15,7 @@
 
     <div class="wc-details-container">
         <!-- Hàng 1: Lọc theo Work Center -->
-        <div class="filter-section">
+        <div class="filter-section" id="wcFilterSection">
             <strong class="filter-title">Work Center</strong>
             <div id="wcFilterContainer" class="filter-bar">
                 <!-- Nút lọc WC sẽ được thêm vào đây -->
@@ -23,7 +23,7 @@
         </div>
 
         <!-- Hàng 2: Lọc (Cuộn) theo Leadtime -->
-        <div class="filter-section">
+        <div class="filter-section" id="timeFilterSection">
             <strong class="filter-title">Lead Time</strong>
             <div id="timeFilterContainer" class="filter-bar">
                 <!-- Nút lọc thời gian sẽ được thêm vào đây -->
@@ -33,6 +33,45 @@
         <!-- Timeline hiển thị kết quả -->
         <div id="timelineView" class="timeline-view">
             <!-- Các dòng thời gian sẽ được vẽ ở đây -->
+        </div>
+    </div>
+
+    <!-- MODAL CHI TIẾT QUÉT MO -->
+    <div id="modalMoScanDetail" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header modal-header-info">
+                <h2>📋 CHI TIẾT QUÉT MO: <span id="moDetailTitle">-</span></h2>
+                <button class="btn-close" onclick="document.getElementById('modalMoScanDetail').classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Thông tin tổng quan -->
+                <div class="mo-scan-summary">
+                    <div class="summary-item" id="moMxBox">
+                        <span class="summary-label">📦 MX:</span>
+                        <span class="summary-value" id="moMx">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">📦 Kế hoạch:</span>
+                        <span class="summary-value" id="moPlannedQty">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">✅ Đã quét:</span>
+                        <span class="summary-value" id="moScannedQty">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">⏱️ Leadtime:</span>
+                        <span class="summary-value" id="moLeadtime">-</span>
+                    </div>
+                </div>
+
+                <!-- Danh sách lịch sử quét -->
+                <div class="mo-scan-history-section">
+                    <h3>📊 LỊCH SỬ QUÉT:</h3>
+                    <div id="moScanHistoryList" class="scan-history-list">
+                        <p style="text-align: center; color: #95a5a6;">Đang tải...</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
