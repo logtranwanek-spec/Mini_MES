@@ -22,3 +22,60 @@ C.
 5. Bạn có thể làm nó real-time được không, mỗi lần có người quét thì nó sẽ cập nhật ngay lên trang web cho tôi luôn
 6. Phạm vi lọc ODORDR trong web là sẽ lấy danh sách MO trong workcenter của MX đó theo kế hoạch
 D. 7. Như cách bạn trình bày, có hiển thị từng lần quét trong web
+
+Danh sách các WC:
+UBF03
+UBF03
+UBF06
+UBF12
+UBF13
+UBF05
+UBF04
+UPHD1
+UCFBP - BUTTON PUNCH BACK KIT
+UCFHS
+UCFHM
+UCFCH
+UCFCT
+UCFCM
+UCFCS
+UPGL1
+UPGL4
+UPGL6
+UPGL2
+WLGL2
+UCFCH
+UCFCO
+
+1. Planed from Excel file / Api api/tracking/journey​‌
+- Read Planned Excel file and collect all MO, MX, WC, Qty and Lead time data.​‌
+- Create list MO need to track and save in MOProgress table​‌
+- Only create the MO that don't exist in MOProgress table before and set its quantity is 0, the read the Scanlogs table to update the Actual Qty for it.​‌
+2. Get actual scan data from AS400 / AS400ScanPollingService​‌
+- Send SQL to AS400 each 10s
+- Only get the legal WC
+- Only get the MO that different with '99'​‌
+- Only get the MO has legal MX​‌
+- Only get the newest scan log from the last time.​‌
+- Save all information collected in Scanlogs Table.
+3.  Match the data from Scanlogs Table and MOProgress Table, calculate and update the progress bar.
+-
+- 
+
+
+To do Next:
+- In detail WC, does it match the correct WC with data scan yet?
+- Add FGITEM under MX code
+- Fix hide WC list when scroll in 'details WC'
+- Add 'details MO' into MO in 'details WC'
+- For each lead-time, give it 2 row to display MO
+- Update real-time with notice on screen
+- Need to check whether the code has run as expected
+
+với những leadtime chỉ có ít MO nếu nằm một hàng chưa đến mức phải tràn ra phía sau thì không cần phải xuống thành 2 hàng. Giờ quy luật nó sẽ như vầy:
+Nếu như ít hàng chưa đến mức hết màn hình thì thể hiện trên 1 hàng
+Nếu nhiều đến mức tràn màn hình thì hiển thị 2 hàng, 
+còn nếu nhiều quá đến mức 2 hàng không hiển thị đủ thì cuộn sang ngang
+
+
+

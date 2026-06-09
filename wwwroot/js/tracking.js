@@ -80,14 +80,14 @@ document.addEventListener('DOMContentLoaded', () => {
             progressData = {};
             data.forEach(item => {
                 const moKey  = item.mo ? item.mo.toUpperCase() : "";
-                const wcBase = item.workCenter ? item.workCenter.toUpperCase() : "";
+                const wcBase = item.baseWorkCenter ? item.baseWorkCenter.toUpperCase() : ""; // ✅ DÙNG TRƯỜNG MỚI
                 const key    = `${moKey}|${wcBase}`;
                 progressData[key] = {
-                    status: item.status,         // pending / in-progress / done / late
-                    progress: item.progress,     // "5/36"
+                    status: item.status,
+                    progress: item.progress,
                     currentQty: item.currentQty,
                     plannedQty: item.plannedQty,
-                    workCenter: item.workCenter
+                    workCenter: item.workCenter // Vẫn lưu WC chi tiết nếu cần
                 };
             });
 
@@ -119,7 +119,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         resultsContainer.innerHTML = Object.values(groupedBySteps).map(group => {
-            // Lấy FgItem từ step đầu tiên (vì các step của cùng 1 MX sẽ có chung FgItem)
             const fgItem = group.steps.length > 0 ? group.steps[0].fgItem : '';
 
             const mxHtml = group.mxList
@@ -139,6 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const stepsHtml = group.steps.map(step => {
                 const moKey  = (step.mo || "").toUpperCase();
+                // ✅ SỬA LẠI DÒNG NÀY: Bỏ biến 'workCenterName' không tồn tại
                 const baseWc = normalizeWcForAs400(step.workCenter);
                 const key    = `${moKey}|${baseWc}`;
 
@@ -818,8 +818,26 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.classList.add('active');
     }
 
+    function autoSearchFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchTermFromUrl = urlParams.get('search');
+
+        if (searchTermFromUrl) {
+            // Điền vào ô tìm kiếm
+            searchInput.value = searchTermFromUrl;
+            // Cập nhật trạng thái và áp dụng bộ lọc
+            // (Chờ một chút để đảm bảo dữ liệu đã tải xong)
+            setTimeout(() => {
+                findAndHighlight();
+            }, 500);
+        }
+    }
+
     // Khởi động
     startSignalR();
+    Promise.all([loadTrackingData(), loadKitProgress()]).then(() => {
+        autoSearchFromUrl(); // Gọi hàm tự động tìm kiếm sau khi dữ liệu đã tải xong
+    });
     loadTrackingData();
     loadKitProgress();
     updateTopButtonsVisibility();

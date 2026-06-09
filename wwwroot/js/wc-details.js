@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const scannedQtyEl = document.getElementById('moScannedQty');
         const leadtimeEl = document.getElementById('moLeadtime');
         const moMxEl = document.getElementById('moMx');
+        const moWcDetailEl = document.getElementById('moWcDetail');
         const historyListEl = document.getElementById('moScanHistoryList');
 
         // Tìm MX chứa MO này từ allTrackingData
@@ -44,7 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if(titleEl) titleEl.textContent = mo;
-        if(moMxEl) moMxEl.textContent = foundMx;
+        if(moMxEl) {
+            moMxEl.innerHTML = `<a href="/tracking?search=${foundMx}" title="Click để tìm MX này ở trang Tracking" target="_blank">${foundMx}</a>`;
+        }
         if(plannedQtyEl) plannedQtyEl.textContent = `${plannedQty} kits`;
         if(leadtimeEl) leadtimeEl.textContent = leadtime || '-';
 
@@ -183,7 +186,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const sortedLeadtimes = Object.keys(mosByLeadtime).sort();
         timelineView.innerHTML = sortedLeadtimes.map(lt => {
-            const moCardsHtml = mosByLeadtime[lt].map(mo => {
+            const moGroup = mosByLeadtime[lt];
+
+            // TÍNH TOÁN TIẾN ĐỘ CHO LEADTIME NÀY
+            let completedCount = 0;
+            moGroup.forEach(mo => {
+                const baseWc = normalizeWcForAs400(mo.wc);
+                const progressKey = `${mo.mo.toUpperCase()}|${baseWc.toUpperCase()}`;
+                const progress = progressData[progressKey];
+                if (progress && (progress.status === 'done' || progress.status === 'late')) {
+                    completedCount++;
+                }
+            });
+            const totalInGroup = moGroup.length;
+            const percentage = totalInGroup > 0 ? (completedCount / totalInGroup) * 100 : 0;
+
+            // TẠO HTML CHO CÁC THẺ MO
+            const moCardsHtml = moGroup.map(mo => {
                 const baseWc = normalizeWcForAs400(mo.wc);
                 const progressKey = `${mo.mo.toUpperCase()}|${baseWc.toUpperCase()}`;
                 const progress = progressData[progressKey] || { status: 'pending', progress: `0/${mo.qty}` };
@@ -198,9 +217,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             }).join('');
 
+            // TẠO HTML CHO TOÀN BỘ DÒNG LEADTIME
             return `
                 <div class="timeline-row" id="lt-${lt.replace(/[^a-zA-Z0-9]/g, '')}">
-                    <div class="timeline-label">${lt}</div>
+                    <div class="timeline-label">
+                        <div class="leadtime-text">${lt}</div>
+                        <div class="leadtime-percentage">${percentage.toFixed(0)}%</div>
+                    </div>
                     <div class="timeline-mo-container">${moCardsHtml}</div>
                 </div>
             `;

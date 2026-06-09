@@ -1,6 +1,8 @@
 "V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\RUN KIT - NHẬN KIT"
 "V:\Prod & Inv Control\Public\P&IC UPH\01.MSS for UPH\2026\MSS0520\Sub Schedule\Kit schedule\WIP\2.KIT STACK OUT\INHOUSE"
 
+Server IP: 10.141.77.77
+
 Run:
 dotnet build -c Release
 dotnet bin\Release\net8.0\OrderTrackingWeb.dll
@@ -15,6 +17,8 @@ dotnet add package System.Data.Odbc
 http://localhost:5050/api/debug/workcenters?date=2026-06-01
 debug MO:
 http://localhost:5050/api/debug/mo-scan-raw/M9HCP90
+debug raw:
+http://localhost:5050/api/tracking/journey?date=2026-06-08
+debug progress:
+http://localhost:5050/api/tracking/kit-progress?date=2026-06-08
 
-
-đang xử lý chỗ cập nhật dữ liệu Scan lên trên MOProgress, đang không đẩy được giá trị Scan lên trên MOProgress

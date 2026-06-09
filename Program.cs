@@ -1282,19 +1282,16 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
                 .SelectMany(r => r.Steps.Select(s => new
                 {
                     Mx = r.Mx,
-                    WcExcel = s.WorkCenter,
                     WcBase = NormalizeWcForAs400(s.WorkCenter),
                     Step = s
                 }))
                 .ToList();
 
-            // Lấy hết MoProgress hiện có, key theo (MO, WC GỐC)
             var existing = await db.MoProgresses.ToListAsync();
             var existingMap = existing
-                .GroupBy(p => (MO: p.MO.ToUpper(), WC: p.WorkCenter.ToUpper()))
-                .ToDictionary(g => g.Key, g => g.First());
+                .ToDictionary(p => (MO: p.MO.ToUpper(), WC: p.WorkCenter.ToUpper()), p => p);
 
-            // Gom planned Qty theo (MO, WC GỐC) trước
+            // 1. Gom PlannedQty và thông tin khác theo (MO, WC GỐC) trước
             var mergedPlan = allSteps
                 .GroupBy(item => (MO: item.Step.Mo.Trim().ToUpper(), WC: item.WcBase.Trim().ToUpper()))
                 .ToDictionary(
@@ -1302,7 +1299,7 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
                     g => new
                     {
                         PlannedQty = g.Sum(x => int.TryParse(x.Step.Qty, out int q) ? q : 0),
-                        Leadtime = g.Last().Step.Leadtime, // Lấy leadtime cuối
+                        Leadtime = g.Last().Step.Leadtime, // Lấy leadtime của dòng cuối cùng
                         Mx = g.Last().Mx
                     }
                 );
@@ -1310,6 +1307,7 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
             var addedCount = 0;
             var updatedCount = 0;
 
+            // 2. Lặp qua kế hoạch đã gom và so sánh với DB
             foreach (var kvp in mergedPlan)
             {
                 var key = kvp.Key;
@@ -1317,25 +1315,34 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
 
                 if (existingMap.TryGetValue(key, out var mp))
                 {
-                    // Ghi đè kế hoạch theo file mới
+                    // Đã tồn tại -> Cập nhật
+                    bool plannedQtyChanged = mp.PlannedQty != plan.PlannedQty;
+                    mp.PlannedDate = targetDate;
                     mp.PlannedQty = plan.PlannedQty;
                     mp.LeadtimeString = plan.Leadtime;
                     mp.MX = plan.Mx;
+
+                    // ✅ TÍNH LẠI STATUS NẾU PlannedQty THAY ĐỔI
+                    if (plannedQtyChanged)
+                    {
+                        mp.Status = AppHelpers.ComputeStatus(mp);
+                    }
                     updatedCount++;
                 }
                 else
                 {
+                    // Chưa tồn tại -> Thêm mới
                     var newMp = new MoProgress
                     {
+                        PlannedDate = targetDate,
                         MO = key.MO,
                         MX = plan.Mx,
-                        WorkCenter = key.WC, // ✅ LƯU WC GỐC
+                        WorkCenter = key.WC,
                         PlannedQty = plan.PlannedQty,
                         ActualQty = 0,
                         Status = "pending",
                         LeadtimeString = plan.Leadtime
                     };
-
                     db.MoProgresses.Add(newMp);
                     existingMap[key] = newMp;
                     addedCount++;
@@ -1414,19 +1421,19 @@ app.MapGet("/api/tracking/kit-progress", async (string date, AppDbContext db) =>
 {
     try
     {
-        var progressData = await db.MoProgresses
-            .Select(p => new
-            {
-                mo = p.MO,
-                mx = p.MX,
-                workCenter = p.WorkCenter,
-                plannedQty = p.PlannedQty,
-                currentQty = p.ActualQty,
-                leadtime = p.LeadtimeString,
-                status = p.Status,
-                progress = $"{p.ActualQty}/{p.PlannedQty}"
-            })
-            .ToListAsync();
+        var progressList = await db.MoProgresses.ToListAsync();
+        var progressData = progressList.Select(p => new
+        {
+            mo = p.MO,
+            mx = p.MX,
+            workCenter = p.WorkCenter, // Giữ lại WC chi tiết
+            baseWorkCenter = NormalizeWcForAs400(p.WorkCenter), 
+            plannedQty = p.PlannedQty,
+            currentQty = p.ActualQty,
+            leadtime = p.LeadtimeString,
+            status = p.Status,
+            progress = $"{p.ActualQty}/{p.PlannedQty}"
+        }).ToList();
 
         return Results.Ok(progressData);
     }
@@ -1758,6 +1765,7 @@ public class ScanLog
 public class MoProgress
 {
     public int Id { get; set; }
+    public DateTime PlannedDate { get; set; }
     public string MO { get; set; } = "";
     public string MX { get; set; } = "";
     public string WorkCenter { get; set; } = "";
@@ -1835,7 +1843,7 @@ public class As400ScanPollingService : BackgroundService
             await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
         }
     }
-
+    
     private async Task PollOnceAsync(IServiceScope scope, CancellationToken token)
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -1925,6 +1933,7 @@ public class As400ScanPollingService : BackgroundService
 
             try
             {
+                if (!moInWc.Any()) continue;
                 var whereClause = $"TRIM(A.ODORDR) IN ({string.Join(",", moInWc.Select(mo => $"'{mo}'"))}) AND TRIM(A.ODWKCN) = '{baseWc}'";
 
                 using var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;TRANSLATE=1;");
@@ -1976,8 +1985,9 @@ public class As400ScanPollingService : BackgroundService
             foreach (var group in updatedMoGroups)
             {
                 string mo = group.Key.MO;
-                string wc = group.Key.BaseWc;
+                string currentBaseWc = group.Key.BaseWc;
 
+                // 4.1 Lưu các bản ghi ScanLog mới
                 foreach (var row in group)
                 {
                     var logExists = await db.ScanLogs.AnyAsync(l => l.MO == row.MO && l.ScanTime == row.ScanTime && l.WorkCenter == row.Wc, token);
@@ -1988,35 +1998,40 @@ public class As400ScanPollingService : BackgroundService
                 }
                 await db.SaveChangesAsync(token);
 
-                var logsForMo = await db.ScanLogs.Where(s => s.MO == mo).ToListAsync(token);
-                var logsForMoAndBaseWc = logsForMo.Where(s => NormalizeWcForAs400(s.WorkCenter) == wc).ToList();
+                // 4.2 Tìm hoặc tự động tạo MoProgress
+                var allMpForMo = await db.MoProgresses.Where(m => m.MO == mo).ToListAsync(token);
+                var relatedMp = allMpForMo.Where(m => NormalizeWcForAs400(m.WorkCenter) == currentBaseWc).ToList();
 
+                if (!relatedMp.Any())
+                {
+                    var firstScan = group.First();
+                    var newMp = new MoProgress { MO = mo, MX = firstScan.MX, WorkCenter = currentBaseWc, PlannedQty = 0, Status = "pending", PlannedDate = DateTime.Now };
+                    db.MoProgresses.Add(newMp);
+                    await db.SaveChangesAsync(token);
+                    relatedMp.Add(newMp);
+                    logger.LogInformation($"[AS400 Polling] Auto-created MoProgress for MO={mo}, WC={currentBaseWc}.");
+                }
+                
+                // 4.3 Tính toán tiến độ từ ScanLogs
+                var logsForMo = await db.ScanLogs.Where(s => s.MO == mo).ToListAsync(token);
+                var logsForMoAndBaseWc = logsForMo.Where(s => NormalizeWcForAs400(s.WorkCenter) == currentBaseWc).ToList();
                 int totalQty = logsForMoAndBaseWc.Sum(s => s.Qty);
                 DateTime? lastScanTimeForPair = logsForMoAndBaseWc.OrderByDescending(s => s.ScanTime).Select(s => (DateTime?)s.ScanTime).FirstOrDefault();
 
-                var relatedMp = (await db.MoProgresses.Where(m => m.MO == mo).ToListAsync(token)).Where(m => NormalizeWcForAs400(m.WorkCenter) == wc).ToList();
-                
+                // 4.4 Cập nhật tiến độ cho tất cả MoProgress liên quan
                 foreach (var mp in relatedMp)
                 {
                     mp.ActualQty = totalQty;
                     mp.LastScanTime = lastScanTimeForPair;
-                    mp.Status = AppHelpers.ComputeStatus(mp);
+                    if (mp.PlannedQty > 0)
+                     mp.Status = AppHelpers.ComputeStatus(mp);
                 }
                 if (relatedMp.Any()) await db.SaveChangesAsync(token);
 
-                // Bắn SignalR cho từng WC chi tiết
+                // 4.5 Bắn SignalR cho từng WC chi tiết đã được cập nhật
                 foreach (var mp in relatedMp)
                 {
-                    await hubContext.Clients.All.SendAsync("MoProgressUpdated", new
-                    {
-                        mo = mp.MO,
-                        mx = mp.MX,
-                        workCenter = mp.WorkCenter,   // Gửi WC chi tiết
-                        planned = mp.PlannedQty,
-                        actual = mp.ActualQty,
-                        status = mp.Status,
-                        lastScanTime = mp.LastScanTime?.ToString("yyyy-MM-dd HH:mm:ss")
-                    }, token);
+                    await hubContext.Clients.All.SendAsync("MoProgressUpdated", new { mo = mp.MO, mx = mp.MX, workCenter = mp.WorkCenter, planned = mp.PlannedQty, actual = mp.ActualQty, status = mp.Status, lastScanTime = mp.LastScanTime?.ToString("yyyy-MM-dd HH:mm:ss") }, token);
                 }
             }
             
@@ -2033,7 +2048,6 @@ public class As400ScanPollingService : BackgroundService
             await db.SaveChangesAsync(token);
         }
     }
-
 }
 
 // ==================== DTO MODELS ====================
@@ -2051,30 +2065,36 @@ public static class AppHelpers
 {
     public static string ComputeStatus(MoProgress mp)
     {
+        // Nếu chưa quét, luôn là pending
         if (mp.ActualQty <= 0) return "pending";
+
+        // Nếu có quét nhưng không có kế hoạch -> đang làm
+        if (mp.PlannedQty <= 0) return "in-progress";
+
+        // Nếu quét chưa đủ so với kế hoạch -> đang làm
         if (mp.ActualQty < mp.PlannedQty) return "in-progress";
 
+        // Từ đây, ActualQty >= PlannedQty và PlannedQty > 0
+        // => Đã hoàn thành, chỉ cần xét trễ hay không
         if (mp.LastScanTime.HasValue)
         {
             try
             {
-                if (string.IsNullOrEmpty(mp.LeadtimeString) ||
-                    !mp.LeadtimeString.Contains('-')) return "done";
-
+                if (string.IsNullOrEmpty(mp.LeadtimeString) || !mp.LeadtimeString.Contains('-')) return "done";
+                
                 var parts = mp.LeadtimeString.Split('-');
                 var endStr = parts[1].Trim();
                 var endParts = endStr.Split(':');
                 int endHour = int.Parse(endParts[0]);
                 int endMin = int.Parse(endParts[1]);
 
-                DateTime targetDate = mp.LastScanTime.Value.Date;
+                DateTime targetDate = mp.PlannedDate.Date;
                 DateTime leadtimeEnd = targetDate.AddHours(endHour).AddMinutes(endMin);
 
                 var startParts = parts[0].Trim().Split(':');
                 int startHour = int.Parse(startParts[0]);
 
-                if (endHour < startHour &&
-                    mp.LastScanTime.Value.TimeOfDay.TotalHours >= startHour)
+                if (endHour < startHour)
                 {
                     leadtimeEnd = leadtimeEnd.AddDays(1);
                 }
@@ -2083,6 +2103,9 @@ public static class AppHelpers
             }
             catch { return "done"; }
         }
+        
+        // Nếu không có LastScanTime nhưng đã đủ số lượng -> done
         return "done";
     }
+
 }
