@@ -29,6 +29,8 @@ string rootMssPath = @"V:\Prod & Inv Control\Public\P&IC UPH\01.MSS for UPH\2026
 string schedulePath = @"V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\LEADTIME UPH SUPPORT";
 string localData = @"D:\logtran\1. Project\CI Project\OrderTrackingWeb\Data";
 builder.Configuration["SchedulePath"] = schedulePath;
+string glueLinePath = @"V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\GLUE LINE";
+builder.Configuration["GlueLinePath"] = glueLinePath;
 
 if (!Directory.Exists(localData))
     Directory.CreateDirectory(localData);
@@ -39,32 +41,6 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
     Console.WriteLine("✅ Database is ready at Data/OrderTracking.db");
-}
-
-// ===== HELPER: GET CELL VALUE SAFELY =====
-string GetCellValue(DataRow row, int columnIndex)
-{
-    try
-    {
-        if (columnIndex >= row.Table.Columns.Count) return "";
-        var value = row[columnIndex];
-        if (value == null || value == DBNull.Value) return "";
-
-        if (value is DateTime dt)
-        {
-            if (dt.TimeOfDay.TotalSeconds > 0) return dt.ToString("HH:mm");
-            else return dt.ToString("dd/MM/yyyy");
-        }
-
-        if (value is double || value is float || value is decimal)
-        {
-            double numValue = Convert.ToDouble(value);
-            if (numValue == Math.Floor(numValue)) return ((long)numValue).ToString();
-            else return numValue.ToString("0.##");
-        }
-        return value.ToString()?.Trim() ?? "";
-    }
-    catch { return ""; }
 }
 
 static string NormalizeWcForAs400(string wcFromExcel)
@@ -100,17 +76,17 @@ List<Order> ReadExcelFile(string filePath, string fileType, string dateKey)
             var row = table.Rows[i];
             if (table.Columns.Count < 4) continue;
 
-            string odrno = GetCellValue(row, 3);
+            string odrno = ExcelHelpers.GetCellValue(row, 3);
             if (string.IsNullOrWhiteSpace(odrno)) continue;
 
             result.Add(new Order
             {
                 OdrNo = odrno,
-                FItem = GetCellValue(row, 4),
-                Mw = GetCellValue(row, 5),
-                Qty = GetCellValue(row, 9),
-                DeliveryDate = GetCellValue(row, 7),
-                DeliveryTime = GetCellValue(row, 8),
+                FItem = ExcelHelpers.GetCellValue(row, 4),
+                Mw = ExcelHelpers.GetCellValue(row, 5),
+                Qty = ExcelHelpers.GetCellValue(row, 9),
+                DeliveryDate = ExcelHelpers.GetCellValue(row, 7),
+                DeliveryTime = ExcelHelpers.GetCellValue(row, 8),
                 FileType = fileType,
                 DateKey = dateKey,
                 Status = "Pending",
@@ -479,7 +455,7 @@ app.MapPost("/upload", async (HttpContext ctx, AppDbContext db) =>
             var row = table.Rows[i];
             if (table.Columns.Count < 4) continue;
 
-            string odrno = GetCellValue(row, 3);
+            string odrno = ExcelHelpers.GetCellValue(row, 3);
             if (string.IsNullOrWhiteSpace(odrno)) continue;
 
             uploadedOdrNos.Add(odrno);
@@ -492,11 +468,11 @@ app.MapPost("/upload", async (HttpContext ctx, AppDbContext db) =>
                 db.Orders.Add(new Order
                 {
                     OdrNo = odrno,
-                    FItem = GetCellValue(row, 4),
-                    Mw = GetCellValue(row, 5),
-                    Qty = GetCellValue(row, 9),
-                    DeliveryDate = GetCellValue(row, 7),
-                    DeliveryTime = GetCellValue(row, 8),
+                    FItem = ExcelHelpers.GetCellValue(row, 4),
+                    Mw = ExcelHelpers.GetCellValue(row, 5),
+                    Qty = ExcelHelpers.GetCellValue(row, 9),
+                    DeliveryDate = ExcelHelpers.GetCellValue(row, 7),
+                    DeliveryTime = ExcelHelpers.GetCellValue(row, 8),
                     FileType = fileType,
                     DateKey = dateKey,
                     Status = "Pending",
@@ -1218,6 +1194,7 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
         if (!DateTime.TryParse(date, out targetDate))
             return Results.BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
+        // ------- 1. Đọc file kế hoạch chính -------
         string fileName = $"UPH Support Schedule {targetDate:ddMMyyyy}.xlsx";
         string filePath = Path.Combine(schedulePath, fileName);
 
@@ -1226,48 +1203,136 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
 
         Console.WriteLine($"🔍 Đang đọc file tracking: {fileName}");
 
+        // dataByMx: MX -> list WorkCenterStep
         var dataByMx = new Dictionary<string, List<WorkCenterStep>>();
 
-        using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        using var reader = ExcelReaderFactory.CreateReader(stream);
-        var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration()
+        using (var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        using (var reader = ExcelReaderFactory.CreateReader(stream))
         {
-            ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
-        });
-
-        foreach (DataTable table in dataSet.Tables)
-        {
-            string workCenterName = table.TableName;
-            if (workCenterName.ToLower().Contains("pivot") ||
-                workCenterName.ToLower().Contains("summary"))
-                continue;
-
-            for (int i = 1; i < table.Rows.Count; i++)
+            var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration()
             {
-                var row = table.Rows[i];
-                string mx = GetCellValue(row, 1);
-                if (string.IsNullOrWhiteSpace(mx)) continue;
-                string fg_item = GetCellValue(row, 2);
-                string mo = GetCellValue(row, 5);
-                string qty = GetCellValue(row, 8);
-                string leadtime = GetCellValue(row, 12);
+                ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
+            });
 
-                if (!dataByMx.ContainsKey(mx))
-                    dataByMx[mx] = new List<WorkCenterStep>();
+            foreach (DataTable table in dataSet.Tables)
+            {
+                string workCenterName = table.TableName;
+                if (workCenterName.ToLower().Contains("pivot") ||
+                    workCenterName.ToLower().Contains("summary"))
+                    continue;
 
-                var alreadyExists = dataByMx[mx].Any(step =>
-                    step.WorkCenter == workCenterName &&
-                    step.Mo == mo &&
-                    step.Qty == qty &&
-                    step.Leadtime == leadtime);
-
-                if (!alreadyExists)
+                for (int i = 1; i < table.Rows.Count; i++)
                 {
-                    dataByMx[mx].Add(new WorkCenterStep(mx, workCenterName, fg_item, mo, qty, leadtime));
+                    var row = table.Rows[i];
+                    string mx = ExcelHelpers.GetCellValue(row, 1);
+                    if (string.IsNullOrWhiteSpace(mx)) continue;
+                    string fg_item = ExcelHelpers.GetCellValue(row, 2);
+                    string mo = ExcelHelpers.GetCellValue(row, 5);
+                    string qty = ExcelHelpers.GetCellValue(row, 8);
+                    string leadtime = ExcelHelpers.GetCellValue(row, 12);
+
+                    if (!dataByMx.ContainsKey(mx))
+                        dataByMx[mx] = new List<WorkCenterStep>();
+
+                    var alreadyExists = dataByMx[mx].Any(step =>
+                        step.WorkCenter == workCenterName &&
+                        step.Mo == mo &&
+                        step.Qty == qty &&
+                        step.Leadtime == leadtime);
+
+                    if (!alreadyExists)
+                    {
+                        dataByMx[mx].Add(new WorkCenterStep(mx, workCenterName, fg_item, mo, qty, leadtime));
+                    }
                 }
             }
         }
 
+        // ------- 2. Đọc & gộp kế hoạch từ GLUE FOAM -------
+        try
+        {
+            string glueFolder = builder.Configuration["GlueLinePath"] ?? @"V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\GLUE LINE";
+            string glueFileName = $"GLUE FOAM {targetDate:ddMMyyyy}.xlsx";
+            string glueFilePath = Path.Combine(glueFolder, glueFileName);
+
+            if (File.Exists(glueFilePath))
+            {
+                Console.WriteLine($"🔗 Đang đọc thêm kế hoạch GLUE FOAM: {glueFileName}");
+
+                // Tập (MO, WC gốc) đã có sẵn từ kế hoạch chính -> để ưu tiên file chính
+                var existingPlanKeys = new HashSet<(string MO, string WCBase)>();
+                foreach (var kv in dataByMx)
+                {
+                    foreach (var step in kv.Value)
+                    {
+                        var baseWc = NormalizeWcForAs400(step.WorkCenter);
+                        existingPlanKeys.Add((step.Mo.Trim().ToUpper(), baseWc));
+                    }
+                }
+
+                using (var stream = File.Open(glueFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (var reader = ExcelReaderFactory.CreateReader(stream))
+                {
+                    var glueDataSet = reader.AsDataSet(new ExcelDataSetConfiguration()
+                    {
+                        ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
+                    });
+
+                    var glueTable = glueDataSet.Tables["GLUE"] ?? glueDataSet.Tables[0];
+
+                    for (int i = 2; i < glueTable.Rows.Count; i++)
+                    {
+                        var row = glueTable.Rows[i];
+
+                        string mo = ExcelHelpers.GetCellValue(row, 1);   // B
+                        string mx = ExcelHelpers.GetCellValue(row, 11);  // L
+                        string wc = ExcelHelpers.GetCellValue(row, 16);  // Q
+                        if (string.IsNullOrWhiteSpace(mo) ||
+                            string.IsNullOrWhiteSpace(mx) ||
+                            string.IsNullOrWhiteSpace(wc))
+                            continue;
+
+                        string fgItem   = ExcelHelpers.GetCellValue(row, 12); // M
+                        string qty      = ExcelHelpers.GetCellValue(row, 4);  // E
+                        string leadtime = ExcelHelpers.GetCellValue(row, 23); // X
+
+                        string baseWc = NormalizeWcForAs400(wc);
+                        var key = (MO: mo.Trim().ToUpper(), WCBase: baseWc);
+
+                        // ƯU TIÊN file kế hoạch chính: nếu đã có (MO, WC gốc) thì bỏ qua GLUE
+                        if (existingPlanKeys.Contains(key))
+                            continue;
+
+                        if (!dataByMx.ContainsKey(mx))
+                            dataByMx[mx] = new List<WorkCenterStep>();
+
+                        bool existsInGlue = dataByMx[mx].Any(step =>
+                            NormalizeWcForAs400(step.WorkCenter) == baseWc &&
+                            step.Mo.Equals(mo, StringComparison.OrdinalIgnoreCase) &&
+                            step.Qty == qty &&
+                            step.Leadtime == leadtime);
+
+                        if (!existsInGlue)
+                        {
+                            dataByMx[mx].Add(new WorkCenterStep(mx, wc, fgItem, mo, qty, leadtime));
+                            existingPlanKeys.Add(key);
+                        }
+                    }
+                }
+
+                Console.WriteLine("✅ Đã gộp kế hoạch GLUE FOAM vào Tracking Journey.");
+            }
+            else
+            {
+                Console.WriteLine($"⚠️ Không tìm thấy file GLUE FOAM: {glueFileName}");
+            }
+        }
+        catch (Exception exGlue)
+        {
+            Console.WriteLine($"❌ Lỗi khi đọc GLUE FOAM: {exGlue.Message}");
+        }
+
+        // ------- 3. Đóng gói kết quả cho frontend -------
         var result = dataByMx
             .Select(kvp => new TrackingData(kvp.Key, kvp.Value))
             .OrderBy(t => t.Mx)
@@ -1275,7 +1340,7 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
 
         Console.WriteLine($"✅ Đã xử lý xong {result.Count} mã MX.");
 
-        // TẠO/CẬP NHẬT MoProgress THEO CẶP (MO, WC GỐC)
+        // ------- 4. TẠO/CẬP NHẬT MoProgress THEO CẶP (MO, WC GỐC) -------
         try
         {
             var allSteps = result
@@ -1299,7 +1364,7 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
                     g => new
                     {
                         PlannedQty = g.Sum(x => int.TryParse(x.Step.Qty, out int q) ? q : 0),
-                        Leadtime = g.Last().Step.Leadtime, // Lấy leadtime của dòng cuối cùng
+                        Leadtime = g.Last().Step.Leadtime,
                         Mx = g.Last().Mx
                     }
                 );
@@ -1322,7 +1387,7 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
                     mp.LeadtimeString = plan.Leadtime;
                     mp.MX = plan.Mx;
 
-                    // ✅ TÍNH LẠI STATUS NẾU PlannedQty THAY ĐỔI
+                    // TÍNH LẠI STATUS NẾU PlannedQty THAY ĐỔI
                     if (plannedQtyChanged)
                     {
                         mp.Status = AppHelpers.ComputeStatus(mp);
@@ -1586,6 +1651,147 @@ app.MapGet("/api/debug/mo-scan-raw/{mo}", async (string mo, AppDbContext db) =>
     }
 });
 
+// ==================== API DEBUG: ĐỒNG BỘ LỊCH SỬ QUÉT CHO CÁC MO CHƯA CÓ DỮ LIỆU (TỐI ƯU) ====================
+app.MapPost("/api/debug/sync-historical", async (string date, AppDbContext db) =>
+{
+    try
+    {
+        if (!DateTime.TryParse(date, out var targetDate))
+        {
+            return Results.BadRequest("Invalid date format. Use yyyy-MM-dd.");
+        }
+
+        Console.WriteLine($"\n🔄 SYNC HISTORICAL (OPTIMIZED): Bắt đầu đồng bộ lịch sử quét cho ngày {targetDate:dd/MM/yyyy}...");
+
+        var BYPASS_WCS = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "UBF05", "UPHD1", "UBF04", "UCFBP"
+        };
+
+        // 1. Lấy danh sách MoProgress ứng viên
+        var candidatesFromDb = await db.MoProgresses
+            .Where(mp => mp.PlannedDate.Date == targetDate.Date &&
+                         mp.PlannedQty > 0 &&
+                         mp.ActualQty == 0)
+            .ToListAsync();
+        
+        var candidates = candidatesFromDb
+            .Where(mp => !BYPASS_WCS.Contains(NormalizeWcForAs400(mp.WorkCenter)))
+            .ToList();
+
+        if (!candidates.Any())
+        {
+            return Results.Ok(new { message = "Không có MO nào cần đồng bộ lịch sử." });
+        }
+
+        // 2. Gom các MO cần quét theo từng Work Center gốc
+        var moGroupsByWc = candidates
+            .GroupBy(mp => NormalizeWcForAs400(mp.WorkCenter))
+            .ToDictionary(g => g.Key, g => g.Select(mp => mp.MO).Distinct().ToList());
+
+        Console.WriteLine($"📋 Sync Historical: Tìm thấy {moGroupsByWc.Count} Work Center có MO cần kiểm tra.");
+
+        int totalUpdated = 0;
+        int totalInsertedLogs = 0;
+        
+        // Thời gian bắt đầu quét lịch sử (2 ngày trước)
+        var historyStartDate = DateTime.Now.Date.AddDays(-2);
+
+        using (var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;TRANSLATE=1;"))
+        {
+            await conn.OpenAsync();
+
+            // 3. Lặp qua từng Work Center để query một lần duy nhất
+            foreach (var group in moGroupsByWc)
+            {
+                string baseWc = group.Key;
+                var moList = group.Value;
+
+                Console.WriteLine($"\n🔄 Đang xử lý WC: {baseWc} với {moList.Count} MO...");
+
+                var as400Rows = new List<ScanLog>();
+                
+                // Tạo câu lệnh IN cho danh sách MO
+                var moInClause = string.Join(",", moList.Select(mo => $"'{mo.Trim().ToUpper()}'"));
+                
+                string sql = $@"
+                    SELECT TRIM(A.ODORDR), TRIM(A.ODPN), A.ODQTYC, TRIM(A.ODWKCN), A.ODTSTP
+                    FROM WWDCF.GRPORDH A
+                    LEFT JOIN AMFLIBW.MOMAST B ON A.ODORDR = B.ORDNO
+                    WHERE TRIM(A.ODORDR) IN ({moInClause}) 
+                      AND TRIM(A.ODWKCN) = ?
+                      AND A.ODTSTP >= ?
+                      AND B.OSTAT NOT IN ('99') AND SUBSTR(B.REFNO, 1, 2) = 'MX'";
+
+                using var cmd = new OdbcCommand(sql, conn);
+                cmd.Parameters.Add("?", OdbcType.VarChar).Value = baseWc;
+
+                string timestampString = historyStartDate.ToString("yyyy-MM-dd-HH.mm.ss.ffffff");
+                cmd.Parameters.Add("?", OdbcType.VarChar).Value = timestampString;
+
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    as400Rows.Add(new ScanLog {
+                        MO = reader.GetString(0),
+                        Item = reader.IsDBNull(1) ? "" : reader.GetString(1),
+                        Qty = reader.IsDBNull(2) ? 0 : (int)reader.GetDecimal(2),
+                        WorkCenter = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                        ScanTime = reader.GetDateTime(4),
+                        Source = "AS400_HISTORICAL"
+                    });
+                }
+
+                if (!as400Rows.Any()) continue;
+
+                // 4. Ghi tất cả log tìm được vào DB
+                int insertedCount = 0;
+                foreach (var row in as400Rows)
+                {
+                    bool exists = await db.ScanLogs.AnyAsync(l => l.MO == row.MO && l.ScanTime == row.ScanTime && l.WorkCenter == row.WorkCenter);
+                    if (!exists)
+                    {
+                        db.ScanLogs.Add(row);
+                        insertedCount++;
+                    }
+                }
+                if (insertedCount > 0) await db.SaveChangesAsync();
+                totalInsertedLogs += insertedCount;
+
+                // 5. Cập nhật lại tất cả MoProgress của các MO trong nhóm này
+                var moScans = as400Rows.GroupBy(r => r.MO);
+                foreach (var moGroup in moScans)
+                {
+                    string currentMo = moGroup.Key;
+                    var relatedMp = candidates.Where(mp => mp.MO == currentMo && NormalizeWcForAs400(mp.WorkCenter) == baseWc).ToList();
+                    
+                    if (relatedMp.Any())
+                    {
+                        int totalQty = moGroup.Sum(s => s.Qty);
+                        var lastScan = moGroup.OrderByDescending(s => s.ScanTime).FirstOrDefault();
+
+                        foreach (var mp in relatedMp)
+                        {
+                            mp.ActualQty = totalQty;
+                            mp.LastScanTime = lastScan?.ScanTime;
+                            mp.Status = AppHelpers.ComputeStatus(mp);
+                        }
+                        totalUpdated++;
+                    }
+                }
+            }
+        }
+        
+        await db.SaveChangesAsync();
+        Console.WriteLine($"✅ Sync Historical: Đã cập nhật {totalUpdated} cặp MO/WC, chèn {totalInsertedLogs} log mới.");
+        return Results.Ok(new { updatedPairs = totalUpdated, newLogs = totalInsertedLogs });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.ToString());
+    }
+});
+
 // ==================== API DEBUG: XEM BẢNG MoProgresses ====================
 app.MapGet("/api/debug/mo-progress", async (AppDbContext db) =>
 {
@@ -1596,7 +1802,470 @@ app.MapGet("/api/debug/mo-progress", async (AppDbContext db) =>
     return Results.Ok(allProgress);
 });
 
+// ==================== API DEBUG: BACKFILL DỮ LIỆU SCAN CHO 1 MO + 1 WC ====================
+app.MapPost("/api/debug/backfill-mo", async (string mo, string workCenter, AppDbContext db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(mo) || string.IsNullOrWhiteSpace(workCenter))
+            return Results.BadRequest("Thiếu MO hoặc WorkCenter");
+
+        string moUpper = mo.Trim().ToUpper();
+        string baseWc = NormalizeWcForAs400(workCenter);
+
+        Console.WriteLine($"\n🔄 BACKFILL MO={moUpper}, WC={workCenter} (base={baseWc})");
+
+        // 1. Lấy dữ liệu thô từ AS400 cho đúng MO + WC gốc
+        var as400Rows = new List<(string MO, string MX, string Item, string Wc, int Qty, DateTime ScanTime)>();
+
+        using (var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;TRANSLATE=1;"))
+        {
+            await conn.OpenAsync();
+
+            string sql = @"
+                SELECT 
+                    TRIM(A.ODORDR) AS ODORDR, TRIM(B.REFNO) AS MX_REFNO,
+                    TRIM(A.ODPN)   AS ODPN,   A.ODQTYC,
+                    TRIM(A.ODWKCN) AS ODWKCN, A.ODTSTP
+                FROM WWDCF.GRPORDH A
+                LEFT JOIN AMFLIBW.MOMAST B ON A.ODORDR = B.ORDNO
+                WHERE TRIM(A.ODORDR) = ? 
+                  AND TRIM(A.ODWKCN) = ?
+                  AND B.OSTAT NOT IN ('99')
+                  AND SUBSTR(B.REFNO, 1, 2) = 'MX'
+                ORDER BY A.ODTSTP";
+
+            using var cmd = new OdbcCommand(sql, conn);
+            cmd.Parameters.Add("?", OdbcType.VarChar).Value = moUpper;
+            cmd.Parameters.Add("?", OdbcType.VarChar).Value = baseWc;
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                string moVal = reader.GetString(0);
+                string mx    = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                string item  = reader.IsDBNull(2) ? "" : reader.GetString(2);
+                int qty      = reader.IsDBNull(3) ? 0  : (int)reader.GetDecimal(3);
+                string wc    = reader.IsDBNull(4) ? "" : reader.GetString(4);
+                DateTime ts  = reader.GetDateTime(5);
+
+                as400Rows.Add((moVal, mx, item, wc, qty, ts));
+            }
+        }
+
+        if (!as400Rows.Any())
+        {
+            Console.WriteLine("⚠️ Backfill: Không tìm thấy bản ghi nào trên AS400 cho MO + WC này.");
+            return Results.Ok(new
+            {
+                mo = moUpper,
+                workCenter = workCenter,
+                message = "Không có dữ liệu scan trên AS400 cho MO + WC này",
+                insertedLogs = 0,
+                updatedMoProgress = false
+            });
+        }
+
+        Console.WriteLine($"✅ Backfill: tìm được {as400Rows.Count} bản ghi từ AS400.");
+
+        // 2. Ghi vào bảng ScanLogs nếu chưa có
+        int insertedCount = 0;
+        foreach (var row in as400Rows)
+        {
+            bool exists = await db.ScanLogs.AnyAsync(l =>
+                l.MO == row.MO &&
+                l.ScanTime == row.ScanTime &&
+                l.WorkCenter == row.Wc);
+
+            if (!exists)
+            {
+                db.ScanLogs.Add(new ScanLog
+                {
+                    MO = row.MO,
+                    Item = row.Item,
+                    WorkCenter = row.Wc,
+                    Qty = row.Qty,
+                    ScanTime = row.ScanTime,
+                    Source = "AS400_BACKFILL"
+                });
+                insertedCount++;
+            }
+        }
+        await db.SaveChangesAsync();
+        Console.WriteLine($"📝 Backfill: đã chèn thêm {insertedCount} dòng vào ScanLogs.");
+
+        // 3. Tính lại tổng qty & last scan cho MO + WC gốc này
+        var allLogsForMo = await db.ScanLogs
+            .Where(s => s.MO == moUpper)
+            .ToListAsync();
+
+        var logsForMoAndBaseWc = allLogsForMo
+            .Where(s => NormalizeWcForAs400(s.WorkCenter) == baseWc)
+            .OrderBy(s => s.ScanTime)
+            .ToList();
+
+        int totalQty = logsForMoAndBaseWc.Sum(s => s.Qty);
+        DateTime? lastScanTime = logsForMoAndBaseWc
+            .OrderByDescending(s => s.ScanTime)
+            .Select(s => (DateTime?)s.ScanTime)
+            .FirstOrDefault();
+
+        Console.WriteLine($"📊 Backfill: tổng Qty = {totalQty}, lastScanTime = {lastScanTime}");
+
+        // 4. Cập nhật MoProgress cho MO + WC gốc
+        var allMpForMo = await db.MoProgresses
+            .Where(m => m.MO == moUpper)
+            .ToListAsync();
+
+        var relatedMp = allMpForMo
+            .Where(m => NormalizeWcForAs400(m.WorkCenter) == baseWc)
+            .ToList();
+
+        bool createdNewMp = false;
+
+        if (!relatedMp.Any())
+        {
+            // Nếu chưa có MoProgress cho MO + WC này -> tạo mới
+            var firstRow = as400Rows.First();
+            var newMp = new MoProgress
+            {
+                PlannedDate = DateTime.Now.Date,
+                MO = moUpper,
+                MX = firstRow.MX,
+                WorkCenter = baseWc,
+                PlannedQty = 0,
+                ActualQty = totalQty,
+                LastScanTime = lastScanTime,
+                Status = "pending",
+                LeadtimeString = ""
+            };
+            db.MoProgresses.Add(newMp);
+            await db.SaveChangesAsync();
+            relatedMp.Add(newMp);
+            createdNewMp = true;
+
+            Console.WriteLine($"➕ Backfill: tạo mới MoProgress cho MO={moUpper}, WC={baseWc}.");
+        }
+
+        foreach (var mp in relatedMp)
+        {
+            mp.ActualQty = totalQty;
+            mp.LastScanTime = lastScanTime;
+            if (mp.PlannedQty > 0)
+            {
+                mp.Status = AppHelpers.ComputeStatus(mp);
+            }
+        }
+
+        if (relatedMp.Any())
+            await db.SaveChangesAsync();
+
+        Console.WriteLine($"✅ Backfill: đã cập nhật MoProgress ({relatedMp.Count} dòng).");
+
+        return Results.Ok(new
+        {
+            mo = moUpper,
+            workCenter = workCenter,
+            baseWorkCenter = baseWc,
+            as400Rows = as400Rows.Count,
+            insertedLogs = insertedCount,
+            totalScannedQty = totalQty,
+            lastScanTime = lastScanTime,
+            updatedMoProgress = relatedMp.Any(),
+            createdNewMoProgress = createdNewMp
+        });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Backfill error: {ex}");
+        return Results.Problem(ex.ToString());
+    }
+});
+
+// ==================== MANAGER DASHBOARD API ====================
+app.MapGet("/api/manager-dashboard", async (string date, AppDbContext db) =>
+{
+    try
+    {
+        // ✅ Danh sách WorkCenter sẽ bị bỏ qua khi tính trạng thái group
+        var BYPASS_WCS = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "UBF05", "UBF04", "UPHD1", "UCFBP","WLGL2"
+        };
+
+        DateTime targetDate;
+        if (!DateTime.TryParse(date, out targetDate))
+            return Results.BadRequest("Invalid date format. Use yyyy-MM-dd.");
+
+        string fileName = $"UPH Support Schedule {targetDate:ddMMyyyy}.xlsx";
+        string filePath = Path.Combine(schedulePath, fileName);
+
+        if (!File.Exists(filePath))
+            return Results.NotFound($"Không tìm thấy file kế hoạch: {fileName}");
+
+        // 1. Định nghĩa các nhóm Work Center
+        var wcGroups = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Blow Fill"] = new HashSet<string> { "UBF03_M", "UBF03_S", "UBF05", "UBF06", "UBF12", "UBF13", "UBF13_PREP" },
+            ["Glueline"] = new HashSet<string> { "UPGL1", "UPGL3", "UPGL4" },
+            ["HandGlue"] = new HashSet<string> { "UPGL2", "UPGL2_I", "UPGL2_II", "UPGL2_III", "UPGL2_IV", "UPGL2_REP", "WLGL2", "UFGL2", "UFGL2_I", "UPGL6", "UPHD1" },
+            ["Handfill"] = new HashSet<string> { "UCFHM", "UCFHM_1", "UCFHS", "UCFBF", "UBF04", "UCFBP" },
+            ["Cushion"]  = new HashSet<string> { "UCFCT", "UCFCM", "UCFCS", "UCFCH", "UCFCO", "UCFCV" }
+        };
+
+        // 2. Đọc dữ liệu thô từ file kế hoạch chính
+        var rawPlanData = new List<(string MX, string FgItem, string MO, string WC, string Ex, string PlannedQty, string Leadtime)>();
+
+        using (var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        using (var reader = ExcelReaderFactory.CreateReader(stream))
+        {
+            var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration()
+            {
+                ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
+            });
+
+            foreach (DataTable table in dataSet.Tables)
+            {
+                string workCenterName = table.TableName;
+                if (workCenterName.ToLower().Contains("pivot") || workCenterName.ToLower().Contains("summary"))
+                    continue;
+
+                for (int i = 1; i < table.Rows.Count; i++)
+                {
+                    var row = table.Rows[i];
+                    string mx = ExcelHelpers.GetCellValue(row, 1);
+                    if (string.IsNullOrWhiteSpace(mx)) continue;
+
+                    rawPlanData.Add((
+                        MX: mx,
+                        FgItem: ExcelHelpers.GetCellValue(row, 2),
+                        MO: ExcelHelpers.GetCellValue(row, 5),
+                        WC: workCenterName,
+                        Ex: ExcelHelpers.GetCellValue(row, 11),
+                        PlannedQty: ExcelHelpers.GetCellValue(row, 8),
+                        Leadtime: ExcelHelpers.GetCellValue(row, 12)
+                    ));
+                }
+            }
+        }
+
+        // 2b. Bổ sung kế hoạch GLUE FOAM (ưu tiên kế hoạch chính)
+        try
+        {
+            string glueFolder = builder.Configuration["GlueLinePath"] ?? glueLinePath;
+            string glueFileName = $"GLUE FOAM {targetDate:ddMMyyyy}.xlsx";
+            string glueFilePath = Path.Combine(glueFolder, glueFileName);
+
+            if (File.Exists(glueFilePath))
+            {
+                Console.WriteLine($"🔗 ManagerDashboard: đọc thêm kế hoạch GLUE: {glueFileName}");
+
+                // Các cặp (MO, WC gốc) đã có trong rawPlanData từ file chính
+                var existingPairs = new HashSet<(string MO, string WCBase)>();
+                foreach (var d in rawPlanData)
+                {
+                    string baseWc = NormalizeWcForAs400(d.WC);
+                    existingPairs.Add((d.MO.Trim().ToUpper(), baseWc));
+                }
+
+                using (var stream = File.Open(glueFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (var reader = ExcelReaderFactory.CreateReader(stream))
+                {
+                    var glueDataSet = reader.AsDataSet(new ExcelDataSetConfiguration()
+                    {
+                        ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
+                    });
+
+                    var glueTable = glueDataSet.Tables["GLUE"] ?? glueDataSet.Tables[0];
+
+                    for (int i = 2; i < glueTable.Rows.Count; i++)
+                    {
+                        var row = glueTable.Rows[i];
+
+                        string mo = ExcelHelpers.GetCellValue(row, 1);   // B
+                        string mx = ExcelHelpers.GetCellValue(row, 11);  // L
+                        string wc = ExcelHelpers.GetCellValue(row, 16);  // Q
+                        if (string.IsNullOrWhiteSpace(mo) ||
+                            string.IsNullOrWhiteSpace(mx) ||
+                            string.IsNullOrWhiteSpace(wc))
+                            continue;
+
+                        string fgItem   = ExcelHelpers.GetCellValue(row, 12); // M
+                        string qty      = ExcelHelpers.GetCellValue(row, 4);  // E
+                        string ex       = "";                    // file GLUE không có Ex -> để trống
+                        string leadtime = ExcelHelpers.GetCellValue(row, 23); // X
+
+                        string baseWc = NormalizeWcForAs400(wc);
+                        var key = (MO: mo.Trim().ToUpper(), WCBase: baseWc);
+
+                        // Ưu tiên kế hoạch chính
+                        if (existingPairs.Contains(key))
+                            continue;
+
+                        rawPlanData.Add((
+                            MX: mx,
+                            FgItem: fgItem,
+                            MO: mo,
+                            WC: wc,
+                            Ex: ex,
+                            PlannedQty: qty,
+                            Leadtime: leadtime
+                        ));
+
+                        existingPairs.Add(key);
+                    }
+                }
+
+                Console.WriteLine("✅ ManagerDashboard: đã gộp GLUE FOAM vào rawPlanData.");
+            }
+            else
+            {
+                Console.WriteLine($"⚠️ ManagerDashboard: không tìm thấy GLUE FOAM {glueFileName}");
+            }
+        }
+        catch (Exception exGlue)
+        {
+            Console.WriteLine($"❌ ManagerDashboard: lỗi khi đọc GLUE FOAM: {exGlue.Message}");
+        }
+
+        // 3. Gom dữ liệu theo MX
+        var dataByMx = rawPlanData
+            .GroupBy(d => d.MX)
+            .Select(g => new
+            {
+                MX = g.Key,
+                FgItem = g.FirstOrDefault().FgItem,
+                ExValue = g.Select(d => d.Ex)
+                          .FirstOrDefault(ex => !string.IsNullOrWhiteSpace(ex) && int.TryParse(ex, out _)) ?? "0",
+                MOs = g.ToList()
+            })
+            .ToList();
+
+        // 4. Lấy tiến độ từ DB
+        var allMoKeys = rawPlanData.Select(d => d.MO).Distinct().ToList();
+        var moProgresses = await db.MoProgresses
+            .Where(p => allMoKeys.Contains(p.MO))
+            .GroupBy(p => new { p.MO, p.WorkCenter })
+            .ToDictionaryAsync(
+                g => (g.Key.MO, g.Key.WorkCenter),
+                g => g
+                    .OrderByDescending(x => x.LastScanTime ?? DateTime.MinValue)
+                    .ThenByDescending(x => x.Id) // fallback
+                    .First()
+            );
+
+        // 5. Xử lý và trả về kết quả
+        var result = dataByMx.Select(mxData =>
+        {
+            int.TryParse(mxData.ExValue, out int exHour);
+            int ltUphSp = exHour - 3;
+            bool isPastDeadline = DateTime.Now.Hour >= ltUphSp;
+
+            var groupStatus = new Dictionary<string, object>();
+            foreach (var group in wcGroups)
+            {
+                string groupName = group.Key;
+                var wcsInGroup = group.Value;
+
+                var mosInGroup = mxData.MOs.Where(m => wcsInGroup.Contains(m.WC)).ToList();
+                if (!mosInGroup.Any())
+                {
+                    groupStatus[groupName] = new { status = "na", tooltip = "Không có MO", details = new List<object>() };
+                    continue;
+                }
+
+                var details = mosInGroup.Select(m =>
+                {
+                    var baseWc = NormalizeWcForAs400(m.WC);
+                    moProgresses.TryGetValue((m.MO, baseWc), out var progress);
+
+                    return new
+                    {
+                        mo = m.MO,
+                        wc = m.WC,
+                        baseWc = baseWc,
+                        plannedQty = m.PlannedQty,
+                        progress = $"{progress?.ActualQty ?? 0}/{m.PlannedQty}",
+                        status = progress?.Status ?? "pending",
+                        leadtime = m.Leadtime
+                    };
+                }).ToList();
+
+                // ✅ Chỉ dùng những WC KHÔNG thuộc BYPASS_WCS để tính trạng thái group
+                var detailsForStatus = details
+                    .Where(d => !BYPASS_WCS.Contains(d.baseWc))
+                    .ToList();
+
+                string statusGroup;
+                string tooltip;
+
+                if (!detailsForStatus.Any())
+                {
+                    // Nếu group này CHỈ toàn WC bypass -> coi như "na" (không đánh giá)
+                    statusGroup = "na";
+                    tooltip = "Chỉ có WC bypass (không tính trạng thái)";
+                }
+                else
+                {
+                    bool allDone = detailsForStatus.All(d => d.status == "done" || d.status == "late");
+
+                    if (allDone)
+                        statusGroup = "green";
+                    else if (isPastDeadline)
+                        statusGroup = "red";
+                    else
+                        statusGroup = "pending";
+
+                    var completedCount = detailsForStatus.Count(d => d.status == "done" || d.status == "late");
+                    tooltip = $"{completedCount} / {detailsForStatus.Count} MOs hoàn thành (không tính WC bypass)";
+                }
+
+                groupStatus[groupName] = new
+                {
+                    status = statusGroup,
+                    tooltip,
+                    details = details.Select(d => new
+                    {
+                        d.mo,
+                        d.wc,
+                        d.progress,
+                        d.status,
+                        d.leadtime
+                    }).ToList()
+                };
+            }
+
+            string overallStatus = "Pending";
+            if (groupStatus.Values.Any(s => ((dynamic)s).status == "red")) overallStatus = "Alert";
+            else if (groupStatus.Values.Any(s => ((dynamic)s).status == "green")) overallStatus = "In Progress";
+            if (groupStatus.Values.All(s => ((dynamic)s).status == "green" || ((dynamic)s).status == "na")) overallStatus = "Done";
+
+            return new
+            {
+                mx = mxData.MX,
+                fgItem = mxData.FgItem,
+                ex = exHour,
+                ltUphSp = ltUphSp,
+                groups = groupStatus,
+                status = overallStatus
+            };
+        })
+        .OrderBy(item => item.ex)
+        .ToList();
+
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.ToString());
+    }
+});
+
 // ==================== WEB ROUTES ====================
+app.MapGet("/manager-dashboard", async ctx => {
+    ctx.Response.ContentType = "text/html";
+    await ctx.Response.SendFileAsync("wwwroot/manager-dashboard.html");
+});
 
 app.MapGet("/", async ctx =>
 {
@@ -1795,8 +2464,9 @@ public class As400ScanPollingService : BackgroundService
     {
         "UBF03", "UBF04", "UBF05", "UBF06", "UBF12", "UBF13",
         "UPHD1", "UCFBP", "UCFHS", "UCFHM", "UCFCH", "UCFCT",
-        "UCFCM", "UCFCS", "UCFCV", "UPGL1", "UPGL4", "UPGL6", 
-        "WLGL2", "UCFCO", "UPGL2", "UFGL2", "UPHD1", "WLGL2"
+        "UCFCM", "UCFCS", "UCFCV", 
+        "UPGL1", "UPGL2", "UPGL3", "UPGL4", "UPGL6",
+        "WLGL2", "UCFCO", "UFGL2"
     };
 
     public As400ScanPollingService(IServiceProvider services, ILogger<As400ScanPollingService> logger)
@@ -1861,6 +2531,7 @@ public class As400ScanPollingService : BackgroundService
         var moList = new List<(string MO, string WorkCenterExcel, string WorkCenterBase)>();
         try
         {
+            // ----- BƯỚC 1A: ĐỌC FILE KẾ HOẠCH CHÍNH -----
             var schedulePath = configuration["SchedulePath"];
             if (string.IsNullOrEmpty(schedulePath))
             {
@@ -1893,10 +2564,42 @@ public class As400ScanPollingService : BackgroundService
                     }
                 }
             }
+
+            // ----- BƯỚC 1B: ĐỌC THÊM FILE GLUE FOAM -----
+            var glueLinePath = configuration["GlueLinePath"];
+            if (!string.IsNullOrEmpty(glueLinePath))
+            {
+                string glueFileName = $"GLUE FOAM {DateTime.Now:ddMMyyyy}.xlsx";
+                string glueFilePath = Path.Combine(glueLinePath, glueFileName);
+                if (File.Exists(glueFilePath))
+                {
+                    logger.LogInformation($"[AS400 Polling] Reading additional plan from: {glueFileName}");
+                    using var stream = File.Open(glueFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var reader = ExcelReaderFactory.CreateReader(stream);
+                    var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration() { ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false } });
+                    
+                    var glueTable = dataSet.Tables["GLUE"] ?? dataSet.Tables[0];
+                    for (int i = 2; i < glueTable.Rows.Count; i++) // Bỏ 2 dòng đầu
+                    {
+                        var row = glueTable.Rows[i];
+                        string mo = ExcelHelpers.GetCellValue(row, 1); // Cột B
+                        string wc = ExcelHelpers.GetCellValue(row, 16); // Cột Q
+
+                        if (!string.IsNullOrEmpty(mo) && !string.IsNullOrEmpty(wc))
+                        {
+                            string baseWc = NormalizeWcForAs400(wc);
+                            if(ALLOWED_WORKCENTERS.Contains(baseWc))
+                            {
+                                moList.Add((mo, wc, baseWc));
+                            }
+                        }
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "[AS400 Polling] Error reading schedule file.");
+            logger.LogError(ex, "[AS400 Polling] Error reading schedule files.");
             return;
         }
 
@@ -2060,6 +2763,35 @@ record TrackingData(string Mx, List<WorkCenterStep> Steps);
 record WorkCenterStep(string Mx, string WorkCenter, string FgItem, string Mo, string Qty, string Leadtime);
 record Kho2ScanRequest(string Odrno, string ZoneCode);
 
+// Get Cell Value Helper
+public static class ExcelHelpers
+{
+    public static string GetCellValue(DataRow row, int columnIndex)
+    {
+        try
+        {
+            if (columnIndex >= row.Table.Columns.Count) return "";
+            var value = row[columnIndex];
+            if (value == null || value == DBNull.Value) return "";
+
+            if (value is DateTime dt)
+            {
+                if (dt.TimeOfDay.TotalSeconds > 0) return dt.ToString("HH:mm");
+                else return dt.ToString("dd/MM/yyyy");
+            }
+
+            if (value is double || value is float || value is decimal)
+            {
+                double numValue = Convert.ToDouble(value);
+                if (numValue == Math.Floor(numValue)) return ((long)numValue).ToString();
+                else return numValue.ToString("0.##");
+            }
+            return value.ToString()?.Trim() ?? "";
+        }
+        catch { return ""; }
+    }
+}
+
 // ==================== GLOBAL HELPER FUNCTIONS ====================
 public static class AppHelpers
 {
@@ -2106,6 +2838,38 @@ public static class AppHelpers
         
         // Nếu không có LastScanTime nhưng đã đủ số lượng -> done
         return "done";
+    }
+
+    public static bool IsPastLeadtime(MoProgress mp, DateTime? nowOverride = null)
+    {
+        var now = nowOverride ?? DateTime.Now;
+
+        if (string.IsNullOrEmpty(mp.LeadtimeString) || !mp.LeadtimeString.Contains('-'))
+            return false;
+
+        try
+        {
+            var parts = mp.LeadtimeString.Split('-');
+            var endStr = parts[1].Trim();
+            var endParts = endStr.Split(':');
+            int endHour = int.Parse(endParts[0]);
+            int endMin  = int.Parse(endParts[1]);
+
+            DateTime targetDate  = mp.PlannedDate.Date;
+            DateTime leadtimeEnd = targetDate.AddHours(endHour).AddMinutes(endMin);
+
+            // Xử lý case ca qua ngày
+            var startParts = parts[0].Trim().Split(':');
+            int startHour = int.Parse(startParts[0]);
+            if (endHour < startHour)
+                leadtimeEnd = leadtimeEnd.AddDays(1);
+
+            return now > leadtimeEnd;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
 }

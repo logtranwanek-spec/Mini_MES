@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Dashboard - Tiến Độ Sản Xuất</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="/js/theme.js"></script>
+    <!-- Chart.js cho biểu đồ -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <button id="scrollToTopBtn" title="Lên đầu trang">↑</button>
+    <!-- HEADER CHÍNH -->
+    <div class="dash-header">
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <a href="/tracking" class="btn-back-home">⬅️ Quay lại Tracking</a>
+            <h1 style="margin: 0;">UPH Support On-time Management System</h1>
+        </div>
+        <div class="dash-controls">
+            <input type="date" id="dashDate" class="input-field" style="width: 150px; padding: 10px;">
+            <button id="btnSyncHistorical" class="btn btn-primary" style="width:auto; padding:10px 20px;">
+                🔍 Đồng bộ Quét Cũ
+            </button>
+            <button class="btn-global-toggle btn-view-toggle">Light</button>
+        </div>
+    </div>
+
+    <!-- THANH CÔNG CỤ LỌC DỌC (NỘI DUNG FILTER SẼ ĐƯỢC CHUYỂN BẰNG JS) -->
+    <div id="floating-toolbar" class="floating-filter-toolbar">
+        <!-- JS sẽ chuyển #filter-group-wrapper vào đây khi scroll -->
+    </div>
+
+    <div class="manager-page-content">
+        <!-- THANH ĐIỀU KHIỂN NGANG (CHỨA CÁC CHECKBOX FILTER) -->
+        <div id="horizontal-controls" class="manager-controls">
+            <!-- BỘ LỌC TRẠNG THÁI -->
+            <div id="filter-group-wrapper" class="filter-group">
+                <strong class="filter-title-text">Lọc trạng thái:</strong>
+
+                <label class="checkbox-label" for="filterDone">
+                    <input type="checkbox" id="filterDone" checked>
+                    <span class="status-dot status-green"></span>
+                    <span class="filter-text">Hoàn thành</span>
+                </label>
+
+                <label class="checkbox-label" for="filterInProgress">
+                    <input type="checkbox" id="filterInProgress" checked>
+                    <span class="status-dot status-blue"></span>
+                    <span class="filter-text">Đang làm</span>
+                </label>
+
+                <label class="checkbox-label" for="filterAlert">
+                    <input type="checkbox" id="filterAlert" checked>
+                    <span class="status-dot status-red"></span>
+                    <span class="filter-text">Cảnh báo</span>
+                </label>
+
+                <label class="checkbox-label" for="filterPending">
+                    <input type="checkbox" id="filterPending" checked>
+                    <span class="status-dot status-gray"></span>
+                    <span class="filter-text">Chờ</span>
+                </label>
+            </div>
+
+            <!-- CÁC Ô THỐNG KÊ NHANH TRÊN HEADER -->
+            <div class="stats-group">
+                <div class="stat-item" title="Tổng số MX">
+                    <span class="stat-label">Tổng:</span>
+                    <span class="stat-number" id="statTotal">0</span>
+                </div>
+                <div class="stat-item" title="Số MX đã hoàn thành">
+                    <span class="stat-number stat-green" id="statDone">0</span>
+                </div>
+                <div class="stat-item" title="Số MX đang có cảnh báo">
+                    <span class="stat-number stat-red" id="statAlert">0</span>
+                </div>
+                <div class="stat-item" title="Số MX đang trong tiến độ">
+                    <span class="stat-number stat-blue" id="statInProgress">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- LAYOUT 2 CỘT: BẢNG TRÁI + BIỂU ĐỒ PHẢI -->
+        <div class="manager-main-layout">
+            <!-- CỘT TRÁI: BẢNG MX -->
+            <div class="manager-main-panel">
+                <table class="manager-table">
+                    <thead>
+                        <tr>
+                            <th>MX</th>
+                            <th>UPH Lead Time</th>
+                            <th>UPH Support Lead Time</th>
+                            <th>Blow Fill</th>
+                            <th>Glueline</th>
+                            <th>HandGlue</th>
+                            <th>Handfill</th>
+                            <th>Cushion</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dashboard-body">
+                        <!-- Dữ liệu sẽ được render bằng manager-dashboard.js -->
+                    </tbody>
+                </table>
+
+                <div id="loading-state" style="text-align: center; padding: 50px; color: #95a5a6; display: none;">
+                    Đang tải dữ liệu...
+                </div>
+            </div>
+
+            <!-- CỘT PHẢI: DASHBOARD BIỂU ĐỒ -->
+            <aside class="manager-charts-panel">
+                <!-- CARD LINE/BAR CHART (GIỐNG WIP) -->
+                <div class="chart-card">
+                    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <h3>📈 Tần suất xử lý theo giờ EX</h3>
+                            <span class="chart-subtitle">Số lượng MX được xử lý theo giờ</span>
+                        </div>
+                        
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                            <select id="chartTypeSelect" style="background: rgba(0,0,0,0.3); color: #a8edea; border: 1px solid #667eea; border-radius: 4px; padding: 4px 8px; font-size: 12px; outline: none; cursor: pointer;">
+                                <option value="line">Biểu đồ Đường (Tổng)</option>
+                                <option value="bar">Biểu đồ Cột (Chi tiết)</option>
+                            </select>
+                            
+                            <div id="chartCheckboxes" style="display: none; gap: 10px; font-size: 12px; color: #bdc3c7;">
+                                <label class="chart-cb-label cb-ontime"><input type="checkbox" id="cbBarOnTime" checked style="accent-color: #27ae60;"> Hoàn thành</label>
+                                <label class="chart-cb-label cb-late"><input type="checkbox" id="cbBarLate" checked style="accent-color: #e74c3c;"> Cảnh báo</label>
+                                <label class="chart-cb-label cb-pending"><input type="checkbox" id="cbBarPending" checked style="accent-color: #7f8c8d;"> Đang làm/Chờ</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-body">
+                        <canvas id="topChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- CARD DOUGHNUT CHART (GIỐNG WIP) -->
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>📊 Tỉ lệ trạng thái MX</h3>
+                        <span class="chart-subtitle">Phân bổ theo trạng thái tổng</span>
+                    </div>
+                    <div class="chart-body doughnut-wrapper">
+                        <canvas id="bottomDoughnut"></canvas>
+                        <div class="center-text">
+                            <span id="totalMxCenter">0</span><br>
+                            <small>Tổng MX</small>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+        </div>
+    </div>
+
+    <!-- MODAL DRILL-DOWN -->
+    <div id="modalDrillDown" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>Chi tiết <span id="drillDownGroupName"></span> cho <span id="drillDownMxName"></span></h2>
+                <button class="btn-close" id="closeDrillDownModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="drillDownList" class="drill-down-list">
+                    <!-- Chi tiết MO sẽ được vẽ ở đây -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/manager-dashboard.js"></script>
+</body>
+</html>

@@ -17,8 +17,8 @@ dotnet add package System.Data.Odbc
 http://localhost:5050/api/debug/workcenters?date=2026-06-01
 debug MO:
 http://localhost:5050/api/debug/mo-scan-raw/M9HCP90
-debug raw:
+debug kế hoạch:
 http://localhost:5050/api/tracking/journey?date=2026-06-08
-debug progress:
+debug scan progress:
 http://localhost:5050/api/tracking/kit-progress?date=2026-06-08
 

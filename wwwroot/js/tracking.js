@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnShowProgressSummary = document.getElementById('btnShowProgressSummary');
     const btnDetails = document.getElementById('btnWcDetails');
 
+    const btnSyncHistoricalTracking = document.getElementById('btnSyncHistoricalTracking');
+
     let allTrackingData = [];
     let isWcView = false;
     let progressData = {};
@@ -840,5 +842,35 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     loadTrackingData();
     loadKitProgress();
+    // ==================== NÚT BACKFILL TẤT CẢ MO TRỄ (TRANG TRACKING) ====================
+    if (btnSyncHistoricalTracking) {
+        btnSyncHistoricalTracking.addEventListener('click', async () => {
+            const selectedDate = dateInput.value;
+            if (!selectedDate) {
+                showTempMessage('Vui lòng chọn ngày.', 'warning');
+                return;
+            }
+            if (!confirm(`Đồng bộ lại tất cả lịch sử quét cho các MO có kế hoạch ngày ${selectedDate} nhưng chưa có dữ liệu?`)) return;
+
+            btnSyncHistoricalTracking.disabled = true;
+            btnSyncHistoricalTracking.textContent = 'Đang đồng bộ...';
+
+            try {
+                const res = await fetch(`/api/debug/sync-historical?date=${selectedDate}`, { method: 'POST' });
+                if (!res.ok) throw new Error(await res.text() || 'Đồng bộ thất bại');
+                
+                const data = await res.json();
+                showTempMessage(`Đồng bộ thành công! Cập nhật: ${data.updatedPairs} cặp MO/WC, ${data.newLogs} log mới.`, 'success');
+                
+                await loadKitProgress();
+                await loadTrackingData();
+            } catch (err) {
+                showTempMessage('Lỗi đồng bộ: ' + err.message, 'error');
+            } finally {
+                btnSyncHistoricalTracking.disabled = false;
+                btnSyncHistoricalTracking.textContent = '🔍 Đồng bộ Quét Cũ';
+            }
+        });
+    }
     updateTopButtonsVisibility();
 });

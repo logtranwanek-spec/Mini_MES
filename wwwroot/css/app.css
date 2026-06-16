@@ -2638,3 +2638,661 @@ html.simple-view .leadtime-text {
 html.simple-view .leadtime-percentage {
     color: #16a34a;
 }
+
+/* ==================== MANAGER DASHBOARD STYLES ==================== */
+.manager-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 10px; /* Khoảng cách giữa các hàng */
+}
+
+.manager-table th {
+    background: #2c3e50;
+    padding: 15px;
+    font-size: 14px;
+    text-align: center;
+    border: none;
+}
+.manager-table th:first-child { border-radius: 8px 0 0 8px; }
+.manager-table th:last-child { border-radius: 0 8px 8px 0; }
+
+.manager-table td {
+    background: #1a1a1a;
+    padding: 12px 15px;
+    border: none;
+    border-top: 1px solid #333;
+    border-bottom: 1px solid #333;
+    vertical-align: middle;
+}
+.manager-table tr:hover td {
+    background: #222;
+}
+.manager-table td:first-child { border-left: 1px solid #333; border-radius: 8px 0 0 8px; }
+.manager-table td:last-child { border-right: 1px solid #333; border-radius: 0 8px 8px 0; }
+
+.mx-cell .fg-item {
+    font-size: 12px;
+    color: #95a5a6;
+    margin-top: 4px;
+}
+
+.status-col {
+    text-align: center;
+}
+
+.status-cell {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    margin: 0 auto;
+    background: #444; /* Màu mặc định (pending) */
+    border: 2px solid #555;
+}
+
+.status-cell-green {
+    background: #27ae60;
+    border-color: #2ecc71;
+    box-shadow: 0 0 10px rgba(39, 174, 96, 0.7);
+}
+
+.status-cell-red {
+    background: #e74c3c;
+    border-color: #c0392b;
+    box-shadow: 0 0 10px rgba(231, 76, 60, 0.7);
+    animation: pulse-red 1.5s infinite;
+}
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 10px rgba(231, 76, 60, 0.7); }
+    50% { box-shadow: 0 0 20px rgba(231, 76, 60, 1); }
+    100% { box-shadow: 0 0 10px rgba(231, 76, 60, 0.7); }
+}
+
+.status-cell-na {
+    background: transparent;
+    border: 2px dashed #444;
+}
+
+.status-overall {
+    font-weight: bold;
+    text-align: center;
+}
+.status-overall-done { color: #27ae60; }
+.status-overall-inprogress { color: #3498db; }
+.status-overall-alert { color: #e74c3c; }
+.status-overall-pending { color: #95a5a6; }
+
+/* Simple View */
+html.simple-view .manager-table th { background: #f1f5f9; color: #334155; }
+html.simple-view .manager-table td { background: #fff; border-color: #e2e8f0; }
+html.simple-view .manager-table tr:hover td { background: #f8fafc; }
+html.simple-view .mx-cell .fg-item { color: #64748b; }
+
+/* ======= MANAGER DASHBOARD - CĂN CHỈNH CỘT LEAD TIME ======= */
+/* Chọn header (th) và data cell (td) của cột thứ 2 và thứ 3 */
+.manager-table th:nth-child(2),
+.manager-table td:nth-child(2),
+.manager-table th:nth-child(3),
+.manager-table td:nth-child(3) {
+    /* Căn giữa nội dung */
+    text-align: center;
+    
+    /* Thu hẹp chiều rộng cột */
+    width: 120px; /* Bạn có thể đổi thành 100px nếu muốn hẹp hơn nữa */
+}
+
+/* ==================== MANAGER DASHBOARD (FINAL VERSION) ==================== */
+
+/* ----- 1. Bố cục chung ----- */
+.manager-page-content {
+    padding: 20px;
+}
+
+.manager-controls {
+    margin-bottom: 20px;
+    background: #1a1a1a;
+    padding: 15px 25px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    min-height: 50px;
+}
+
+/* ----- 2. Thanh lọc nổi (dọc) ----- */
+.floating-filter-toolbar {
+    position: fixed;
+    left: 0;
+    top: 80px;
+    z-index: 1001;
+    background: rgba(26, 26, 26, 0.9);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0 12px 12px 0;
+    padding: 15px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transform: translateX(-100%);
+    pointer-events: none;
+    transition: all 0.3s ease-in-out;
+}
+
+body.toolbar-is-floating .floating-filter-toolbar {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+/* ----- 3. Nhóm Lọc (Ngang và Dọc) ----- */
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+.filter-title-text { color: #bdc3c7; }
+
+.floating-filter-toolbar .filter-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.floating-filter-toolbar .filter-title-text,
+.floating-filter-toolbar .filter-text {
+    display: none;
+}
+
+/* ----- 4. Style cho Checkbox và Chữ (PHẦN SỬA CHÍNH) ----- */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: #95a5a6; /* Màu chữ mặc định */
+}
+.checkbox-label input[type="checkbox"] {
+    display: none; /* Ẩn checkbox thật */
+}
+
+/* Chấm tròn giả - đây là nút bấm chính */
+.checkbox-label .status-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #555;
+    background: #444; /* Màu mặc định khi chưa tick */
+    transition: all 0.2s;
+}
+
+/* Khi ở thanh dọc, các chấm tròn LUÔN CÓ MÀU */
+.floating-filter-toolbar .status-dot.status-green { background-color: #27ae60; border-color: #2ecc71; }
+.floating-filter-toolbar .status-dot.status-blue { background-color: #3498db; border-color: #5dade2; }
+.floating-filter-toolbar .status-dot.status-red { background-color: #e74c3c; border-color: #c0392b; }
+.floating-filter-toolbar .status-dot.status-gray { background-color: #7f8c8d; border-color: #95a5a6; }
+
+/* Khi ở thanh dọc, chấm tròn sẽ mờ đi nếu KHÔNG được tick */
+.floating-filter-toolbar .checkbox-label input:not(:checked) + .status-dot {
+    opacity: 0.4;
+    transform: scale(0.8);
+}
+
+/* Khi ở thanh ngang, chấm tròn chỉ có màu KHI được tick */
+.manager-controls .checkbox-label input#filterDone:checked + .status-dot { background-color: #27ae60; border-color: #2ecc71;}
+.manager-controls .checkbox-label input#filterInProgress:checked + .status-dot { background-color: #3498db; border-color: #5dade2;}
+.manager-controls .checkbox-label input#filterAlert:checked + .status-dot { background-color: #e74c3c; border-color: #c0392b;}
+.manager-controls .checkbox-label input#filterPending:checked + .status-dot { background-color: #7f8c8d; border-color: #95a5a6;}
+
+/* Khi ở thanh ngang, chữ đổi màu KHI được tick */
+.manager-controls .checkbox-label input:checked ~ .filter-text { font-weight: bold; }
+.manager-controls .checkbox-label input#filterDone:checked ~ .filter-text { color: #27ae60; }
+.manager-controls .checkbox-label input#filterInProgress:checked ~ .filter-text { color: #3498db; }
+.manager-controls .checkbox-label input#filterAlert:checked ~ .filter-text { color: #e74c3c; }
+.manager-controls .checkbox-label input#filterPending:checked ~ .filter-text { color: #95a5a6; }
+
+.stats-group {
+    display: flex;
+    align-items: center;
+    gap: 25px;
+}
+
+/* Các style cho stat-item không đổi */
+.stat-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+.stat-item .stat-label {
+    font-size: 14px;
+    color: #95a5a6;
+    font-weight: bold;
+}
+.stat-item .stat-number {
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1;
+}
+.stat-green { color: #27ae60; }
+.stat-red { color: #e74c3c; }
+.stat-blue { color: #3498db; }
+
+/* Simple View */
+html.simple-view .manager-page-content {
+    padding: 0; /* Bỏ padding để thanh filter dính sát lề */
+}
+html.simple-view .sticky-manager-controls {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0; /* Bỏ bo góc khi ở chế độ dính */
+    padding: 15px 20px; /* Điều chỉnh padding */
+}
+html.simple-view .filter-group strong {
+    color: #475569;
+}
+html.simple-view .stat-item .stat-label {
+    color: #64748b;
+}
+
+/* ==================== DRILL-DOWN MODAL STYLES ==================== */
+.status-cell {
+    cursor: pointer; /* Thêm con trỏ để biết có thể click */
+}
+
+.drill-down-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: #333;
+    border: 1px solid #444;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.drill-down-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    align-items: center;
+    padding: 12px 15px;
+    background: #2c3e50;
+    font-size: 14px;
+}
+
+.drill-down-item:nth-child(even) {
+    background: #34495e;
+}
+
+.drill-down-mo { font-weight: bold; color: #f39c12; }
+.drill-down-wc { color: #bdc3c7; }
+.drill-down-progress { font-weight: bold; color: #a8edea; }
+.drill-down-status { font-weight: bold; text-transform: capitalize; }
+.status-text-done { color: #27ae60; }
+.status-text-late { color: #e74c3c; }
+.status-text-in-progress { color: #f1c40f; }
+.status-text-pending { color: #95a5a6; }
+
+.drill-down-empty {
+    padding: 40px;
+    text-align: center;
+    color: #95a5a6;
+}
+
+/* Simple View */
+html.simple-view .drill-down-list { background: #cbd5e1; border-color: #cbd5e1; }
+html.simple-view .drill-down-item { background: #fff; }
+html.simple-view .drill-down-item:nth-child(even) { background: #f8fafc; }
+html.simple-view .drill-down-mo { color: #0056b3; }
+html.simple-view .drill-down-wc { color: #475569; }
+html.simple-view .drill-down-progress { color: #0369a1; }
+html.simple-view .status-text-done { color: #16a34a; }
+html.simple-view .status-text-late { color: #dc2626; }
+html.simple-view .status-text-in-progress { color: #d97706; }
+html.simple-view .status-text-pending { color: #64748b; }
+
+/* ==================== FLOATING FILTER TOOLBAR ==================== */
+.floating-filter-toolbar {
+    position: fixed;
+    left: 20px;
+    top: 50%;
+    /* transform: translateY(-50%); */
+    z-index: 1001;
+    user-select: none;
+
+    background: rgba(26, 26, 26, 0.9); /* Nền mờ */
+    backdrop-filter: blur(10px); /* Hiệu ứng kính mờ */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+
+    display: flex;
+    flex-direction: column; /* Xếp các mục theo chiều dọc */
+    gap: 15px; /* Khoảng cách giữa các mục */
+}
+
+.floating-filter-toolbar:active {
+    cursor: grabbing !important;
+}
+
+.floating-filter-toolbar strong {
+    color: #a8edea;
+    font-size: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 5px;
+}
+
+/* Simple View */
+html.simple-view .floating-filter-toolbar {
+    background: rgba(255, 255, 255, 0.85);
+    border-color: #e2e8f0;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+html.simple-view .floating-filter-toolbar strong {
+    color: #334155;
+    border-bottom-color: #e2e8f0;
+}
+
+/* ==================== HIỆU ỨNG BIẾN HÌNH CHO BỘ LỌC ==================== */
+
+/* Style chung cho label của checkbox */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.checkbox-label:hover {
+    transform: scale(1.05);
+}
+
+/* Ẩn checkbox gốc đi */
+.checkbox-label input[type="checkbox"] {
+    display: none;
+}
+
+/* ==================== MANAGER DASHBOARD - STYLE CHO CHẤM TRÒN ==================== */
+
+/* Đảm bảo chấm tròn hiển thị inline */
+.checkbox-label .status-dot {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #555;
+    background: #444;
+    margin-right: 8px;
+    vertical-align: middle;
+    transition: all 0.2s;
+}
+
+/* ✅ TÔ MÀU KHI TICK (Ở THANH NGANG) */
+.manager-controls .checkbox-label input#filterDone:checked + .status-dot {
+    background-color: #27ae60;
+    border-color: #2ecc71;
+    box-shadow: 0 0 8px rgba(39, 174, 96, 0.7);
+}
+
+.manager-controls .checkbox-label input#filterInProgress:checked + .status-dot {
+    background-color: #3498db;
+    border-color: #5dade2;
+    box-shadow: 0 0 8px rgba(52, 152, 219, 0.7);
+}
+
+.manager-controls .checkbox-label input#filterAlert:checked + .status-dot {
+    background-color: #e74c3c;
+    border-color: #c0392b;
+    box-shadow: 0 0 8px rgba(231, 76, 60, 0.7);
+}
+
+.manager-controls .checkbox-label input#filterPending:checked + .status-dot {
+    background-color: #7f8c8d;
+    border-color: #95a5a6;
+    box-shadow: 0 0 8px rgba(127, 140, 141, 0.7);
+}
+
+/* ✅ Ở THANH DỌC - LUÔN CÓ MÀU NHƯNG MỜ ĐI KHI KHÔNG TICK */
+.floating-filter-toolbar .status-dot.status-green { 
+    background-color: #27ae60; 
+    border-color: #2ecc71; 
+}
+
+.floating-filter-toolbar .status-dot.status-blue { 
+    background-color: #3498db; 
+    border-color: #5dade2; 
+}
+
+.floating-filter-toolbar .status-dot.status-red { 
+    background-color: #e74c3c; 
+    border-color: #c0392b; 
+}
+
+.floating-filter-toolbar .status-dot.status-gray { 
+    background-color: #7f8c8d; 
+    border-color: #95a5a6; 
+}
+
+/* Làm mờ chấm tròn khi KHÔNG tick ở thanh dọc */
+.floating-filter-toolbar .checkbox-label input:not(:checked) + .status-dot {
+    opacity: 0.4;
+    transform: scale(0.8);
+}
+
+/* Ẩn chữ khi ở thanh dọc */
+.floating-filter-toolbar .filter-text {
+    display: none;
+}
+
+/* Tăng kích thước chấm tròn ở thanh dọc */
+.floating-filter-toolbar .status-dot {
+    width: 20px;
+    height: 20px;
+    margin-right: 0;
+}
+
+/* ==================== CHẾ ĐỘ SÁNG (SIMPLE VIEW) ==================== */
+html.simple-view .checkbox-label .status-dot {
+    border-color: #cbd5e1;
+    background: #f1f5f9;
+}
+
+html.simple-view .manager-controls .checkbox-label input#filterDone:checked + .status-dot {
+    background-color: #22c55e;
+    border-color: #4ade80;
+}
+
+html.simple-view .manager-controls .checkbox-label input#filterInProgress:checked + .status-dot {
+    background-color: #3b82f6;
+    border-color: #60a5fa;
+}
+
+html.simple-view .manager-controls .checkbox-label input#filterAlert:checked + .status-dot {
+    background-color: #ef4444;
+    border-color: #f87171;
+}
+
+html.simple-view .manager-controls .checkbox-label input#filterPending:checked + .status-dot {
+    background-color: #64748b;
+    border-color: #94a3b8;
+}
+
+html.simple-view .floating-filter-toolbar .status-dot.status-green {
+    background-color: #22c55e;
+    border-color: #4ade80;
+}
+
+html.simple-view .floating-filter-toolbar .status-dot.status-blue {
+    background-color: #3b82f6;
+    border-color: #60a5fa;
+}
+
+html.simple-view .floating-filter-toolbar .status-dot.status-red {
+    background-color: #ef4444;
+    border-color: #f87171;
+}
+
+html.simple-view .floating-filter-toolbar .status-dot.status-gray {
+    background-color: #64748b;
+    border-color: #94a3b8;
+}
+
+/* ==================== DRAG HANDLE ==================== */
+.toolbar-drag-handle {
+    cursor: grab;
+    padding: 5px 10px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    margin-bottom: 10px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px 8px 0 0;
+}
+
+.toolbar-drag-handle:active {
+    cursor: grabbing;
+}
+
+html.simple-view .toolbar-drag-handle {
+    background: rgba(0,0,0,0.05);
+    border-bottom-color: #e2e8f0;
+}
+
+html.simple-view .toolbar-drag-handle strong {
+    color: #475569;
+}
+
+/* ======= MANAGER DASHBOARD - 2 CỘT VÀ SIDEBAR THỐNG KÊ ======= */
+.manager-main-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.manager-main-panel {
+    min-width: 0;
+}
+
+.manager-side-panel {
+    background: #1a1a1a;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 15px 18px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    position: sticky;
+    top: 90px; /* dính khi cuộn */
+}
+
+.side-title {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 12px;
+    color: #a8edea;
+}
+
+.side-stat-card {
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.side-stat-card .label {
+    font-size: 13px;
+    color: #bdc3c7;
+}
+
+.side-stat-card .value {
+    font-size: 22px;
+    font-weight: 900;
+}
+
+/* Màu từng loại */
+.side-stat-card.total  .value { color: #f1c40f; }
+.side-stat-card.done   .value { color: #2ecc71; }
+.side-stat-card.alert  .value { color: #e74c3c; }
+.side-stat-card.inprogress .value { color: #3498db; }
+.side-stat-card.pending   .value { color: #95a5a6; }
+
+/* Simple view */
+html.simple-view .manager-side-panel {
+    background: #ffffff;
+    border-color: #e2e8f0;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+html.simple-view .side-title {
+    color: #1e293b;
+}
+html.simple-view .side-stat-card {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+html.simple-view .side-stat-card .label {
+    color: #64748b;
+}
+
+/* ======= MANAGER DASHBOARD - LAYOUT 2 CỘT + CHARTS ======= */
+.manager-main-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(280px, 1.1fr);
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.manager-main-panel {
+    min-width: 0;
+}
+
+.manager-charts-panel {
+    background: #1a1a1a;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 15px 18px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    position: sticky;
+    top: 90px;
+}
+
+.manager-charts-panel .side-title {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #a8edea;
+}
+
+.chart-box {
+    margin-bottom: 20px;
+    padding: 10px 10px 15px 10px;
+    background: rgba(0,0,0,0.25);
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.chart-box h4 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: #bdc3c7;
+    text-align: center;
+}
+
+.chart-box canvas {
+    width: 100% !important;
+    height: 220px !important;
+}
+
+/* Simple View */
+html.simple-view .manager-charts-panel {
+    background: #ffffff;
+    border-color: #e2e8f0;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+html.simple-view .chart-box {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+html.simple-view .chart-box h4 {
+    color: #475569;
+}
