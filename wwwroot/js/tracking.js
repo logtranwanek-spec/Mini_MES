@@ -868,7 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showTempMessage('Lỗi đồng bộ: ' + err.message, 'error');
             } finally {
                 btnSyncHistoricalTracking.disabled = false;
-                btnSyncHistoricalTracking.textContent = '🔍 Đồng bộ Quét Cũ';
+                btnSyncHistoricalTracking.textContent = 'Backfill MO';
             }
         });
     }

@@ -22,3 +22,7 @@ http://localhost:5050/api/tracking/journey?date=2026-06-08
 debug scan progress:
 http://localhost:5050/api/tracking/kit-progress?date=2026-06-08
 
+git status
+git add .
+git commit -m "..."
+git push origin master

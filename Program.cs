@@ -282,9 +282,9 @@ app.MapGet("/sync", async (AppDbContext db, IHubContext<OrderHub> hubContext) =>
         Console.WriteLine("📡 Broadcasted sync completion to all clients");
 
         // =====================================================================
-        // 🧹 TỰ ĐỘNG DỌN DẸP DỮ LIỆU CŨ (LƯU 21 NGÀY)
+        // TỰ ĐỘNG DỌN DẸP DỮ LIỆU CŨ (LƯU 21 NGÀY)
         // =====================================================================
-        Console.WriteLine("🧹 Đang dọn dẹp dữ liệu cũ hơn 21 ngày...");
+        Console.WriteLine("Đang dọn dẹp dữ liệu cũ hơn 21 ngày...");
         try
         {
             DateTime cutoffDate = DateTime.Now.Date.AddDays(-21);
@@ -328,22 +328,35 @@ app.MapGet("/sync", async (AppDbContext db, IHubContext<OrderHub> hubContext) =>
             if (kho2ToDelete.Any())
             {
                 db.Kho2_Inventory.RemoveRange(kho2ToDelete);
-                Console.WriteLine($"   🗑️ Đã xóa lịch sử {kho2ToDelete.Count} xe xuất Kho 2 cũ.");
+                Console.WriteLine($"Đã xóa lịch sử {kho2ToDelete.Count} xe xuất Kho 2 cũ.");
             }
 
             await db.SaveChangesAsync();
-            Console.WriteLine("✅ Dọn dẹp hoàn tất!");
+            Console.WriteLine("Dọn dẹp hoàn tất!");
+
+            var oldMoProgressToDelete = await db.MoProgresses
+                .Where(mp => mp.PlannedDate < DateTime.Now.Date.AddDays(-7))
+                .ToListAsync();
+
+            if (oldMoProgressToDelete.Any())
+            {
+                db.MoProgresses.RemoveRange(oldMoProgressToDelete);
+                Console.WriteLine($"Đã xóa {oldMoProgressToDelete.Count} dòng MoProgress cũ.");
+            }
+
+            await db.SaveChangesAsync();
+            Console.WriteLine("Dọn dẹp hoàn tất!");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Lỗi khi dọn dẹp dữ liệu cũ: {ex.Message}");
+            Console.WriteLine($"Lỗi khi dọn dẹp dữ liệu cũ: {ex.Message}");
         }
 
-        return Results.Ok(new { message = "✅ Đồng bộ Database thành công" });
+        return Results.Ok(new { message = "Đồng bộ Database thành công" });
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"❌ Sync error: {ex.Message}");
+        Console.WriteLine($"Sync error: {ex.Message}");
         return Results.Problem(ex.Message);
     }
 });
@@ -1354,7 +1367,11 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
 
             var existing = await db.MoProgresses.ToListAsync();
             var existingMap = existing
-                .ToDictionary(p => (MO: p.MO.ToUpper(), WC: p.WorkCenter.ToUpper()), p => p);
+                .GroupBy(p => (MO: p.MO.ToUpper(), WC: p.WorkCenter.ToUpper()))
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(x => x.Id).First() // Nếu trùng, lấy dòng có Id lớn nhất
+                );
 
             // 1. Gom PlannedQty và thông tin khác theo (MO, WC GỐC) trước
             var mergedPlan = allSteps

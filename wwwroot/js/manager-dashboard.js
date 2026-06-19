@@ -175,11 +175,20 @@ document.addEventListener('DOMContentLoaded', () => {
             hourlyStats[i] = { onTime: 0, late: 0, pending: 0, total: 0 };
         }
         data.forEach(item => {
-            const hour = item.ex;
-            if (typeof hour !== 'number' || isNaN(hour) || hour < 0 || hour > 23) {
-                console.error("Dữ liệu MX bị lỗi, giờ 'ex' không hợp lệ:", item);
-                return;
+            let hour = item.ex;
+            
+            // ✅ QUY ĐỔI GIỜ LỚN HƠN 23
+            // Ví dụ: 24 -> 0, 25 -> 1, ...
+            if (hour >= 24) {
+                hour = hour % 24;
             }
+            
+            // Bộ lọc chống lỗi và debug
+            if (typeof hour !== 'number' || isNaN(hour) || hour < 0 || hour > 23) {
+                console.error("Dữ liệu MX bị lỗi, giờ 'ex' không hợp lệ sau khi quy đổi:", item);
+                return; // Bỏ qua item này
+            }
+            
             hourlyStats[hour].total++;
             if (item.status === 'Done') hourlyStats[hour].onTime++;
             else if (item.status === 'Alert') hourlyStats[hour].late++;
@@ -300,7 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Lỗi đồng bộ: ' + err.message);
             } finally {
                 btnSyncHistorical.disabled = false;
-                btnSyncHistorical.textContent = '🔍 Đồng bộ Quét Cũ';
+                btnSyncHistorical.textContent = 'Backfill MO';
             }
         });
     }
