@@ -1208,13 +1208,14 @@ app.MapGet("/api/tracking/journey", async (string date, AppDbContext db) =>
             return Results.BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
         // ------- 1. Đọc file kế hoạch chính -------
-        string fileName = $"UPH Support Schedule {targetDate:ddMMyyyy}.xlsx";
-        string filePath = Path.Combine(schedulePath, fileName);
+        string? filePath = FileHelpers.FindLatestScheduleFile(targetDate, schedulePath);
 
-        if (!File.Exists(filePath))
-            return Results.NotFound($"Không tìm thấy file kế hoạch: {fileName}");
+        if (filePath == null)
+        {
+            return Results.NotFound($"Không tìm thấy file kế hoạch nào cho ngày {targetDate:dd/MM/yyyy}.");
+        }
 
-        Console.WriteLine($"🔍 Đang đọc file tracking: {fileName}");
+        Console.WriteLine($"🔍 Đang đọc file tracking mới nhất: {Path.GetFileName(filePath)}");
 
         // dataByMx: MX -> list WorkCenterStep
         var dataByMx = new Dictionary<string, List<WorkCenterStep>>();
@@ -1460,11 +1461,13 @@ app.MapGet("/api/debug/workcenters", (string date) =>
         if (!DateTime.TryParse(date, out targetDate))
             return Results.BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
-        string fileName = $"UPH Support Schedule {targetDate:ddMMyyyy}.xlsx";
-        string filePath = Path.Combine(schedulePath, fileName);
+        string? filePath = FileHelpers.FindLatestScheduleFile(targetDate, schedulePath);
 
-        if (!File.Exists(filePath))
-            return Results.NotFound($"Không tìm thấy file kế hoạch: {fileName}");
+        if (filePath == null)
+        {
+            return Results.NotFound($"Không tìm thấy file kế hoạch nào cho ngày {targetDate:dd/MM/yyyy}.");
+        }
+        string fileName = Path.GetFileName(filePath); // Lấy tên file thực tế để hiển thị
 
         var workCenterNames = new List<string>();
 
@@ -1682,7 +1685,7 @@ app.MapPost("/api/debug/sync-historical", async (string date, AppDbContext db) =
 
         var BYPASS_WCS = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "UBF05", "UPHD1", "UBF04", "UCFBP"
+            "UBF05", "UPHD1", "UBF04", "UCFBP", "WLGL2"
         };
 
         // 1. Lấy danh sách MoProgress ứng viên
@@ -2014,11 +2017,12 @@ app.MapGet("/api/manager-dashboard", async (string date, AppDbContext db) =>
         if (!DateTime.TryParse(date, out targetDate))
             return Results.BadRequest("Invalid date format. Use yyyy-MM-dd.");
 
-        string fileName = $"UPH Support Schedule {targetDate:ddMMyyyy}.xlsx";
-        string filePath = Path.Combine(schedulePath, fileName);
+        string? filePath = FileHelpers.FindLatestScheduleFile(targetDate, schedulePath);
 
-        if (!File.Exists(filePath))
-            return Results.NotFound($"Không tìm thấy file kế hoạch: {fileName}");
+        if (filePath == null)
+        {
+            return Results.NotFound($"Không tìm thấy file kế hoạch nào cho ngày {targetDate:dd/MM/yyyy}.");
+        }
 
         // 1. Định nghĩa các nhóm Work Center
         var wcGroups = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
@@ -2544,22 +2548,18 @@ public class As400ScanPollingService : BackgroundService
             return;
         }
 
-        // ===== 1. Đọc file kế hoạch và gom MO theo từng WorkCenter gốc =====
+        // ===== 1. Đọc file kế hoạch, gom MO và tính tỷ lệ cho UBF12 =====
         var moList = new List<(string MO, string WorkCenterExcel, string WorkCenterBase)>();
+        var ubf12Ratios = new Dictionary<string, double>(); // Dictionary để lưu tỷ lệ: MO -> (sản phẩm/kit)
+
         try
         {
-            // ----- BƯỚC 1A: ĐỌC FILE KẾ HOẠCH CHÍNH -----
-            var schedulePath = configuration["SchedulePath"];
-            if (string.IsNullOrEmpty(schedulePath))
-            {
-                logger.LogError("[AS400 Polling] SchedulePath is not configured.");
-                return;
-            }
-            string fileName = $"UPH Support Schedule {DateTime.Now:ddMMyyyy}.xlsx";
-            string filePath = Path.Combine(schedulePath, fileName);
+            string? schedulePath = configuration["SchedulePath"];
+            string? filePath = FileHelpers.FindLatestScheduleFile(DateTime.Now, schedulePath);
 
-            if (File.Exists(filePath))
+            if (filePath != null && File.Exists(filePath))
             {
+                logger.LogInformation($"[AS400 Polling] Reading latest schedule: {Path.GetFileName(filePath)}");
                 using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 using var reader = ExcelReaderFactory.CreateReader(stream);
                 var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration() { ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false } });
@@ -2573,16 +2573,33 @@ public class As400ScanPollingService : BackgroundService
                     
                     for (int i = 1; i < table.Rows.Count; i++)
                     {
-                        string mo = table.Rows[i][5]?.ToString()?.Trim() ?? "";
-                        if (!string.IsNullOrEmpty(mo))
+                        var row = table.Rows[i];
+                        string mo = ExcelHelpers.GetCellValue(row, 5)?.Trim() ?? "";
+                        if (string.IsNullOrEmpty(mo)) continue;
+                        
+                        moList.Add((mo, workCenterName, baseWcName));
+
+                        // ✅ UBF12 SPECIAL LOGIC: Tính và lưu tỷ lệ sản phẩm/kit
+                        if (baseWcName.Equals("UBF12", StringComparison.OrdinalIgnoreCase))
                         {
-                            moList.Add((mo, workCenterName, NormalizeWcForAs400(workCenterName)));
+                            if (!ubf12Ratios.ContainsKey(mo))
+                            {
+                                string productsStr = ExcelHelpers.GetCellValue(row, 8); // Cột I
+                                string kitsStr = ExcelHelpers.GetCellValue(row, 3);     // Cột D
+
+                                if (double.TryParse(productsStr, out double products) && 
+                                    double.TryParse(kitsStr, out double kits) && 
+                                    kits > 0)
+                                {
+                                    ubf12Ratios[mo] = products / kits;
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // ----- BƯỚC 1B: ĐỌC THÊM FILE GLUE FOAM -----
+            // Đọc thêm file GLUE FOAM (logic này giữ nguyên)
             var glueLinePath = configuration["GlueLinePath"];
             if (!string.IsNullOrEmpty(glueLinePath))
             {
@@ -2596,12 +2613,11 @@ public class As400ScanPollingService : BackgroundService
                     var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration() { ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false } });
                     
                     var glueTable = dataSet.Tables["GLUE"] ?? dataSet.Tables[0];
-                    for (int i = 2; i < glueTable.Rows.Count; i++) // Bỏ 2 dòng đầu
+                    for (int i = 2; i < glueTable.Rows.Count; i++)
                     {
                         var row = glueTable.Rows[i];
-                        string mo = ExcelHelpers.GetCellValue(row, 1); // Cột B
-                        string wc = ExcelHelpers.GetCellValue(row, 16); // Cột Q
-
+                        string mo = ExcelHelpers.GetCellValue(row, 1);
+                        string wc = ExcelHelpers.GetCellValue(row, 16);
                         if (!string.IsNullOrEmpty(mo) && !string.IsNullOrEmpty(wc))
                         {
                             string baseWc = NormalizeWcForAs400(wc);
@@ -2630,13 +2646,13 @@ public class As400ScanPollingService : BackgroundService
             return;
         }
 
-        // ===== 2. Lấy tất cả LastScanTime của các WC cùng lúc =====
+        // ===== 2. Lấy LastScanTime (giữ nguyên) =====
         var lastScanTimeKeys = plansByBaseWc.Keys.Select(wc => $"LastScanTime_{wc}").ToList();
         var allLastScanTimeSettings = await db.AppSettings
             .Where(s => lastScanTimeKeys.Contains(s.Key))
             .ToDictionaryAsync(s => s.Key, s => DateTime.Parse(s.Value), token);
 
-        // ===== 3. Lặp qua từng Work Center gốc để query AS400 riêng =====
+        // ===== 3. Lặp qua từng WC để query AS400 (giữ nguyên) =====
         foreach (var kvp in plansByBaseWc)
         {
             string baseWc = kvp.Key;
@@ -2644,7 +2660,6 @@ public class As400ScanPollingService : BackgroundService
 
             if (token.IsCancellationRequested) break;
 
-            // Lấy LastScanTime cho WC hiện tại, nếu chưa có thì quét 7 ngày gần nhất
             string currentKey = $"LastScanTime_{baseWc}";
             DateTime lastScanTime = allLastScanTimeSettings.TryGetValue(currentKey, out var time) ? time : DateTime.UtcNow.AddDays(-7);
 
@@ -2655,10 +2670,8 @@ public class As400ScanPollingService : BackgroundService
             {
                 if (!moInWc.Any()) continue;
                 var whereClause = $"TRIM(A.ODORDR) IN ({string.Join(",", moInWc.Select(mo => $"'{mo}'"))}) AND TRIM(A.ODWKCN) = '{baseWc}'";
-
                 using var conn = new OdbcConnection("DSN=WFVNPROD;UID=WNKRND;PWD=wnkrnd@112;TRANSLATE=1;");
                 await conn.OpenAsync(token);
-
                 string sql = $@"
                     SELECT 
                         TRIM(A.ODORDR) AS ODORDR, TRIM(B.REFNO) AS MX_REFNO,
@@ -2671,20 +2684,18 @@ public class As400ScanPollingService : BackgroundService
                     AND B.OSTAT NOT IN ('99')
                     AND SUBSTR(B.REFNO, 1, 2) = 'MX'
                     ORDER BY A.ODTSTP";
-
                 using var cmd = new OdbcCommand(sql, conn);
                 cmd.Parameters.Add("?", OdbcType.VarChar).Value = lastScanTime.ToString("yyyy-MM-dd-HH.mm.ss.ffffff");
-                
                 using var reader = await cmd.ExecuteReaderAsync(token);
                 while (await reader.ReadAsync(token))
                 {
+                    //... (code đọc reader giữ nguyên)
                     string mo = reader.GetString(0);
                     string mx = reader.IsDBNull(1) ? "" : reader.GetString(1);
                     string item = reader.IsDBNull(2) ? "" : reader.GetString(2);
                     int qty = reader.IsDBNull(3) ? 0 : (int)reader.GetDecimal(3);
                     string wc = reader.IsDBNull(4) ? "" : reader.GetString(4);
                     DateTime scanTime = reader.GetDateTime(5);
-                    
                     allNewRowsForWc.Add((mo, mx, item, wc, qty, scanTime));
                     if (scanTime > latestScanTimeInBatch) latestScanTimeInBatch = scanTime;
                 }
@@ -2692,22 +2703,20 @@ public class As400ScanPollingService : BackgroundService
             catch (Exception ex)
             {
                 logger.LogError(ex, $"[AS400 Polling] Exception for WC {baseWc}.");
-                continue; // Lỗi WC này, tiếp tục với WC khác
+                continue;
             }
 
             if (allNewRowsForWc.Count == 0) continue;
-
             logger.LogInformation($"[AS400 Polling] Found {allNewRowsForWc.Count} new scans for WC {baseWc}.");
 
-            // ===== 4. Cập nhật DB và broadcast SignalR cho WC này =====
+            // ===== 4. Cập nhật DB và broadcast SignalR =====
             var updatedMoGroups = allNewRowsForWc.GroupBy(r => new { r.MO, BaseWc = NormalizeWcForAs400(r.Wc) });
-            
             foreach (var group in updatedMoGroups)
             {
                 string mo = group.Key.MO;
                 string currentBaseWc = group.Key.BaseWc;
 
-                // 4.1 Lưu các bản ghi ScanLog mới
+                // 4.1 Lưu ScanLog (giữ nguyên)
                 foreach (var row in group)
                 {
                     var logExists = await db.ScanLogs.AnyAsync(l => l.MO == row.MO && l.ScanTime == row.ScanTime && l.WorkCenter == row.Wc, token);
@@ -2718,10 +2727,9 @@ public class As400ScanPollingService : BackgroundService
                 }
                 await db.SaveChangesAsync(token);
 
-                // 4.2 Tìm hoặc tự động tạo MoProgress
+                // 4.2 Tìm hoặc tạo MoProgress (giữ nguyên)
                 var allMpForMo = await db.MoProgresses.Where(m => m.MO == mo).ToListAsync(token);
                 var relatedMp = allMpForMo.Where(m => NormalizeWcForAs400(m.WorkCenter) == currentBaseWc).ToList();
-
                 if (!relatedMp.Any())
                 {
                     var firstScan = group.First();
@@ -2732,30 +2740,54 @@ public class As400ScanPollingService : BackgroundService
                     logger.LogInformation($"[AS400 Polling] Auto-created MoProgress for MO={mo}, WC={currentBaseWc}.");
                 }
                 
-                // 4.3 Tính toán tiến độ từ ScanLogs
+                // ✅ 4.3 TÍNH TOÁN LẠI TIẾN ĐỘ VỚI LOGIC CHO UBF12
                 var logsForMo = await db.ScanLogs.Where(s => s.MO == mo).ToListAsync(token);
                 var logsForMoAndBaseWc = logsForMo.Where(s => NormalizeWcForAs400(s.WorkCenter) == currentBaseWc).ToList();
-                int totalQty = logsForMoAndBaseWc.Sum(s => s.Qty);
+                
+                int totalQty;
+                if (currentBaseWc.Equals("UBF12", StringComparison.OrdinalIgnoreCase))
+                {
+                    double calculatedTotalProducts = 0;
+                    foreach (var scanLog in logsForMoAndBaseWc)
+                    {
+                        if (ubf12Ratios.TryGetValue(scanLog.MO, out double ratio))
+                        {
+                            calculatedTotalProducts += scanLog.Qty * ratio;
+                        }
+                        else
+                        {
+                            // Fallback: nếu không tìm thấy tỷ lệ, coi như tỷ lệ là 1
+                            calculatedTotalProducts += scanLog.Qty;
+                            logger.LogWarning($"[AS400 Polling] Missing ratio for UBF12 MO: {scanLog.MO}. Using 1:1 conversion.");
+                        }
+                    }
+                    totalQty = (int)Math.Round(calculatedTotalProducts);
+                }
+                else
+                {
+                    // Logic cũ cho các WC khác
+                    totalQty = logsForMoAndBaseWc.Sum(s => s.Qty);
+                }
+
                 DateTime? lastScanTimeForPair = logsForMoAndBaseWc.OrderByDescending(s => s.ScanTime).Select(s => (DateTime?)s.ScanTime).FirstOrDefault();
 
-                // 4.4 Cập nhật tiến độ cho tất cả MoProgress liên quan
+                // 4.4 & 4.5 Cập nhật và broadcast (giữ nguyên)
                 foreach (var mp in relatedMp)
                 {
                     mp.ActualQty = totalQty;
                     mp.LastScanTime = lastScanTimeForPair;
                     if (mp.PlannedQty > 0)
-                     mp.Status = AppHelpers.ComputeStatus(mp);
+                        mp.Status = AppHelpers.ComputeStatus(mp);
                 }
                 if (relatedMp.Any()) await db.SaveChangesAsync(token);
 
-                // 4.5 Bắn SignalR cho từng WC chi tiết đã được cập nhật
                 foreach (var mp in relatedMp)
                 {
                     await hubContext.Clients.All.SendAsync("MoProgressUpdated", new { mo = mp.MO, mx = mp.MX, workCenter = mp.WorkCenter, planned = mp.PlannedQty, actual = mp.ActualQty, status = mp.Status, lastScanTime = mp.LastScanTime?.ToString("yyyy-MM-dd HH:mm:ss") }, token);
                 }
             }
             
-            // ===== 5. Cập nhật LastScanTime cho WC này =====
+            // 5. Cập nhật LastScanTime (giữ nguyên)
             var setting = await db.AppSettings.FirstOrDefaultAsync(s => s.Key == currentKey, token);
             if (setting == null)
             {
@@ -2806,6 +2838,58 @@ public static class ExcelHelpers
             return value.ToString()?.Trim() ?? "";
         }
         catch { return ""; }
+    }
+}
+
+public static class FileHelpers
+{
+    // ==================== HELPER: TÌM FILE KẾ HOẠCH MỚI NHẤT (THEO VERSION HOẶC NGÀY SỬA) ====================
+    public static string? FindLatestScheduleFile(DateTime targetDate, string schedulePath)
+    {
+        // 1. Tạo pattern tìm kiếm cho ngày cụ thể
+        string datePattern = targetDate.ToString("ddMMyyyy");
+        string searchPattern = $"UPH Support Schedule {datePattern}*.xlsx";
+
+        // 2. Tìm tất cả các file khớp với pattern
+        var matchingFiles = Directory.GetFiles(schedulePath, searchPattern)
+            .Where(f => !Path.GetFileName(f).StartsWith("~"))
+            .ToList();
+
+        if (!matchingFiles.Any())
+        {
+            return null; // Không tìm thấy file nào
+        }
+
+        // 3. Phân tích phiên bản và ngày sửa của từng file
+        var fileVersions = matchingFiles.Select(file => {
+            var fileName = Path.GetFileNameWithoutExtension(file);
+            var fileInfo = new FileInfo(file);
+            int version = 0;
+
+            // Dùng Regex để tìm các chuỗi như "VER 3", "V.2", "Version4"
+            var match = System.Text.RegularExpressions.Regex.Match(fileName, @"(?:V|VER|VERSION)[\s\.]*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                int.TryParse(match.Groups[1].Value, out version);
+            }
+
+            return new 
+            {
+                FullPath = file,
+                Version = version,
+                LastWriteTime = fileInfo.LastWriteTime
+            };
+        }).ToList();
+
+        // 4. Sắp xếp để tìm file "tốt nhất"
+        // Ưu tiên 1: Version cao nhất
+        // Ưu tiên 2: Nếu version bằng nhau, lấy file được sửa gần đây nhất
+        var latestFile = fileVersions
+            .OrderByDescending(f => f.Version)
+            .ThenByDescending(f => f.LastWriteTime)
+            .FirstOrDefault();
+
+        return latestFile?.FullPath;
     }
 }
 
