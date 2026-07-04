@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Blow Fill Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9; }
+        .container { max-width: 1400px; margin: 0 auto; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1, h2 { margin-bottom: 15px; color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px 12px; font-size: 14px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .controls { margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        input[type="date"], button { padding: 8px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #007bff; color: white; cursor: pointer; border-color: #007bff; }
+        button:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Blow Fill - Báo cáo các lần cân</h1>
+        <div class="controls">
+            <label for="dateInput">Chọn ngày:</label>
+            <input type="date" id="dateInput">
+            <button onclick="loadReport()">Xem báo cáo</button>
+        </div>
+
+        <h2>Tổng hợp theo Fiber Kit</h2>
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>Work Center</th>
+                    <th>MO</th>
+                    <th>Fiber Kit</th>
+                    <th>Số lượng hoàn thành</th> <!-- ✅ CỘT 1 -->
+                    <th>Số lượng kế hoạch</th>   <!-- ✅ CỘT 2 -->
+                    <th>Số lần cân quá</th>
+                    <th>Số lần cân thiếu</th>
+                    <th>Hoàn thành lần cuối</th>
+                </tr>
+            </thead>
+            <tbody id="summaryBody"></tbody>
+        </table>
+        <h2>Chi tiết từng lần cân</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Thời gian</th>
+                    <th>Work Center</th>
+                    <th>MO</th>
+                    <th>Fiber Kit</th>
+                    <th>Step</th>
+                    <th>Target (kg)</th>
+                    <th>Actual (kg)</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="logsBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        async function loadReport() {
+            const date = document.getElementById('dateInput').value;
+            const url = date ? `/api/blow-fill/logs?date=${date}` : '/api/blow-fill/logs';
+            
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('Failed to fetch data');
+                const data = await res.json();
+
+                // Render Summary Table
+                const sBody = document.getElementById('summaryBody');
+                sBody.innerHTML = '';
+                data.summary.forEach(row => {
+                    sBody.innerHTML += `
+                        <tr>
+                            <td>${row.workCenter}</td>
+                            <td>${row.mo}</td>
+                            <td>${row.fiberKit}</td>
+                            <td style="text-align:right">${row.completedQty}</td> <!-- ✅ CỘT 1 -->
+                            <td style="text-align:right">${row.plannedQty}</td>   <!-- ✅ CỘT 2 -->
+                            <td style="text-align:right">${row.overCount}</td>
+                            <td style="text-align:right">${row.underCount}</td>
+                            <td>${row.lastTime}</td>
+                        </tr>
+                    `;
+                });
+
+                // Render Logs Table
+                const lBody = document.getElementById('logsBody');
+                lBody.innerHTML = '';
+                data.logs.forEach(log => {
+                    lBody.innerHTML += `
+                        <tr>
+                            <td>${new Date(log.timestamp).toLocaleString('vi-VN')}</td>
+                            <td>${log.workCenter}</td>
+                            <td>${log.mo}</td>
+                            <td>${log.fiberKit}</td>
+                            <td style="text-align:right">${log.stepNumber}</td>
+                            <td style="text-align:right">${log.targetWeight.toFixed(2)}</td>
+                            <td style="text-align:right">${log.actualWeight.toFixed(2)}</td>
+                            <td>${log.status}</td>
+                        </tr>
+                    `;
+                });
+            } catch (error) {
+                console.error("Error loading report:", error);
+                alert("Không thể tải báo cáo. Vui lòng kiểm tra lại.");
+            }
+        }
+
+        window.onload = () => {
+            const today = new Date().toISOString().slice(0, 10);
+            document.getElementById('dateInput').value = today;
+            loadReport();
+        };
+    </script>
+</body>
+</html>

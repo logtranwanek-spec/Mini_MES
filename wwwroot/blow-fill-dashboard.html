@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Blow Fill Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            height: 100vh; /* Chiếm 100% chiều cao màn hình */
+            width: 100vw;
+            overflow: hidden; /* Chặn scroll */
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+        }
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 15px;
+            gap: 15px;
+        }
+        .controls {
+            flex-shrink: 0; /* Không co lại */
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .controls h1 { font-size: 24px; margin-right: auto; }
+        .controls input, .controls button { padding: 8px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
+        .dashboard-container {
+            flex-grow: 1; /* Chiếm hết không gian còn lại */
+            display: grid;
+            grid-template-columns: repeat(4, 1fr); /* ✅ Bố cục 4 cột */
+            grid-template-rows: auto 1fr; /* ✅ Hàng 1 tự động, hàng 2 chiếm hết phần còn lại */
+            grid-gap: 15px;
+            min-height: 0; /* Quan trọng để flexbox hoạt động đúng trong grid */
+        }
+        .card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .kpi-card { text-align: center; justify-content: center; }
+        .kpi-card .value { font-size: clamp(24px, 3vw, 48px); font-weight: bold; color: #007bff; }
+        .kpi-card .label { font-size: 14px; color: #666; margin-top: 5px; }
+        h2 { font-size: 18px; margin-bottom: 10px; color: #333; flex-shrink: 0; }
+        .chart-container {
+            position: relative;
+            flex-grow: 1;
+        }
+        .table-container {
+            flex-grow: 1;
+            overflow-y: auto; /* Thêm scroll nếu bảng quá dài */
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 8px; border: 1px solid #ddd; text-align: left; font-size: 13px; }
+        th { background-color: #f7f7f7; }
+        
+        /* ✅ Sắp xếp lại các card */
+        #hourlyTrendCard { grid-column: span 2; }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="controls">
+            <h1>Blow Fill - Dashboard</h1>
+            <label>Chọn ngày:</label>
+            <input type="date" id="dateInput">
+            <button onclick="fetchData()">Xem</button>
+        </div>
+
+        <div class="dashboard-container">
+            <!-- Hàng 1 -->
+            <div class="card kpi-card">
+                <div id="kpiTotalCompleted" class="value">0</div>
+                <div class="label">Tổng sản phẩm hoàn thành</div>
+            </div>
+            <div class="card kpi-card">
+                <div id="kpiProgress" class="value">0%</div>
+                <div class="label">Tiến độ / Kế hoạch</div>
+            </div>
+            <div class="card kpi-card">
+                <div id="kpiErrorRate" class="value">0%</div>
+                <div class="label">Tỷ lệ cân lỗi</div>
+            </div>
+            <div class="card">
+                <h2>Tỷ lệ chất lượng</h2>
+                <div class="chart-container">
+                    <canvas id="qualityPieChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Hàng 2 -->
+            <div class="card" id="hourlyTrendCard">
+                <h2>Xu hướng sản xuất theo giờ</h2>
+                <div class="chart-container">
+                    <canvas id="hourlyTrendChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Sản lượng theo WC</h2>
+                <div class="chart-container">
+                    <canvas id="wcBarChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Top 5 sản phẩm lỗi</h2>
+                <div class="table-container">
+                    <table id="topErrorsTable">
+                        <thead><tr><th>MO</th><th>Fiber Kit</th><th>Số lỗi</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let qualityPieChart, wcBarChart, hourlyTrendChart;
+
+        async function fetchData() {
+            const date = document.getElementById('dateInput').value;
+            const url = `/api/blow-fill/dashboard-data?date=${date}`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.isEmpty) {
+                    alert(`Không có dữ liệu cho ngày ${data.date}`);
+                    resetDashboard();
+                    return;
+                }
+
+                // Update KPIs
+                document.getElementById('kpiTotalCompleted').innerText = data.totalCompleted;
+                document.getElementById('kpiProgress').innerText = data.totalPlanned > 0 
+                    ? `${((data.totalCompleted / data.totalPlanned) * 100).toFixed(1)}%`
+                    : 'N/A';
+                document.getElementById('kpiErrorRate').innerText = `${(data.errorRate * 100).toFixed(1)}%`;
+
+                // Update Charts
+                renderQualityPieChart(data.qualityRatio);
+                renderWcBarChart(data.productionByWc);
+                renderHourlyTrendChart(data.productionByHour);
+
+                // Update Table
+                renderTopErrorsTable(data.topErrors);
+
+            } catch (error) {
+                console.error("Failed to fetch dashboard data:", error);
+            }
+        }
+        
+        function resetDashboard() {
+            document.getElementById('kpiTotalCompleted').innerText = 0;
+            document.getElementById('kpiProgress').innerText = '0%';
+            document.getElementById('kpiErrorRate').innerText = '0%';
+            if (qualityPieChart) qualityPieChart.destroy();
+            if (wcBarChart) wcBarChart.destroy();
+            if (hourlyTrendChart) hourlyTrendChart.destroy();
+            document.querySelector('#topErrorsTable tbody').innerHTML = '';
+        }
+
+        function renderQualityPieChart(data) {
+            const ctx = document.getElementById('qualityPieChart').getContext('2d');
+            if (qualityPieChart) qualityPieChart.destroy();
+            qualityPieChart = new Chart(ctx, {
+                type: 'doughnut', // Doughnut gọn hơn Pie
+                data: {
+                    labels: ['OK', 'Thiếu (Under)', 'Thừa (Over)'],
+                    datasets: [{
+                        data: [data.ok, data.under, data.over],
+                        backgroundColor: ['#4CAF50', '#FFEB3B', '#F44336']
+                    }]
+                },
+                options: { maintainAspectRatio: false } // ✅ Quan trọng
+            });
+        }
+
+        function renderWcBarChart(data) {
+            const ctx = document.getElementById('wcBarChart').getContext('2d');
+            if (wcBarChart) wcBarChart.destroy();
+            wcBarChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        label: 'Sản phẩm hoàn thành',
+                        data: Object.values(data),
+                        backgroundColor: '#36A2EB'
+                    }]
+                },
+                options: { maintainAspectRatio: false, indexAxis: 'y' } // ✅ Quan trọng
+            });
+        }
+        
+        function renderHourlyTrendChart(data) {
+            const ctx = document.getElementById('hourlyTrendChart').getContext('2d');
+            const labels = Array.from({ length: 24 }, (_, i) => `${i}`);
+            const chartData = labels.map((_, i) => data[i] || 0);
+
+            if (hourlyTrendChart) hourlyTrendChart.destroy();
+            hourlyTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Số lần cân OK',
+                        data: chartData,
+                        borderColor: '#FF6384',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: { maintainAspectRatio: false } // ✅ Quan trọng
+            });
+        }
+
+        function renderTopErrorsTable(data) {
+            const tbody = document.querySelector('#topErrorsTable tbody');
+            tbody.innerHTML = '';
+            data.forEach(item => {
+                tbody.innerHTML += `<tr><td>${item.mo}</td><td>${item.fiberKit}</td><td>${item.errorCount}</td></tr>`;
+            });
+        }
+
+        window.onload = () => {
+            const today = new Date().toISOString().slice(0, 10);
+            document.getElementById('dateInput').value = today;
+            fetchData();
+            setInterval(fetchData, 60000);
+        };
+    </script>
+</body>
+</html>

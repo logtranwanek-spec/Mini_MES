@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weigh Monitor - Blow Fill Station</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 8px;
+            overflow-y: auto;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            height: 55px;
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            flex: 3;
+            background-color: white;
+            border: 3px solid black;
+            padding: 12px;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .wc-selector {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 16px;
+        }
+
+        .wc-selector label {
+            font-weight: bold;
+        }
+
+        .wc-selector select {
+            font-size: 16px;
+            padding: 2px 6px;
+        }
+
+        .header-station {
+            flex: 1;
+            background-color: #FFB366;
+            border: 3px solid black;
+            border-left: none;
+            padding: 12px;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Product Info */
+        .product-section {
+            display: flex;
+            gap: 15px;
+            flex-shrink: 0;
+        }
+
+        .product-inputs {
+            flex: 1;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            width: 140px;
+            font-size: 30px;
+            font-weight: bold;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 10px;
+            font-size: 45px;
+            font-weight: bold;
+            text-align: center;
+            border: 2px solid #E0E0E0;
+            border-radius: 5px;
+        }
+
+        .input-group input.mo-input {
+            font-size: 45px;
+            color: red;
+        }
+
+        /* Status Legend & Tolerance */
+        .status-legend {
+            width: 180px;
+            padding: 15px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .status-legend h3 {
+            text-align: center;
+            margin-bottom: 12px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .status-circle {
+            font-size: 24px;
+        }
+        .status-item span:last-child {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .status-circle.under { color: #FFEB3B; }
+        .status-circle.ok { color: #4CAF50; }
+        .status-circle.over { color: #F44336; }
+
+        .tolerance-group {
+            margin-top: auto;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .tolerance-group label {
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            white-space: nowrap;
+        }
+        .tolerance-group input {
+            width: 65px;
+            padding: 4px;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            -moz-appearance: textfield;
+        }
+        .tolerance-group input::-webkit-outer-spin-button,
+        .tolerance-group input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        /* Info Bar */
+        .info-bar {
+            display: flex;
+            gap: 25px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .info-item label {
+            font-size: 30px;
+            font-weight: bold;
+        }
+
+        .info-item .value {
+            padding: 12px 20px;
+            font-size: 35px;
+            font-weight: bold;
+            border-radius: 5px;
+            border: 3px solid;
+        }
+
+        .info-item .value.step {
+            color: #2196F3;
+            background-color: #E3F2FD;
+            border-color: #2196F3;
+        }
+
+        .info-item .value.counter {
+            color: #4CAF50;
+            background-color: #E8F5E9;
+            border-color: #4CAF50;
+        }
+
+        /* Step Indicators - DYNAMIC */
+        .steps-container {
+            display: flex;
+            gap: 15px; /* Tăng gap cho dễ nhìn */
+            flex-shrink: 0;
+            justify-content: center; /* Căn giữa các steps */
+            flex-wrap: wrap; /* Cho phép xuống dòng nếu quá nhiều steps */
+        }
+
+        .step-indicator {
+            text-align: center;
+            min-width: 80px; /* Đảm bảo step không bị nhỏ quá */
+        }
+
+        .step-indicator .label {
+            font-size: 25px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .step-indicator .circle {
+            font-size: 40px;
+            font-weight: bold;
+            color: #E0E0E0;
+        }
+
+        .step-indicator .circle.completed { color: #4CAF50; }
+        .step-indicator .circle.current { color: #FFEB3B; }
+        .step-indicator .circle.pending { color: #E0E0E0; }
+
+        /* Weight Displays */
+        .weights-container {
+            display: flex;
+            gap: 15px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .weight-display {
+            flex: 1;
+            border: 5px solid;
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .weight-display.target {
+            background-color: #C8E6C9;
+            border-color: #4CAF50;
+        }
+
+        .weight-display.current {
+            background-color: #BBDEFB;
+            border-color: #2196F3;
+        }
+
+        .weight-display h3 {
+            font-size: 50px;
+            font-weight: bold;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            margin-bottom: 10px;
+            flex-shrink: 0;
+        }
+
+        .weight-display.target h3 {
+            background-color: #81C784;
+        }
+
+        .weight-display.current h3 {
+            background-color: #64B5F6;
+        }
+
+        /* WEIGHT VALUES */
+        .weight-value {
+            font-size: clamp(100px, 15vw, 300px);
+            font-weight: 900;
+            text-align: center;
+            padding: 15px;
+            border-radius: 5px;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .weight-display.target .weight-value {
+            background-color: #E8F5E9;
+        }
+
+        .weight-display.current .weight-value {
+            background-color: #E3F2FD;
+        }
+
+        .weight-value.under {
+            background-color: #FFF9C4 !important;
+            color: #F57F17;
+            border: 5px solid #FFEB3B;
+        }
+
+        .weight-value.ok {
+            background-color: #C8E6C9 !important;
+            color: #2E7D32;
+            border: 5px solid #4CAF50;
+        }
+
+        .weight-value.over {
+            background-color: #FFCDD2 !important;
+            color: #C62828;
+            border: 5px solid #F44336;
+        }
+
+        .weight-value.not-found {
+            background-color: #FFCDD2 !important;
+            color: #C62828;
+            border: 5px solid #F44336;
+            font-size: clamp(40px, 6vw, 70px);
+            font-weight: bold;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            border: 2px solid #999;
+            padding: 10px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .control-panel label {
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .control-panel input {
+            padding: 6px;
+            font-size: 14px;
+            width: 120px;
+        }
+
+        .control-panel button {
+            padding: 8px 12px;
+            font-size: 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+        }
+
+        .btn-reload {
+            background-color: #4CAF50;
+        }
+
+        .btn-reload:hover {
+            background-color: #45a049;
+        }
+
+        .btn-reset {
+            background-color: #FF9800;
+        }
+
+        .btn-reset:hover {
+            background-color: #F57C00;
+        }
+
+        /* Responsive adjustments */
+        @media (max-height: 800px) {
+            .header {
+                height: 50px;
+            }
+            .header-title, .header-station {
+                font-size: 18px;
+                padding: 10px;
+            }
+            .weight-display h3 {
+                font-size: 40px;
+            }
+            .info-item label {
+                font-size: 24px;
+            }
+            .info-item .value {
+                font-size: 28px;
+            }
+            .input-group label {
+                font-size: 24px;
+            }
+            .input-group input {
+                font-size: 35px;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .product-section {
+                flex-direction: column;
+            }
+            .status-legend {
+                width: 100%;
+                display: flex;
+                justify-content: space-around;
+            }
+            .status-legend h3 {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-title">
+                <span>MÀN HÌNH HIỂN THỊ KHỐI LƯỢNG</span>
+                <div class="wc-selector">
+                    <label for="wcSelect">WC:</label>
+                    <select id="wcSelect">
+                        <option value="UBF12">UBF12</option>
+                        <option value="UBF13">UBF13</option>
+                        <option value="UBF03_M">UBF03_M</option>
+                        <option value="UBF03_S">UBF03_S</option>
+                        <option value="UBF05">UBF05</option>
+                        <option value="UBF06">UBF06</option>
+                        <option value="UBF13_PREP">UBF13_PREP</option>
+                    </select>
+                </div>
+            </div>
+            <div class="header-station">WNK3 - BLOW FILL</div>
+        </div>
+
+        <!-- Product Info + Status -->
+        <div class="product-section">
+            <div class="product-inputs">
+                <div class="input-group">
+                    <label>MO</label>
+                    <input type="text" id="moInput" class="mo-input" placeholder="Enter MO code..."
+                        onkeydown="if(event.key === 'Enter') onMoEntered()">
+                </div>
+                <div class="input-group">
+                    <label>Fiber Kit</label>
+                    <input type="text" id="fiberInput" placeholder="Loading Excel data..." readonly>
+                </div>
+            </div>
+
+            <div class="status-legend">
+                <h3>Status</h3>
+                <div class="status-item">
+                    <span class="status-circle under">●</span>
+                    <span>UNDER</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-circle ok">●</span>
+                    <span>OK</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-circle over">●</span>
+                    <span>OVER</span>
+                </div>
+                
+                <!-- ✅ ĐÃ SỬA LẠI HTML CHO ĐÚNG -->
+                <div class="tolerance-group">
+                    <label>Tolerance (%)</label>
+                    <input type="number" id="toleranceInput" value="5" step="1" oninput="updateTolerance()">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Info Bar -->
+        <div class="info-bar">
+            <div class="info-item">
+                <label>Current Step:</label>
+                <div class="value step" id="stepInfo">-</div>
+            </div>
+            <div class="info-item">
+                <label>Completed Today:</label>
+                <div class="value counter" id="counterDisplay">0</div>
+            </div>
+        </div>
+
+        <!-- Step Indicators - DYNAMIC -->
+        <div class="steps-container" id="stepsContainer">
+            <!-- Will be generated dynamically based on actual steps -->
+        </div>
+
+        <!-- Weight Displays -->
+        <div class="weights-container">
+            <div class="weight-display target">
+                <h3>Target Weight</h3>
+                <div class="weight-value" id="targetWeight">-</div>
+            </div>
+            <div class="weight-display current">
+                <h3>Current Weight</h3>
+                <div class="weight-value" id="currentWeight">-</div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <label>🔧 Test Weight:</label>
+            <input type="number" id="testWeight" step="0.01" oninput="simulateWeight()">
+            <button class="btn-reload" onclick="loadExcelData()">🔄 Reload Excel</button>
+            <button class="btn-reset" onclick="resetCounter()">🔄 Reset Counter</button>
+        </div>
+    </div>
+
+    <script>
+        let productDatabase = {};
+        let currentProduct = null;
+        let currentStep = 0;
+        let totalSteps = 0;
+        let targetWeight = 0;
+        let currentWeight = 0;
+        let tolerance = 0.05;
+        let productCounter = 0;
+        let stepCompleted = false;
+        let weightStableTime = 0;
+        let offScaleTime = 0;
+        let currentWc = 'UBF12';
+        let moScanTimer = null;
+
+        const OFF_SCALE_DELAY = 1.0; // seconds
+        const WEIGHT_STABLE_TIME = 0.5; // seconds
+
+        // Initialize
+        window.onload = function() {
+            loadExcelData();
+
+            // Chọn WC mặc định + handler đổi WC
+            const wcSelect = document.getElementById('wcSelect');
+            if (wcSelect) {
+                wcSelect.value = currentWc;
+                wcSelect.addEventListener('change', () => {
+                    currentWc = wcSelect.value;
+                    console.log('🔧 Selected WC =', currentWc);
+                });
+            }
+
+            // 🔍 BẮT ENTER KHI SCAN MO
+            const moInput = document.getElementById('moInput');
+            if (moInput) {
+                moInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        onMoEntered();   // gọi API kế hoạch + fill FiberKit + load weight
+                        event.preventDefault(); // tránh form submit, nếu có
+                    }
+                });
+            }
+
+            updateTolerance();
+
+            setInterval(checkWeightStatus, 100);
+        };
+
+        async function onMoEntered() {
+            const moInput = document.getElementById('moInput');
+            const fiberInput = document.getElementById('fiberInput');
+            const mo = moInput.value.trim().toUpperCase();
+
+            if (!mo) {
+                resetDisplay();
+                return;
+            }
+
+            if (!currentWc) {
+                alert('Vui lòng chọn Work Center (WC) trước.');
+                return;
+            }
+
+            try {
+                console.log(`🔍 Lấy kế hoạch cho MO=${mo}, WC=${currentWc} ...`);
+
+                const res = await fetch(`/api/blow-fill/plan?wc=${encodeURIComponent(currentWc)}&mo=${encodeURIComponent(mo)}`);
+                if (!res.ok) {
+                    console.error('Error calling /api/blow-fill/plan', res.status);
+                    alert('Không gọi được kế hoạch. Vui lòng thử lại.');
+                    return;
+                }
+
+                const data = await res.json();
+                if (!data.found) {
+                    console.log('❌', data.message || 'Không tìm thấy kế hoạch');
+                    alert(data.message || `Không tìm thấy kế hoạch cho MO ${mo} tại WC ${currentWc}`);
+                    fiberInput.value = '';
+                    resetDisplay();
+                    return;
+                }
+
+                // ✅ Gán Fiber Kit và PlannedQty
+                fiberInput.value = data.fiberKit || '';
+                console.log(`✅ MO ${data.mo} tại ${data.workCenter} có FiberKit = ${data.fiberKit}, PlannedQty = ${data.plannedQty}`);
+
+                // Gọi logic tìm standard weight bằng FiberKit như trước
+                searchProduct(); // dùng hàm bạn đã có, sẽ dùng fiberInput.value
+
+                // TODO: sau này có thể hiển thị "Completed Today = actual/planned" ở đây
+                // Ví dụ: document.getElementById('counterDisplay').innerText = `${actual} / ${data.plannedQty}`;
+            } catch (e) {
+                console.error('Error in onMoEntered:', e);
+                alert('Có lỗi khi lấy kế hoạch MO. Xem console để biết chi tiết.');
+            }
+        }
+
+
+        // ✅ DYNAMIC STEP CREATION - Only create needed steps
+        function createStepIndicators(numSteps) {
+            const container = document.getElementById('stepsContainer');
+            container.innerHTML = ''; // Clear existing
+            
+            for (let i = 1; i <= numSteps; i++) {
+                const div = document.createElement('div');
+                div.className = 'step-indicator';
+                div.innerHTML = `
+                    <div class="label">Step ${i}</div>
+                    <div class="circle pending" id="step${i}">●</div>
+                `;
+                container.appendChild(div);
+            }
+        }
+
+        async function loadExcelData() {
+            try {
+                document.getElementById('fiberInput').placeholder = 'Loading Excel...';
+                
+                const response = await fetch('/api/blow-fill/load-excel');
+                const data = await response.json();
+
+                if (data.success) {
+                    productDatabase = data.products;
+                    console.log(`✅ Loaded ${data.productCount} products`);
+                    document.getElementById('fiberInput').placeholder = 'Enter Fiber Kit code...';
+                    alert(`Excel loaded!\nTotal Products: ${data.productCount}`);
+                } else {
+                    throw new Error('Failed to load Excel');
+                }
+            } catch (error) {
+                console.error('Error loading Excel:', error);
+                alert('Failed to load Excel data');
+                document.getElementById('fiberInput').placeholder = 'Error loading data';
+            }
+        }
+
+        function searchProduct() {
+            const fiberKit = document.getElementById('fiberInput').value.trim().toUpperCase();
+            
+            if (!fiberKit) {
+                resetDisplay();
+                return;
+            }
+
+            console.log(`🔍 Searching: ${fiberKit}`);
+
+            // Search in database
+            for (const [key, data] of Object.entries(productDatabase)) {
+                if (key.toUpperCase().includes(fiberKit)) {
+                    currentProduct = data;
+                    totalSteps = data.steps.length;
+                    tolerance = data.tolerance;
+                    currentStep = 0;
+
+                    // ✅ Create only the needed number of step indicators
+                    createStepIndicators(totalSteps);
+
+                    loadStep(0);
+                    
+                    console.log(`✅ Found: ${key}`);
+                    console.log(`   Steps: ${totalSteps}`);
+                    return;
+                }
+            }
+
+            // Not found
+            console.log(`❌ Not found: ${fiberKit}`);
+            const currentWeightEl = document.getElementById('currentWeight');
+            currentWeightEl.textContent = 'NOT FOUND';
+            currentWeightEl.className = 'weight-value not-found';
+            document.getElementById('stepInfo').textContent = 'Product Not Found';
+        }
+
+        function loadStep(stepIndex) {
+            if (!currentProduct || stepIndex >= totalSteps) return;
+
+            const step = currentProduct.steps[stepIndex];
+            targetWeight = step.target_weight;
+            
+            document.getElementById('targetWeight').textContent = targetWeight.toFixed(2);
+            document.getElementById('stepInfo').textContent = `Step ${stepIndex + 1} of ${totalSteps}`;
+            
+            updateStepIndicators(stepIndex);
+            
+            stepCompleted = false;
+            weightStableTime = 0;
+            offScaleTime = 0;
+
+            console.log(`📍 Step ${stepIndex + 1}/${totalSteps}: Target = ${targetWeight.toFixed(2)} kg`);
+        }
+
+        function updateTolerance() {
+            const input = document.getElementById('toleranceInput');
+            const value = parseFloat(input.value);
+
+            if (!isNaN(value) && value >= 0) {
+                // Chuyển đổi từ % (ví dụ: 5) sang dạng thập phân (ví dụ: 0.05)
+                tolerance = value / 100.0;
+                console.log(`Tolerance đã được cập nhật thành: ${tolerance} (${value}%)`);
+            } else {
+                // Nếu giá trị không hợp lệ, quay về mặc định
+                tolerance = 0.05;
+            }
+        }
+
+        function updateStepIndicators(currentStepIndex) {
+            for (let i = 0; i < totalSteps; i++) {
+                const circle = document.getElementById(`step${i + 1}`);
+                if (circle) {
+                    if (i < currentStepIndex) {
+                        circle.className = 'circle completed';
+                    } else if (i === currentStepIndex) {
+                        circle.className = 'circle current';
+                    } else {
+                        circle.className = 'circle pending';
+                    }
+                }
+            }
+        }
+
+        function simulateWeight() {
+            const input = document.getElementById('testWeight').value;
+            currentWeight = input ? parseFloat(input) : 0;
+        }
+
+        function checkWeightStatus() {
+            if (!currentProduct) return;
+
+            // Update display
+            const currentWeightEl = document.getElementById('currentWeight');
+            if (currentWeight > 0) {
+                currentWeightEl.textContent = currentWeight.toFixed(2);
+            } else {
+                currentWeightEl.textContent = '-';
+            }
+
+            // Calculate tolerance
+            const lowerLimit = targetWeight * (1 - tolerance);
+            const upperLimit = targetWeight * (1 + tolerance);
+
+            // Check status
+            currentWeightEl.className = 'weight-value';
+            
+            if (currentWeight >= lowerLimit && currentWeight <= upperLimit) {
+                // OK
+                currentWeightEl.classList.add('ok');
+                if (!stepCompleted) {
+                    weightStableTime += 0.1;
+                }
+            } else if (currentWeight > 0 && currentWeight < lowerLimit) {
+                // UNDER
+                currentWeightEl.classList.add('under');
+                weightStableTime = 0;
+            } else if (currentWeight > upperLimit) {
+                // OVER
+                currentWeightEl.classList.add('over');
+                weightStableTime = 0;
+            }
+
+            // Step transition
+            if (stepCompleted && currentWeight === 0) {
+                offScaleTime += 0.1;
+                
+                if (offScaleTime >= OFF_SCALE_DELAY) {
+                    currentStep++;
+                    
+                    if (currentStep < totalSteps) {
+                        console.log(`✅ Step ${currentStep} completed!`);
+                        console.log(`➡️  Moving to Step ${currentStep + 1}...`);
+                        loadStep(currentStep);
+                    } else {
+                        completeProduct();
+                    }
+                    
+                    offScaleTime = 0;
+                }
+            } else if (currentWeight > 0) {
+                offScaleTime = 0;
+            }
+
+            // Mark step completed
+            if (weightStableTime >= WEIGHT_STABLE_TIME && !stepCompleted) {
+                stepCompleted = true;
+                console.log(`✅ Step ${currentStep + 1} confirmed: ${currentWeight.toFixed(2)} kg`);
+
+                // Xác định trạng thái
+                let status = "";
+                if (currentWeight >= targetWeight * (1 - tolerance) && currentWeight <= targetWeight * (1 + tolerance))
+                    status = "OK";
+                else if (currentWeight < targetWeight * (1 - tolerance))
+                    status = "UNDER";
+                else
+                    status = "OVER";
+
+                // Gửi log về server
+                logWeighStep(currentStep + 1, targetWeight, currentWeight, tolerance, status);
+            }
+        }
+
+        function completeProduct() {
+            // Mark all steps complete
+            for (let i = 0; i < totalSteps; i++) {
+                const circle = document.getElementById(`step${i + 1}`);
+                if (circle) {
+                    circle.className = 'circle completed';
+                }
+            }
+
+            productCounter++;
+            document.getElementById('counterDisplay').textContent = productCounter;
+
+            console.log(`🎉 PRODUCT #${productCounter} COMPLETED!`);
+            console.log(`♻️  Restarting at Step 1...`);
+
+            // Restart at Step 1
+            currentStep = 0;
+            loadStep(0);
+
+            // Reset weight
+            currentWeight = 0;
+            const currentWeightEl = document.getElementById('currentWeight');
+            currentWeightEl.textContent = '-';
+            currentWeightEl.className = 'weight-value';
+        }
+
+        function resetDisplay() {
+            currentProduct = null;
+            currentStep = 0;
+            totalSteps = 0;
+            targetWeight = 0;
+            currentWeight = 0;
+            stepCompleted = false;
+
+            document.getElementById('targetWeight').textContent = '-';
+            document.getElementById('currentWeight').textContent = '-';
+            document.getElementById('currentWeight').className = 'weight-value';
+            document.getElementById('stepInfo').textContent = '-';
+            
+            // Clear all step indicators
+            document.getElementById('stepsContainer').innerHTML = '';
+        }
+
+        function resetCounter() {
+            productCounter = 0;
+            document.getElementById('counterDisplay').textContent = '0';
+            console.log('🔄 Counter reset');
+        }
+
+        async function logWeighStep(stepNumber, target, actual, tol, status) {
+            try {
+                const mo = document.getElementById('moInput').value.trim().toUpperCase();
+                const fiber = document.getElementById('fiberInput').value.trim().toUpperCase();
+
+                const body = {
+                    workCenter: currentWc, // ✅ THÊM DÒNG NÀY (biến currentWc đã có sẵn)
+                    mo: mo,
+                    fiberKit: fiber,
+                    stepNumber: stepNumber,
+                    targetWeight: target,
+                    actualWeight: actual,
+                    tolerance: tol,
+                    status: status,
+                    operatorName: ""
+                };
+
+                await fetch('/api/blow-fill/log-step', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            } catch (e) {
+                console.error('Error logging weigh step:', e);
+            }
+        }
+    </script>
+</body>
+</html>
