@@ -157,5 +157,16 @@ namespace OrderTrackingWeb.Hubs
                 return ConnectedUsers.Keys.ToList();
             }
         }
+        /// <summary>
+        /// Cho client join vào group theo MachineId (dùng cho BlowFill)
+        /// </summary>
+        public async Task JoinGroup(string machineId)
+        {
+            if (!string.IsNullOrWhiteSpace(machineId))
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, machineId.Trim());
+                Console.WriteLine($"🔗 Connection {Context.ConnectionId} joined group '{machineId.Trim()}'");
+            }
+        }
     }
 }

@@ -9,6 +9,7 @@ using OrderTrackingWeb.Hubs;
 using System.Data.Odbc;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+System.IO.Ports.SerialPort? _scaleSerialPort = null;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,9 +27,15 @@ builder.Services.AddDbContext<BlowFillDbContext>(options =>
     options.UseSqlite(cs);
 });
 
+builder.Services.AddDbContext<ToolManagementDbContext>(options =>
+{
+    var cs = builder.Configuration.GetConnectionString("ToolManagementConnection");
+    options.UseSqlite(cs);
+});
+
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<As400ScanPollingService>();
-
+// builder.Services.AddHostedService<ScaleReaderService>();
 var app = builder.Build();
 
 
@@ -65,6 +72,13 @@ using (var scope = app.Services.CreateScope())
     var blowDb = scope.ServiceProvider.GetRequiredService<BlowFillDbContext>();
     blowDb.Database.EnsureCreated();
     Console.WriteLine("✅ BlowFill DB is ready at Data/BlowFillWeigh.db");
+
+    // ✅ DB Tool Management
+    var toolDb = scope.ServiceProvider.GetRequiredService<ToolManagementDbContext>();
+    toolDb.Database.EnsureCreated();
+    toolDb.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
+    toolDb.Database.ExecuteSqlRaw("PRAGMA busy_timeout=5000;");
+    Console.WriteLine("✅ Tool Management DB is ready at Data/ToolManagement.db");
 
     // 🔁 INITIAL LOAD: chạy sync + load kế hoạch một lần
     Console.WriteLine("🔁 Initial load: Sync RUN KIT + MX details + Schedule plan hôm nay...");
@@ -1501,6 +1515,7 @@ app.MapGet("/api/kits-inv/inventory", async (AppDbContext db) =>
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapHub<OrderHub>("/orderHub");
+app.MapHub<ScaleTestHub>("/scaleTestHub");
 
 async Task<List<(string MX, string FgItem, string MO, string FiberKit, string WC, string Ex, string PlannedQty, string Leadtime)>> LoadSchedulePlan(DateTime targetDate, AppDbContext db, CancellationToken token)
 {
@@ -2535,6 +2550,7 @@ app.MapPost("/api/blow-fill/log-step", async (WeighLogRequest req, BlowFillDbCon
     {
         var log = new WeighLog
         {
+            MachineId    = req.MachineId ?? "",
             Timestamp    = DateTime.Now,
             WorkCenter   = req.WorkCenter ?? "",
             MO           = req.MO ?? "",
@@ -2558,6 +2574,25 @@ app.MapPost("/api/blow-fill/log-step", async (WeighLogRequest req, BlowFillDbCon
     }
 });
 
+// API: nhận weight từ BlowFillClient và broadcast SignalR theo MachineId
+app.MapPost("/api/blow-fill/push-weight", async (BlowFillPushRequest req, IHubContext<OrderHub> hub) =>
+{
+    try
+    {
+        Console.WriteLine($"[API] Received weight {req.Weight} from MachineId '{req.MachineId}'");
+
+        // Chỉ gửi số cân (weight) vào group
+        await hub.Clients.Group(req.MachineId).SendAsync("ReceiveScaleData", req.Weight);
+
+        return Results.Ok(new { success = true });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Error in push-weight: {ex.Message}");
+        return Results.Problem(ex.Message);
+    }
+});
+
 // GET /api/blow-fill/logs?date=2026-07-02
 app.MapGet("/api/blow-fill/logs", async (string? date, BlowFillDbContext blowDb, AppDbContext appDb) =>
 {
@@ -2566,6 +2601,8 @@ app.MapGet("/api/blow-fill/logs", async (string? date, BlowFillDbContext blowDb,
         DateTime targetDate = DateTime.Today;
         if (!string.IsNullOrEmpty(date) && DateTime.TryParse(date, out var d))
             targetDate = d.Date;
+
+        await LoadSchedulePlan(targetDate, appDb, CancellationToken.None);
 
         var nextDay = targetDate.AddDays(1);
 
@@ -2587,7 +2624,7 @@ app.MapGet("/api/blow-fill/logs", async (string? date, BlowFillDbContext blowDb,
 
         // 3. Tính toán summary, kết hợp dữ liệu từ 2 nguồn
         var summary = logs
-            .GroupBy(w => new { w.WorkCenter, w.MO, w.FiberKit })
+            .GroupBy(w => new { w.MachineId, w.WorkCenter, w.MO, w.FiberKit })
             .Select(g => {
                 // Tính số lượng hoàn thành
                 var maxStepNumber = g.Any() ? g.Max(x => x.StepNumber) : 0;
@@ -2598,6 +2635,7 @@ app.MapGet("/api/blow-fill/logs", async (string? date, BlowFillDbContext blowDb,
 
                 return new
                 {
+                    machineId = g.Key.MachineId,
                     workCenter = g.Key.WorkCenter,
                     mo = g.Key.MO,
                     fiberKit = g.Key.FiberKit,
@@ -2965,10 +3003,375 @@ app.MapGet("/assemble", async ctx =>
     await ctx.Response.WriteAsync("<h1>ASSEMBLE - Dang xay dung...</h1><a href='/'>Quay lai</a>");
 });
 
+// ==================== CNC GO ROUTES ====================
 app.MapGet("/cnc-go", async ctx =>
 {
-    await ctx.Response.WriteAsync("<h1>CNC GO - Dang xay dung...</h1><a href='/'>Quay lai</a>");
+    ctx.Response.ContentType = "text/html";
+    await ctx.Response.SendFileAsync("wwwroot/cnc-go.html");
 });
+
+app.MapGet("/cnc-go-dashboard", async ctx =>
+{
+    ctx.Response.ContentType = "text/html";
+    await ctx.Response.SendFileAsync("wwwroot/cnc-go-dashboard.html");
+});
+
+app.MapGet("/cnc-go-history", async ctx =>
+{
+    ctx.Response.ContentType = "text/html";
+    await ctx.Response.SendFileAsync("wwwroot/cnc-go-history.html");
+});
+
+// ==================== TOOL MANAGEMENT API ENDPOINTS ====================
+// GET: Lấy danh sách lịch sử thay dao (có filter)
+app.MapGet("/api/tools/history", async (
+    string? machine, 
+    string? shift, 
+    DateTime? fromDate, 
+    DateTime? toDate,
+    string? reason,
+    string? toolType,
+    ToolManagementDbContext db) =>
+{
+    try
+    {
+        var query = db.ToolChanges.AsQueryable();
+        
+        if (!string.IsNullOrEmpty(machine))
+            query = query.Where(t => t.MachineName == machine);
+        
+        if (!string.IsNullOrEmpty(shift))
+            query = query.Where(t => t.Shift == shift);
+        
+        if (fromDate.HasValue)
+            query = query.Where(t => t.Date >= fromDate.Value);
+        
+        if (toDate.HasValue)
+            query = query.Where(t => t.Date <= toDate.Value);
+        
+        if (!string.IsNullOrEmpty(reason))
+            query = query.Where(t => t.Reason == reason);
+        
+        if (!string.IsNullOrEmpty(toolType))
+            query = query.Where(t => t.ToolType == toolType);
+        
+        var results = await query
+            .OrderByDescending(t => t.Date)
+            .ThenByDescending(t => t.ReplaceTime)
+            .ToListAsync();
+        
+        return Results.Ok(results);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
+// GET: Lấy trạng thái dao hiện tại của tất cả máy
+app.MapGet("/api/tools/status", async (ToolManagementDbContext db) =>
+{
+    try
+    {
+        var statuses = await db.ToolStatuses
+            .OrderBy(t => t.MachineName)
+            .ThenBy(t => t.Shift)
+            .ThenBy(t => t.ToolPosition)
+            .ToListAsync();
+        
+        return Results.Ok(statuses);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
+// GET: Lấy trạng thái dao của 1 máy cụ thể
+app.MapGet("/api/tools/status/{machine}/{shift}", async (
+    string machine, 
+    string shift, 
+    ToolManagementDbContext db) =>
+{
+    try
+    {
+        var statuses = await db.ToolStatuses
+            .Where(t => t.MachineName == machine && t.Shift == shift)
+            .OrderBy(t => t.ToolPosition)
+            .ToListAsync();
+        
+        return Results.Ok(statuses);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
+// POST: Thêm bản ghi thay dao mới
+app.MapPost("/api/tools/change", async (ToolChangeRequest req, ToolManagementDbContext db, IHubContext<OrderHub> hubContext) =>
+{
+    try
+    {
+        // Validate
+        if (string.IsNullOrEmpty(req.MachineName) || string.IsNullOrEmpty(req.Shift))
+            return Results.BadRequest("Thiếu thông tin máy hoặc ca làm việc");
+        
+        if (req.ToolPosition < 1 || req.ToolPosition > 4)
+            return Results.BadRequest("Vị trí dao phải từ 1-4");
+
+        // ⭐ Parse ngày / giờ từ string
+        DateTime date = DateTime.TryParse(req.Date, out var d) ? d : DateTime.Today;
+        DateTime? installDate = DateTime.TryParse(req.InstallDate, out var id) ? id : null;
+        DateTime? replaceDate = DateTime.TryParse(req.ReplaceDate, out var rd) ? rd : null;
+
+        TimeSpan? installTime = TimeSpan.TryParse(req.InstallTime, out var it) ? it : null;
+        TimeSpan? replaceTime = TimeSpan.TryParse(req.ReplaceTime, out var rt) ? rt : null;
+
+        // Lấy version hiện tại
+        var currentStatus = await db.ToolStatuses
+            .FirstOrDefaultAsync(t => 
+                t.MachineName == req.MachineName && 
+                t.Shift == req.Shift && 
+                t.ToolPosition == req.ToolPosition);
+        
+        int newVersion = (currentStatus?.CurrentVersion ?? 0) + 1;
+        
+        // Tạo bản ghi thay dao
+        var toolChange = new ToolChange
+        {
+            Shift       = req.Shift,
+            Supervisor  = req.Supervisor ?? "",
+            MSS         = req.MSS ?? "",
+            Date        = date,
+            MachineName = req.MachineName,
+            ToolPosition= req.ToolPosition,
+            ToolVersion = newVersion,
+            ToolType    = req.ToolType ?? "MỚI",
+            InstallDate = installDate,
+            InstallTime = installTime,
+            ReplaceDate = replaceDate,
+            ReplaceTime = replaceTime,
+            ActualHours = req.ActualHours,
+            Reason      = req.Reason ?? "",
+            Material    = req.Material ?? "PLYWOOD",
+            CreatedAt   = DateTime.Now,
+            UpdatedAt   = DateTime.Now
+        };
+        
+        db.ToolChanges.Add(toolChange);
+        
+        // Cập nhật hoặc tạo ToolStatus
+        if (currentStatus != null)
+        {
+            currentStatus.CurrentVersion = newVersion;
+            currentStatus.TotalHours += req.ActualHours;
+            currentStatus.LastUpdated = DateTime.Now;
+        }
+        else
+        {
+            db.ToolStatuses.Add(new ToolStatus
+            {
+                MachineName  = req.MachineName,
+                Shift        = req.Shift,
+                ToolPosition = req.ToolPosition,
+                CurrentVersion = newVersion,
+                TotalHours   = req.ActualHours,
+                LastUpdated  = DateTime.Now
+            });
+        }
+        
+        await db.SaveChangesAsync();
+        
+        // Broadcast update qua SignalR
+        await hubContext.Clients.All.SendAsync("ToolStatusUpdated", new
+        {
+            machine   = req.MachineName,
+            shift     = req.Shift,
+            position  = req.ToolPosition,
+            version   = newVersion,
+            totalHours= (currentStatus?.TotalHours ?? 0) + req.ActualHours
+        });
+        
+        return Results.Ok(new { 
+            success = true, 
+            version = newVersion,
+            message = $"✅ Đã ghi nhận thay dao {req.MachineName} - Vị trí {req.ToolPosition} (Version {newVersion})"
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
+// PUT: Cập nhật bản ghi thay dao
+app.MapPut("/api/tools/change/{id}", async (int id, ToolChangeRequest req,ToolManagementDbContext db) =>
+{
+    try
+    {
+        var toolChange = await db.ToolChanges.FindAsync(id);
+        if (toolChange == null)
+            return Results.NotFound("Không tìm thấy bản ghi");
+        
+        toolChange.Supervisor = req.Supervisor ?? toolChange.Supervisor;
+        toolChange.MSS = req.MSS ?? toolChange.MSS;
+        toolChange.ToolType = req.ToolType ?? toolChange.ToolType;
+        // toolChange.InstallDate = req.InstallDate ?? toolChange.InstallDate;
+        // toolChange.InstallTime = req.InstallTime ?? toolChange.InstallTime;
+        // toolChange.ReplaceDate = req.ReplaceDate ?? toolChange.ReplaceDate;
+        // toolChange.ReplaceTime = req.ReplaceTime ?? toolChange.ReplaceTime;
+        toolChange.Reason = req.Reason ?? toolChange.Reason;
+        toolChange.Material = req.Material ?? toolChange.Material;
+        
+        // Cập nhật ActualHours và TotalHours nếu thay đổi
+        if (req.ActualHours != toolChange.ActualHours)
+        {
+            int diff = req.ActualHours - toolChange.ActualHours;
+            toolChange.ActualHours = req.ActualHours;
+            
+            var status = await db.ToolStatuses.FirstOrDefaultAsync(t =>
+                t.MachineName == toolChange.MachineName &&
+                t.Shift == toolChange.Shift &&
+                t.ToolPosition == toolChange.ToolPosition);
+            
+            if (status != null)
+            {
+                status.TotalHours += diff;
+                status.LastUpdated = DateTime.Now;
+            }
+        }
+        
+        toolChange.UpdatedAt = DateTime.Now;
+        await db.SaveChangesAsync();
+        
+        return Results.Ok(new { success = true, message = "✅ Đã cập nhật thành công" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
+// DELETE: Xóa bản ghi thay dao
+app.MapDelete("/api/tools/change/{id}", async (int id, ToolManagementDbContext db) =>
+{
+    try
+    {
+        var toolChange = await db.ToolChanges.FindAsync(id);
+        if (toolChange == null)
+            return Results.NotFound("Không tìm thấy bản ghi");
+        
+        // Cập nhật lại TotalHours
+        var status = await db.ToolStatuses.FirstOrDefaultAsync(t =>
+            t.MachineName == toolChange.MachineName &&
+            t.Shift == toolChange.Shift &&
+            t.ToolPosition == toolChange.ToolPosition);
+        
+        if (status != null)
+        {
+            status.TotalHours -= toolChange.ActualHours;
+            if (status.TotalHours < 0) status.TotalHours = 0;
+        }
+        
+        db.ToolChanges.Remove(toolChange);
+        await db.SaveChangesAsync();
+        
+        return Results.Ok(new { success = true, message = "✅ Đã xóa thành công" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
+// GET: Export Excel lịch sử thay dao
+app.MapGet("/api/tools/export", async (
+    string? machine,
+    string? shift,
+    DateTime? fromDate,
+    DateTime? toDate,
+    ToolManagementDbContext db) =>
+{
+    try
+    {
+        var query = db.ToolChanges.AsQueryable();
+        
+        if (!string.IsNullOrEmpty(machine))
+            query = query.Where(t => t.MachineName == machine);
+        
+        if (!string.IsNullOrEmpty(shift))
+            query = query.Where(t => t.Shift == shift);
+        
+        if (fromDate.HasValue)
+            query = query.Where(t => t.Date >= fromDate.Value);
+        
+        if (toDate.HasValue)
+            query = query.Where(t => t.Date <= toDate.Value);
+        
+        var data = await query
+            .OrderByDescending(t => t.Date)
+            .ThenByDescending(t => t.ReplaceTime)
+            .ToListAsync();
+        
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Tool Changes");
+        
+        // Header
+        worksheet.Cell(1, 1).Value = "Ca";
+        worksheet.Cell(1, 2).Value = "Supervisor";
+        worksheet.Cell(1, 3).Value = "MSS";
+        worksheet.Cell(1, 4).Value = "Máy";
+        worksheet.Cell(1, 5).Value = "Vị trí dao";
+        worksheet.Cell(1, 6).Value = "Version";
+        worksheet.Cell(1, 7).Value = "Loại dao";
+        worksheet.Cell(1, 8).Value = "Ngày lắp";
+        worksheet.Cell(1, 9).Value = "Giờ lắp";
+        worksheet.Cell(1, 10).Value = "Ngày thay";
+        worksheet.Cell(1, 11).Value = "Giờ thay";
+        worksheet.Cell(1, 12).Value = "Giờ thực tế";
+        worksheet.Cell(1, 13).Value = "Lý do thay";
+        worksheet.Cell(1, 14).Value = "Nguyên liệu";
+        
+        // Data
+        int row = 2;
+        foreach (var item in data)
+        {
+            worksheet.Cell(row, 1).Value = item.Shift;
+            worksheet.Cell(row, 2).Value = item.Supervisor;
+            worksheet.Cell(row, 3).Value = item.MSS;
+            worksheet.Cell(row, 4).Value = item.MachineName;
+            worksheet.Cell(row, 5).Value = item.ToolPosition;
+            worksheet.Cell(row, 6).Value = item.ToolVersion;
+            worksheet.Cell(row, 7).Value = item.ToolType;
+            worksheet.Cell(row, 8).Value = item.InstallDate?.ToString("dd/MM/yyyy") ?? "";
+            worksheet.Cell(row, 9).Value = item.InstallTime?.ToString(@"hh\:mm") ?? "";
+            worksheet.Cell(row, 10).Value = item.ReplaceDate?.ToString("dd/MM/yyyy") ?? "";
+            worksheet.Cell(row, 11).Value = item.ReplaceTime?.ToString(@"hh\:mm") ?? "";
+            worksheet.Cell(row, 12).Value = item.ActualHours;
+            worksheet.Cell(row, 13).Value = item.Reason;
+            worksheet.Cell(row, 14).Value = item.Material;
+            row++;
+        }
+        
+        worksheet.Columns().AdjustToContents();
+        
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        var content = stream.ToArray();
+        
+        return Results.File(
+            content,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"Tool_Changes_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx"
+        );
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
 app.MapGet("/ban-khung-go", async ctx =>
 {
     await ctx.Response.WriteAsync("<h1>BAN KHUNG GO - Dang xay dung...</h1><a href='/'>Quay lai</a>");
@@ -3333,6 +3736,79 @@ app.MapGet("/feather-fill", async ctx =>
     await ctx.Response.WriteAsync("<h1>FEATHER FILL - Dang xay dung...</h1><a href='/'>Quay lai</a>");
 });
 
+// ==================== API VÀ TRANG TEST ĐẦU CÂN ====================
+
+// Route để hiển thị trang HTML
+app.MapGet("/scale-tester", async ctx =>
+{
+    ctx.Response.ContentType = "text/html";
+    await ctx.Response.SendFileAsync("wwwroot/scale-tester.html");
+});
+
+// API để MỞ cổng COM và bắt đầu lắng nghe
+app.MapPost("/api/scale/start-listening", async (string portName, IHubContext<ScaleTestHub> hubContext) =>
+{
+    if (_scaleSerialPort != null && _scaleSerialPort.IsOpen)
+    {
+        return Results.Conflict("Cổng COM đã được mở.");
+    }
+
+    try
+    {
+        _scaleSerialPort = new System.IO.Ports.SerialPort(portName, 9600, System.IO.Ports.Parity.None, 8, System.IO.Ports.StopBits.One);
+        _scaleSerialPort.DataReceived += async (sender, e) =>
+        {
+            try
+            {
+                var sp = (System.IO.Ports.SerialPort)sender;
+                string data = sp.ReadLine();
+                // Gửi dữ liệu nhận được cho tất cả client đang kết nối
+                await hubContext.Clients.All.SendAsync("ReceiveData", data.Trim());
+            }
+            catch { /* Bỏ qua lỗi đọc */ }
+        };
+        _scaleSerialPort.Open();
+        return Results.Ok($"Đã mở cổng {portName} và bắt đầu lắng nghe.");
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Lỗi khi mở cổng {portName}: {ex.Message}");
+    }
+});
+
+// API để GỬI lệnh đi
+app.MapPost("/api/scale/send-command", (string command) => // Bỏ async và await
+{
+    if (_scaleSerialPort == null || !_scaleSerialPort.IsOpen)
+    {
+        return Results.BadRequest("Cổng COM chưa được mở. Vui lòng bắt đầu lắng nghe trước.");
+    }
+    
+    try
+    {
+        // ✅ SỬA LẠI THÀNH WriteLine
+        _scaleSerialPort.WriteLine(command);
+        return Results.Ok($"Đã gửi lệnh: '{command}'");
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Lỗi khi gửi lệnh: {ex.Message}");
+    }
+});
+
+// API để ĐÓNG cổng COM
+app.MapPost("/api/scale/stop-listening", () =>
+{
+    if (_scaleSerialPort != null && _scaleSerialPort.IsOpen)
+    {
+        _scaleSerialPort.Close();
+        _scaleSerialPort.Dispose();
+        _scaleSerialPort = null;
+        return Results.Ok("Đã đóng cổng COM.");
+    }
+    return Results.Ok("Cổng COM đã đóng sẵn.");
+});
+
 app.Run("http://0.0.0.0:5050");
 
 // ==================== DATABASE MODELS ====================
@@ -3393,6 +3869,28 @@ public class BlowFillDbContext : DbContext
     }
 }
 
+// ==================== TOOL MANAGEMENT DATABASE CONTEXT ====================
+public class ToolManagementDbContext : DbContext
+{
+    public ToolManagementDbContext(DbContextOptions<ToolManagementDbContext> options) : base(options) { }
+
+    public DbSet<ToolChange> ToolChanges { get; set; }
+    public DbSet<ToolStatus> ToolStatuses { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Index cho ToolChange
+        modelBuilder.Entity<ToolChange>()
+            .HasIndex(t => new { t.MachineName, t.Shift, t.ToolPosition, t.Date });
+
+        // Index unique cho ToolStatus
+        modelBuilder.Entity<ToolStatus>()
+            .HasIndex(t => new { t.MachineName, t.Shift, t.ToolPosition })
+            .IsUnique();
+    }
+}
 
 public class Order
 {
@@ -3425,6 +3923,7 @@ public class MxDetail
 public class WeighLog
 {
     public int Id { get; set; }
+    public string MachineId { get; set; } = "";
     public DateTime Timestamp { get; set; }   
     public string WorkCenter { get; set; } = "";
     public string MO { get; set; } = "";
@@ -3488,6 +3987,44 @@ public class AppSetting
     [Key]
     public string Key { get; set; } = "";
     public string Value { get; set; } = "";
+}
+
+// ==================== TOOL MANAGEMENT MODELS ====================
+public class ToolChange
+{
+    public int Id { get; set; }
+    public string Shift { get; set; } = "";           // Day Shift / Night Shift
+    public string Supervisor { get; set; } = "";      
+    public string MSS { get; set; } = "";             
+    public DateTime Date { get; set; }                
+    public string MachineName { get; set; } = "";     // Heian 4 - Heian 21
+    
+    public int ToolPosition { get; set; }             // 1-4 (DS: 1-4, NS: 5-8)
+    public int ToolVersion { get; set; }              
+    public string ToolType { get; set; } = "MỚI";     // MỚI / MÀI LẦN 1 / MÀI LẦN 2
+    
+    public DateTime? InstallDate { get; set; }        
+    public TimeSpan? InstallTime { get; set; }        
+    public DateTime? ReplaceDate { get; set; }        
+    public TimeSpan? ReplaceTime { get; set; }        
+    
+    public int ActualHours { get; set; }              // 0-11
+    public string Reason { get; set; } = "";          // Cháy / Cùn / Cuối ca thay / Mẻ / Gãy
+    public string Material { get; set; } = "PLYWOOD"; 
+    
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime UpdatedAt { get; set; } = DateTime.Now;
+}
+
+public class ToolStatus
+{
+    public int Id { get; set; }
+    public string MachineName { get; set; } = "";
+    public string Shift { get; set; } = "";           // Day Shift / Night Shift
+    public int ToolPosition { get; set; }             // 1-4 (DS: 1-4, NS: 5-8)
+    public int CurrentVersion { get; set; }           
+    public int TotalHours { get; set; } = 0;          
+    public DateTime LastUpdated { get; set; } = DateTime.Now;
 }
 
 // ==================== BACKGROUND SERVICE POLLING AS400 ====================
@@ -3828,7 +4365,25 @@ record PartMappingData { public int Order { get; set; } public string PartName {
 record TrackingData(string Mx, List<WorkCenterStep> Steps);
 record WorkCenterStep(string Mx, string WorkCenter, string FgItem, string Mo, string Qty, string Leadtime);
 record Kho2ScanRequest(string Odrno, string ZoneCode);
-record WeighLogRequest( string WorkCenter, string MO, string FiberKit, int StepNumber, double TargetWeight, double ActualWeight, double Tolerance, string Status, string OperatorName);
+record WeighLogRequest( string MachineId, string WorkCenter, string MO, string FiberKit, int StepNumber, double TargetWeight, double ActualWeight, double Tolerance, string Status, string OperatorName);
+record ToolChangeRequest(
+    string MachineName,
+    string Shift,
+    int ToolPosition,
+    string? Supervisor,
+    string? MSS,
+    string? Date,
+    string? ToolType,
+    string? InstallDate,
+    string? InstallTime,
+    string? ReplaceDate,
+    string? ReplaceTime,
+    int ActualHours,
+    string? Reason,
+    string? Material
+);
+record ChangePortRequest(string PortName);
+record BlowFillPushRequest(string MachineId, double Weight);
 
 // Get Cell Value Helper
 public static class ExcelHelpers
@@ -4021,5 +4576,105 @@ public static class DbRetryHelper
             await operation();
             return true;
         }, maxRetries);
+    }
+}
+
+public class ScaleTestHub : Hub { }
+
+public class ScaleReaderService : BackgroundService
+{
+    private readonly IHubContext<OrderHub> _hubContext;
+    private readonly ILogger<ScaleReaderService> _logger;
+    private readonly IConfiguration _configuration;
+    private System.IO.Ports.SerialPort? _serialPort;
+
+    public ScaleReaderService(IHubContext<OrderHub> hubContext, ILogger<ScaleReaderService> logger, IConfiguration configuration)
+    {
+        _hubContext = hubContext;
+        _logger = logger;
+        _configuration = configuration;
+    }
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        string portName = _configuration.GetValue<string>("ScaleSettings:PortName") ?? "COM14";
+        int baudRate = _configuration.GetValue<int>("ScaleSettings:BaudRate", 9600);
+
+        _serialPort = new System.IO.Ports.SerialPort(portName, baudRate, System.IO.Ports.Parity.None, 8, System.IO.Ports.StopBits.One);
+        
+        try
+        {
+            _serialPort.DataReceived += OnDataReceived;
+            _serialPort.Open();
+            _logger.LogInformation($"✅ Cổng cân '{portName}' đã được mở và đang lắng nghe.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"❌ Không thể mở cổng cân '{portName}': {ex.Message}");
+            return Task.CompletedTask;
+        }
+
+        stoppingToken.Register(() => {
+            if (_serialPort?.IsOpen ?? false)
+            {
+                _serialPort.Close();
+                _logger.LogInformation($"✅ Cổng cân '{portName}' đã được đóng.");
+            }
+        });
+
+        return Task.CompletedTask;
+    }
+
+    private async void OnDataReceived(object sender, System.IO.Ports.SerialDataReceivedEventArgs e)
+    {
+        if (_serialPort == null || !_serialPort.IsOpen) return;
+        
+        try
+        {
+            string rawData = _serialPort.ReadLine().Trim();
+            _logger.LogInformation($"[ScaleData] Raw: '{rawData}'"); // ✅ THÊM LOG NÀY
+
+            double weight = ParseWeight(rawData);
+            _logger.LogInformation($"[ScaleData] Parsed: {weight}"); // ✅ THÊM LOG NÀY
+
+            await _hubContext.Clients.All.SendAsync("ReceiveScaleData", weight);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning($"Lỗi khi xử lý dữ liệu từ cân: {ex.Message}");
+        }
+    }
+
+    private double ParseWeight(string rawData)
+    {
+        if (string.IsNullOrWhiteSpace(rawData))
+        {
+            return 0;
+        }
+        try
+        {
+            // Regex mới: tìm chuỗi số nằm sau dấu phẩy cuối cùng và trước "kg"
+            var match = System.Text.RegularExpressions.Regex.Match(rawData, @",([+-]?\s*[\d\.]+)\s*kg");
+            
+            if (match.Success)
+            {
+                string weightString = match.Groups[1].Value;
+                if (double.TryParse(weightString, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double weight))
+                {
+                    return weight;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning($"Không thể parse dữ liệu cân: '{rawData}'. Lỗi: {ex.Message}");
+        }
+        return 0;
+    }
+
+    public override void Dispose()
+    {
+        _serialPort?.Dispose();
+        base.Dispose();
     }
 }

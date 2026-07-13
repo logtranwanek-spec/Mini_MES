@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNC Dashboard - Trạng thái Dao</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="/js/theme.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            min-height: 100vh;
+        }
+        
+        .dashboard-container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        .dashboard-header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            padding: 20px 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .dashboard-header h1 {
+            margin: 0;
+            font-size: 28px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: bold;
+        }
+        
+        .shift-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .shift-section {
+            background: rgba(26, 26, 26, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .shift-title {
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 24px;
+            font-weight: bold;
+            padding-bottom: 15px;
+            border-bottom: 2px solid;
+        }
+        
+        .shift-day .shift-title {
+            color: #f39c12;
+            border-color: #f39c12;
+        }
+        
+        .shift-night .shift-title {
+            color: #9b59b6;
+            border-color: #9b59b6;
+        }
+        
+        .machine-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 15px;
+        }
+        
+        .machine-card {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            border: 1px solid #444;
+            border-radius: 10px;
+            padding: 15px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .machine-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            border-color: #667eea;
+        }
+        
+        .machine-name {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #a8edea;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(168, 237, 234, 0.3);
+        }
+        
+        .tool-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        
+        .tool-row:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: translateX(5px);
+        }
+        
+        .tool-label {
+            color: #bdc3c7;
+            font-size: 14px;
+        }
+        
+        .tool-status {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }
+        
+        .tool-version {
+            font-size: 20px;
+            font-weight: bold;
+            color: #f39c12;
+        }
+        
+        .tool-hours {
+            font-size: 13px;
+            color: #95a5a6;
+        }
+        
+        .tool-new {
+            font-size: 12px;
+            color: #27ae60;
+            font-weight: bold;
+        }
+        
+        .stats-bar {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #95a5a6;
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        /* Simple View */
+        html.simple-view body {
+            background: #f8f9fc;
+        }
+        
+        html.simple-view .dashboard-header {
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        html.simple-view .dashboard-header h1 {
+            background: none;
+            -webkit-text-fill-color: #2c3e50;
+            color: #2c3e50;
+        }
+        
+        html.simple-view .shift-section {
+            background: #fff;
+            border-color: #e2e8f0;
+        }
+        
+        html.simple-view .shift-day .shift-title {
+            color: #d97706;
+        }
+        
+        html.simple-view .shift-night .shift-title {
+            color: #7c3aed;
+        }
+        
+        html.simple-view .machine-card {
+            background: #fff;
+            border-color: #e2e8f0;
+        }
+        
+        html.simple-view .machine-card:hover {
+            border-color: #3b82f6;
+        }
+        
+        html.simple-view .machine-name {
+            color: #1e293b;
+            border-bottom-color: #e2e8f0;
+        }
+        
+        html.simple-view .tool-row {
+            background: #f8fafc;
+        }
+        
+        html.simple-view .tool-row:hover {
+            background: #e0f2fe;
+        }
+        
+        html.simple-view .tool-label {
+            color: #475569;
+        }
+        
+        html.simple-view .tool-version {
+            color: #d97706;
+        }
+        
+        html.simple-view .tool-hours {
+            color: #64748b;
+        }
+        
+        html.simple-view .tool-new {
+            color: #16a34a;
+        }
+        
+        html.simple-view .stats-bar {
+            background: #fff;
+            border-color: #e2e8f0;
+        }
+        
+        html.simple-view .stat-value {
+            background: none;
+            -webkit-text-fill-color: #0f172a;
+            color: #0f172a;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <div class="dashboard-header">
+            <h1>📊 CNC Dashboard - Trạng thái Dao Real-time</h1>
+            <div style="display: flex; gap: 15px;">
+                <button class="btn btn-primary" onclick="loadDashboard()">🔄 Làm mới</button>
+                <a href="/cnc-go" class="btn btn-secondary" style="text-decoration: none;">📝 Nhập liệu</a>
+                <a href="/" class="btn-back-home">🏠 Trang chủ</a>
+                <button class="btn-view-toggle btn-global-toggle">🎨 Chế độ đơn giản</button>
+            </div>
+        </div>
+        
+        <!-- Stats Bar -->
+        <div class="stats-bar" id="statsBar">
+            <div class="stat-item">
+                <div class="stat-label">Tổng số máy</div>
+                <div class="stat-value" id="totalMachines">18</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Tổng số dao</div>
+                <div class="stat-value" id="totalTools">144</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Dao mới thay hôm nay</div>
+                <div class="stat-value" style="background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" id="newToday">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Lần cập nhật cuối</div>
+                <div class="stat-value" style="font-size: 18px; font-family: 'Courier New', monospace;" id="lastUpdate">--:--:--</div>
+            </div>
+        </div>
+        
+        <!-- Shift Grid -->
+        <div class="shift-grid">
+            <!-- Day Shift -->
+            <div class="shift-section shift-day">
+                <div class="shift-title">☀️ Day Shift (Ca ngày)</div>
+                <div class="machine-grid" id="dayShiftGrid">
+                    <p class="loading-text">Đang tải dữ liệu...</p>
+                </div>
+            </div>
+            
+            <!-- Night Shift -->
+            <div class="shift-section shift-night">
+                <div class="shift-title">🌙 Night Shift (Ca đêm)</div>
+                <div class="machine-grid" id="nightShiftGrid">
+                    <p class="loading-text">Đang tải dữ liệu...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr/dist/browser/signalr.min.js"></script>
+    <script>
+        // Danh sách máy
+        const MACHINES = [];
+        for (let i = 4; i <= 21; i++) {
+            MACHINES.push(`Heian ${i}`);
+        }
+        
+        // Load dashboard
+        async function loadDashboard() {
+            try {
+                const response = await fetch('/api/tools/status');
+                const data = await response.json();
+                
+                // Nhóm theo shift
+                const dayShift = data.filter(t => t.shift === 'Day Shift');
+                const nightShift = data.filter(t => t.shift === 'Night Shift');
+                
+                // Render
+                renderShiftGrid('dayShiftGrid', dayShift);
+                renderShiftGrid('nightShiftGrid', nightShift);
+                
+                // Update stats
+                updateStats(data);
+                
+                // Update last update time
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('vi-VN');
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                showToast('❌ Lỗi tải dữ liệu: ' + error.message, 'error');
+            }
+        }
+        
+        // Render lưới máy
+        function renderShiftGrid(containerId, data) {
+            const container = document.getElementById(containerId);
+            
+            // Nhóm theo máy
+            const machineMap = {};
+            data.forEach(item => {
+                if (!machineMap[item.machineName]) {
+                    machineMap[item.machineName] = {};
+                }
+                machineMap[item.machineName][item.toolPosition] = item;
+            });
+            
+            let html = '';
+            MACHINES.forEach(machine => {
+                html += '<div class="machine-card">';
+                html += `<div class="machine-name">${machine}</div>`;
+                
+                for (let pos = 1; pos <= 4; pos++) {
+                    const tool = machineMap[machine]?.[pos];
+                    const version = tool?.currentVersion || '-';
+                    const hours = tool?.totalHours || 0;
+                    
+                    html += '<div class="tool-row">';
+                    html += `<span class="tool-label">Dao ${pos}</span>`;
+                    html += '<span class="tool-status">';
+                    html += `<span class="tool-version">${version}</span>`;
+                    if (hours > 0) {
+                        html += `<span class="tool-hours">${hours}h</span>`;
+                    } else if (version !== '-') {
+                        html += '<span class="tool-new">MỚI</span>';
+                    }
+                    html += '</span>';
+                    html += '</div>';
+                }
+                
+                html += '</div>';
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        // Update stats
+        function updateStats(data) {
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Đếm số dao mới thay hôm nay (cần gọi API lịch sử)
+            fetch(`/api/tools/history?fromDate=${today}&toDate=${today}`)
+                .then(r => r.json())
+                .then(history => {
+                    document.getElementById('newToday').textContent = history.length;
+                })
+                .catch(err => console.error('Error loading stats:', err));
+        }
+        
+        // Toast notification
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `
+                <span class="toast-icon">${type === 'success' ? '✓' : '✗'}</span>
+                <span class="toast-message">${message}</span>
+                <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+            `;
+            
+            let container = document.querySelector('.toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'toast-container';
+                document.body.appendChild(container);
+            }
+            
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
+        
+        // SignalR real-time update
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/orderHub")
+            .build();
+        
+        connection.on("ToolStatusUpdated", (data) => {
+            console.log('Tool status updated:', data);
+            loadDashboard();
+        });
+        
+        connection.start()
+            .then(() => console.log('SignalR connected'))
+            .catch(err => console.error('SignalR error:', err));
+        
+        // Auto refresh every 30 seconds
+        setInterval(() => {
+            loadDashboard();
+        }, 30000);
+        
+        // Load on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDashboard();
+        });
+    </script>
+</body>
+</html>

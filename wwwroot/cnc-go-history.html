@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNC - Lịch sử Thay Dao</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="/js/theme.js"></script>
+    <style>
+        .history-container {
+            max-width: 1600px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        
+        .history-header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            padding: 20px 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .filter-bar {
+            background: #1a1a1a;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .filter-group label {
+            font-size: 13px;
+            color: #a8edea;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        
+        .filter-group select,
+        .filter-group input {
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #555;
+            background: #222;
+            color: #fff;
+            outline: none;
+        }
+        
+        .action-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        /* Simple View */
+        html.simple-view .history-header {
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        html.simple-view .filter-bar {
+            background: #fff;
+            border-color: #e2e8f0;
+        }
+        
+        html.simple-view .filter-group label {
+            color: #0056b3;
+        }
+        
+        html.simple-view .filter-group select,
+        html.simple-view .filter-group input {
+            background: #fff;
+            color: #333;
+            border-color: #cbd5e1;
+        }
+    </style>
+</head>
+<body>
+    <div class="history-container">
+        <!-- Header -->
+        <div class="history-header">
+            <h1>📋 Lịch sử Thay Dao</h1>
+            <div style="display: flex; gap: 15px;">
+                <a href="/cnc-go" class="btn btn-primary" style="text-decoration: none;">📝 Nhập liệu</a>
+                <a href="/cnc-go-dashboard" class="btn btn-secondary" style="text-decoration: none;">📊 Dashboard</a>
+                <a href="/" class="btn-back-home">🏠 Trang chủ</a>
+                <button class="btn-view-toggle btn-global-toggle">🎨 Chế độ đơn giản</button>
+            </div>
+        </div>
+        
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+            <div class="filter-group">
+                <label>🔍 Tìm kiếm</label>
+                <input type="text" id="searchText" placeholder="Nhập từ khóa...">
+            </div>
+            
+            <div class="filter-group">
+                <label>🏭 Máy CNC</label>
+                <select id="filterMachine">
+                    <option value="">-- Tất cả --</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label>🌓 Ca làm việc</label>
+                <select id="filterShift">
+                    <option value="">-- Tất cả --</option>
+                    <option value="Day Shift">Day Shift</option>
+                    <option value="Night Shift">Night Shift</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label>📅 Từ ngày</label>
+                <input type="date" id="filterFromDate">
+            </div>
+            
+            <div class="filter-group">
+                <label>📅 Đến ngày</label>
+                <input type="date" id="filterToDate">
+            </div>
+            
+            <div class="filter-group">
+                <label>⚠️ Lý do thay</label>
+                <select id="filterReason">
+                    <option value="">-- Tất cả --</option>
+                    <option value="Cháy">Cháy</option>
+                    <option value="Cùn">Cùn</option>
+                    <option value="Cuối ca thay">Cuối ca thay</option>
+                    <option value="Mẻ">Mẻ</option>
+                    <option value="Gãy">Gãy</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label>🔧 Loại dao</label>
+                <select id="filterToolType">
+                    <option value="">-- Tất cả --</option>
+                    <option value="MỚI">MỚI</option>
+                    <option value="MÀI LẦN 1">MÀI LẦN 1</option>
+                    <option value="MÀI LẦN 2">MÀI LẦN 2</option>
+                </select>
+            </div>
+            
+            <div class="filter-group" style="display: flex; align-items: flex-end;">
+                <button class="btn btn-primary" onclick="applyFilters()" style="width: 100%;">🔍 Lọc</button>
+            </div>
+        </div>
+        
+        <!-- Action Bar -->
+        <div class="action-bar">
+            <button class="btn btn-export" onclick="exportToExcel()">📊 Xuất Excel</button>
+            <button class="btn btn-secondary" onclick="resetFilters()">🔄 Xóa bộ lọc</button>
+        </div>
+        
+        <!-- Table -->
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ca</th>
+                        <th>Supervisor</th>
+                        <th>MSS</th>
+                        <th>Máy</th>
+                        <th>Vị trí</th>
+                        <th>Version</th>
+                        <th>Loại dao</th>
+                        <th>Ngày lắp</th>
+                        <th>Giờ lắp</th>
+                        <th>Ngày thay</th>
+                        <th>Giờ thay</th>
+                        <th>Giờ thực tế</th>
+                        <th>Lý do</th>
+                        <th>Nguyên liệu</th>
+                        <th>Hành động</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                    <tr>
+                        <td colspan="15" style="text-align: center; padding: 40px;">
+                            <p class="loading-text">Đang tải dữ liệu...</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        // Danh sách máy
+        const MACHINES = [];
+        for (let i = 4; i <= 21; i++) {
+            MACHINES.push(`Heian ${i}`);
+        }
+        
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            initMachineFilter();
+            setDefaultDates();
+            loadHistory();
+        });
+        
+        // Điền dropdown máy
+        function initMachineFilter() {
+            const select = document.getElementById('filterMachine');
+            MACHINES.forEach(machine => {
+                const option = document.createElement('option');
+                option.value = machine;
+                option.textContent = machine;
+                select.appendChild(option);
+            });
+        }
+        
+        // Set ngày mặc định (7 ngày gần nhất)
+        function setDefaultDates() {
+            const today = new Date();
+            const sevenDaysAgo = new Date(today);
+            sevenDaysAgo.setDate(today.getDate() - 7);
+            
+            document.getElementById('filterToDate').value = today.toISOString().split('T')[0];
+            document.getElementById('filterFromDate').value = sevenDaysAgo.toISOString().split('T')[0];
+        }
+        
+        // Load history
+        async function loadHistory() {
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '<tr><td colspan="15" style="text-align: center; padding: 40px;"><p class="loading-text">Đang tải dữ liệu...</p></td></tr>';
+            
+            try {
+                const params = buildQueryParams();
+                const response = await fetch(`/api/tools/history?${params}`);
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="15" style="text-align: center; padding: 40px; color: #95a5a6;">Không có dữ liệu</td></tr>';
+                    return;
+                }
+                
+                let html = '';
+                data.forEach(item => {
+                    html += `
+                        <tr>
+                            <td>${item.shift}</td>
+                            <td>${item.supervisor || '-'}</td>
+                            <td>${item.mss || '-'}</td>
+                            <td style="font-weight: bold; color: #a8edea;">${item.machineName}</td>
+                            <td style="text-align: center;">${item.toolPosition}</td>
+                            <td style="text-align: center; font-weight: bold; color: #f39c12;">${item.toolVersion}</td>
+                            <td>${item.toolType}</td>
+                            <td>${item.installDate ? new Date(item.installDate).toLocaleDateString('vi-VN') : '-'}</td>
+                            <td style="text-align: center;">${formatTime(item.installTime)}</td>
+                            <td>${item.replaceDate ? new Date(item.replaceDate).toLocaleDateString('vi-VN') : '-'}</td>
+                            <td style="text-align: center;">${formatTime(item.replaceTime)}</td>
+                            <td style="text-align: center; font-weight: bold; color: #3498db;">${item.actualHours}h</td>
+                            <td><span style="background: rgba(231,76,60,0.2); padding: 4px 8px; border-radius: 4px; font-size: 12px;">${item.reason}</span></td>
+                            <td>${item.material}</td>
+                            <td style="text-align: center;">
+                                <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="deleteRecord(${item.id})">🗑️</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                tbody.innerHTML = html;
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="15" style="text-align: center; padding: 40px; color: #e74c3c;">❌ Lỗi: ${error.message}</td></tr>`;
+            }
+        }
+        
+        // Format time
+        function formatTime(time) {
+            if (!time) return '-';
+            if (time.includes(':')) return time.substring(0, 5); // HH:mm
+            return time;
+        }
+        
+        // Build query params
+        function buildQueryParams() {
+            const params = new URLSearchParams();
+            
+            const machine = document.getElementById('filterMachine').value;
+            const shift = document.getElementById('filterShift').value;
+            const fromDate = document.getElementById('filterFromDate').value;
+            const toDate = document.getElementById('filterToDate').value;
+            const reason = document.getElementById('filterReason').value;
+            const toolType = document.getElementById('filterToolType').value;
+            
+            if (machine) params.append('machine', machine);
+            if (shift) params.append('shift', shift);
+            if (fromDate) params.append('fromDate', fromDate);
+            if (toDate) params.append('toDate', toDate);
+            if (reason) params.append('reason', reason);
+            if (toolType) params.append('toolType', toolType);
+            
+            return params.toString();
+        }
+        
+        // Apply filters
+        function applyFilters() {
+            loadHistory();
+        }
+        
+        // Reset filters
+        function resetFilters() {
+            document.getElementById('searchText').value = '';
+            document.getElementById('filterMachine').value = '';
+            document.getElementById('filterShift').value = '';
+            document.getElementById('filterReason').value = '';
+            document.getElementById('filterToolType').value = '';
+            setDefaultDates();
+            loadHistory();
+        }
+        
+        // Search
+        document.getElementById('searchText').addEventListener('input', (e) => {
+            const searchText = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#historyTableBody tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchText) ? '' : 'none';
+            });
+        });
+        
+        // Delete record
+        async function deleteRecord(id) {
+            if (!confirm('Bạn có chắc muốn xóa bản ghi này?')) return;
+            
+            try {
+                const response = await fetch(`/api/tools/change/${id}`, { method: 'DELETE' });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showToast(result.message, 'success');
+                    loadHistory();
+                } else {
+                    showToast('❌ Lỗi xóa dữ liệu', 'error');
+                }
+            } catch (error) {
+                showToast('❌ Lỗi: ' + error.message, 'error');
+            }
+        }
+        
+        // Export Excel
+        function exportToExcel() {
+            const params = buildQueryParams();
+            window.location.href = `/api/tools/export?${params}`;
+        }
+        
+        // Toast
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `
+                <span class="toast-icon">${type === 'success' ? '✓' : '✗'}</span>
+                <span class="toast-message">${message}</span>
+                <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+            `;
+            
+            let container = document.querySelector('.toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'toast-container';
+                document.body.appendChild(container);
+            }
+            
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
+    </script>
+</body>
+</html>

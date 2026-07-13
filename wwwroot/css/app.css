@@ -3296,3 +3296,52 @@ html.simple-view .chart-box {
 html.simple-view .chart-box h4 {
     color: #475569;
 }
+
+/* ==================== CNC GO - SIMPLE VIEW ==================== */
+html.simple-view .cnc-container {
+    background: #f8f9fc;
+}
+
+html.simple-view .cnc-header {
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+html.simple-view .cnc-header h1 {
+    background: none;
+    -webkit-text-fill-color: #2c3e50;
+    color: #2c3e50;
+}
+
+html.simple-view .tab-btn {
+    background: #f8fafc;
+    color: #475569;
+    border-color: #e2e8f0;
+}
+
+html.simple-view .tab-btn.active {
+    background: #0056b3;
+    color: #fff;
+    border-color: #0056b3;
+}
+
+html.simple-view .form-grid {
+    background: #fff;
+    border-color: #e2e8f0;
+}
+
+html.simple-view .form-group label {
+    color: #0056b3;
+}
+
+html.simple-view .form-group input,
+html.simple-view .form-group select {
+    background: #fff;
+    color: #333;
+    border-color: #cbd5e1;
+}
+
+html.simple-view .form-group input:focus,
+html.simple-view .form-group select:focus {
+    border-color: #0056b3;
+}

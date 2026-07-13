@@ -6,6 +6,8 @@ Server IP: 10.141.77.77
 Run:
 dotnet build -c Release
 dotnet bin\Release\net8.0\OrderTrackingWeb.dll
+dotnet build -c Release
+dotnet bin\Release\net8.0\BlowFillClient.dll
 
 Publish:
 dotnet publish -c Release
@@ -26,3 +28,144 @@ git status
 git add .
 git commit -m "..."
 git push origin master
+
+
+using System;
+using System.IO.Ports;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Linq; // ✅ Thêm thư viện này
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        Console.OutputEncoding = Encoding.UTF8;
+        Console.WriteLine("=== Blow Fill Client v4.0 (Robust Parsing) ===");
+        
+        // --- Lấy thông tin cấu hình ---
+        Console.Write("Nhập MachineId (ví dụ: PC01): ");
+        string machineId = Console.ReadLine()?.Trim() ?? "PC01";
+
+        Console.Write("Nhập địa chỉ server (ví dụ: http://localhost:5050): ");
+        string serverUrl = Console.ReadLine()?.Trim() ?? "http://localhost:5050";
+
+        Console.WriteLine("\nCác cổng COM khả dụng:");
+        var ports = SerialPort.GetPortNames();
+        foreach (var p in ports)
+            Console.WriteLine($" - {p}");
+
+        Console.Write("\nChọn cổng COM (ví dụ: COM15): ");
+        string portName = Console.ReadLine()?.Trim() ?? "COM15";
+
+        // --- Cấu hình SerialPort ---
+        var serial = new SerialPort(portName, 9600, Parity.None, 8, StopBits.One);
+        serial.ReadTimeout = 1000;
+        serial.NewLine = "\r";
+        serial.DtrEnable = true;
+        serial.RtsEnable = true;
+
+        try
+        {
+            serial.Open();
+            Console.WriteLine($"\n✅ Đã mở {portName}. Đang đọc dữ liệu... (nhấn Ctrl+C để dừng)");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Không mở được {portName}: {ex.Message}");
+            Console.ReadLine();
+            return;
+        }
+
+        var http = new HttpClient();
+        string apiUrl = $"{serverUrl.TrimEnd('/')}/api/blow-fill/push-weight";
+        var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (s, e) => { e.Cancel = true; cts.Cancel(); };
+
+        // --- Vòng lặp đọc dữ liệu ---
+        while (!cts.IsCancellationRequested)
+        {
+            try
+            {
+                string line = serial.ReadLine();
+                if (!string.IsNullOrWhiteSpace(line))
+                {
+                    double weight = ParseWeight(line);
+                    Console.WriteLine($"[COM] Raw: '{line.Trim()}'  →  {weight} kg");
+                    
+                    if (weight != 0 || line.Contains("0.00")) // Gửi cả số 0 nếu cân báo về 0
+                    {
+                         await SendWeightToServer(http, apiUrl, machineId, weight);
+                    }
+                }
+            }
+            catch (TimeoutException) { continue; }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ Lỗi đọc COM: {ex.Message}");
+                await Task.Delay(1000);
+            }
+        }
+
+        // --- Dọn dẹp ---
+        Console.WriteLine("\nĐang đóng cổng COM...");
+        if (serial.IsOpen) serial.Close();
+        Console.WriteLine("Đã đóng. Nhấn Enter để thoát.");
+        Console.ReadLine();
+    }
+
+    static async Task SendWeightToServer(HttpClient http, string apiUrl, string machineId, double weight)
+    {
+        try
+        {
+            var payload = new { MachineId = machineId, Weight = weight };
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var resp = await http.PostAsync(apiUrl, content);
+            if (!resp.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"⚠️ API lỗi: {resp.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Lỗi gửi API: {ex.Message}");
+        }
+    }
+
+    // ✅ HÀM PARSEWEIGHT PHIÊN BẢN MỚI, MẠNH MẼ HƠN
+    static double ParseWeight(string rawData)
+    {
+        if (string.IsNullOrWhiteSpace(rawData)) return 0;
+
+        try
+        {
+            // Bước 1: Tìm và cắt chuỗi con có chứa "kg"
+            int kgIndex = rawData.IndexOf("kg", StringComparison.OrdinalIgnoreCase);
+            if (kgIndex == -1) return 0;
+            
+            // Lấy một đoạn trước chữ "kg" để xử lý (ví dụ 10 ký tự)
+            int startIndex = Math.Max(0, kgIndex - 10);
+            string relevantPart = rawData.Substring(startIndex, kgIndex - startIndex);
+
+            // Bước 2: Chỉ giữ lại các ký tự là số, '.', '+', '-'
+            var cleanChars = relevantPart.Where(c => char.IsDigit(c) || c == '.' || c == '-' || c == '+').ToArray();
+            string numberString = new string(cleanChars);
+
+            // Bước 3: Chuyển đổi chuỗi số sạch thành double
+            if (double.TryParse(numberString, 
+                System.Globalization.NumberStyles.Any, 
+                System.Globalization.CultureInfo.InvariantCulture, 
+                out double weight))
+            {
+                return weight;
+            }
+        }
+        catch { }
+
+        return 0;
+    }
+}

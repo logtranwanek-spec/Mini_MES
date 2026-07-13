@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Scale COM Port Tester</title>
+    <style>
+        body { font-family: Arial, sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; }
+        .controls { padding: 15px; background: #f0f0f0; border-bottom: 1px solid #ccc; display: flex; gap: 15px; align-items: center; }
+        .controls input, .controls button { padding: 8px; font-size: 14px; }
+        .container { flex-grow: 1; display: flex; }
+        .panel { flex: 1; padding: 15px; display: flex; flex-direction: column; }
+        .panel:first-child { border-right: 1px solid #ccc; }
+        h2 { margin-top: 0; }
+        textarea { width: 100%; flex-grow: 1; font-family: monospace; font-size: 14px; resize: none; border: 1px solid #ccc; }
+        #sendCommand { width: 100%; padding: 10px; margin-top: 10px; font-size: 16px; }
+        #status { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <label for="portName">Cổng COM:</label>
+        <input type="text" id="portName" value="COM15" placeholder="Ví dụ: COM15">
+        <button onclick="startListening()">Bắt đầu Lắng nghe</button>
+        <button onclick="stopListening()">Dừng Lắng nghe</button>
+        <span id="status" style="color: red;">Chưa kết nối</span>
+    </div>
+
+    <div class="container">
+        <div class="panel">
+            <h2>Dữ liệu nhận được (RX)</h2>
+            <textarea id="receivedData" readonly></textarea>
+        </div>
+        <div class="panel">
+            <h2>Gửi lệnh đi (TX)</h2>
+            <p>Gõ lệnh và nhấn Enter để gửi.</p>
+            <input type="text" id="commandInput" placeholder="Gõ lệnh ở đây...">
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/scaleTestHub")
+            .build();
+
+        const receivedDataEl = document.getElementById('receivedData');
+        const statusEl = document.getElementById('status');
+        const commandInputEl = document.getElementById('commandInput');
+
+        // Lắng nghe dữ liệu từ server
+        connection.on("ReceiveData", (data) => {
+            const timestamp = new Date().toLocaleTimeString();
+            receivedDataEl.value += `[${timestamp}] ${data}\n`;
+            receivedDataEl.scrollTop = receivedDataEl.scrollHeight; // Tự cuộn xuống
+        });
+
+        async function startListening() {
+            const portName = document.getElementById('portName').value;
+            if (!portName) {
+                alert('Vui lòng nhập tên cổng COM.');
+                return;
+            }
+
+            try {
+                // Gọi API để mở cổng COM
+                const response = await fetch(`/api/scale/start-listening?portName=${portName}`, { method: 'POST' });
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(error);
+                }
+
+                // Bắt đầu kết nối SignalR
+                await connection.start();
+                statusEl.textContent = `Đang kết nối tới ${portName}...`;
+                statusEl.style.color = 'green';
+                console.log("SignalR connected.");
+            } catch (err) {
+                statusEl.textContent = `Lỗi: ${err.message}`;
+                statusEl.style.color = 'red';
+                console.error(err);
+            }
+        }
+
+        async function stopListening() {
+            try {
+                await connection.stop();
+                await fetch('/api/scale/stop-listening', { method: 'POST' });
+                statusEl.textContent = 'Chưa kết nối';
+                statusEl.style.color = 'red';
+                console.log("SignalR disconnected and port closed.");
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Gửi lệnh khi nhấn Enter
+        commandInputEl.addEventListener('keydown', async (event) => {
+            if (event.key === 'Enter') {
+                const command = commandInputEl.value;
+                if (!command) return;
+
+                try {
+                    await fetch(`/api/scale/send-command?command=${encodeURIComponent(command)}`, { method: 'POST' });
+                    const timestamp = new Date().toLocaleTimeString();
+                    receivedDataEl.value += `[${timestamp}] SENT >> ${command}\n`;
+                    commandInputEl.value = ''; // Xóa ô nhập sau khi gửi
+                } catch (err) {
+                    console.error('Error sending command:', err);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

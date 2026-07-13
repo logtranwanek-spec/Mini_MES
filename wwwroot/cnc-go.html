@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNC Gỗ - Quản lý Dao</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="/js/theme.js"></script>
+    <style>
+        .cnc-container {
+            max-width: 1400px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        
+        .cnc-header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .cnc-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            color: #bdc3c7;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .tab-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* ==================== TABLE-BASED FORM LAYOUT ==================== */
+        .form-container-table {
+            background: #1a1a1a;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 30px;
+        }
+
+        /* Header Section */
+        .form-header-section {
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid rgba(255,255,255,0.1);
+        }
+
+        .header-row {
+            display: flex;
+            align-items: center;
+            gap: 40px;
+            margin-bottom: 15px;
+        }
+
+        .header-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-group label {
+            font-size: 15px;
+            color: #ecf0f1;
+            min-width: 80px;
+        }
+
+        .header-input {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #555;
+            background: #222;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+            min-width: 150px;
+        }
+
+        .supervisor-input {
+            color: #ecf0f1;
+            font-weight: bold;
+        }
+
+        /* Machine Section */
+        .machine-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .machine-label {
+            font-size: 16px;
+            color: #ecf0f1;
+            min-width: 80px;
+        }
+
+        .machine-select {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #555;
+            border-radius: 8px;
+            background: #222;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            outline: none;
+        }
+
+        .machine-select:focus {
+            border-color: #667eea;
+        }
+
+        /* Tool Input Table */
+        .tool-input-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .tool-input-table th,
+        .tool-input-table td {
+            border: 1px solid #444;
+            padding: 10px 8px;
+            text-align: center;
+        }
+
+        .tool-input-table th {
+            background: #2c3e50;
+            color: #ecf0f1;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tool-input-table td {
+            background: #1a1a1a;
+        }
+
+        .tool-input-table input,
+        .tool-input-table select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #222;
+            color: #fff;
+            font-size: 13px;
+            text-align: center;
+            outline: none;
+        }
+
+        .tool-input-table input:focus,
+        .tool-input-table select:focus {
+            border-color: #667eea;
+        }
+
+        .tool-name-cell {
+            font-weight: bold;
+            color: #a8edea;
+            text-align: left;
+            padding-left: 15px;
+        }
+
+        /* Table Actions */
+        .table-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        /* Simple View */
+        html.simple-view .cnc-header {
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        html.simple-view .tab-btn {
+            background: #f8fafc;
+            color: #475569;
+            border-color: #e2e8f0;
+        }
+        
+        html.simple-view .tab-btn.active {
+            background: #0056b3;
+            color: #fff;
+            border-color: #0056b3;
+        }
+        
+        html.simple-view .form-container-table {
+            background: #fff;
+            border-color: #e2e8f0;
+        }
+
+        html.simple-view .form-header-section {
+            border-bottom-color: #e2e8f0;
+        }
+
+        html.simple-view .header-group label,
+        html.simple-view .machine-label {
+            color: #2c3e50;
+        }
+
+        html.simple-view .header-input,
+        html.simple-view .machine-select,
+        html.simple-view .tool-input-table input,
+        html.simple-view .tool-input-table select {
+            background: #fff;
+            color: #333;
+            border-color: #cbd5e1;
+        }
+
+        html.simple-view .tool-input-table th {
+            background: #f1f5f9;
+            color: #334155;
+        }
+
+        html.simple-view .tool-input-table td {
+            background: #fff;
+        }
+
+        html.simple-view .tool-name-cell {
+            color: #0369a1;
+        }
+    </style>
+</head>
+<body>
+    <div class="cnc-container">
+        <!-- Header -->
+        <div class="cnc-header">
+            <h1>🔧 CNC Gỗ - Quản lý Dao</h1>
+            <div style="display: flex; gap: 15px;">
+                <a href="/" class="btn-back-home">🏠 Trang chủ</a>
+                <button class="btn-view-toggle btn-global-toggle">🎨 Chế độ đơn giản</button>
+            </div>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="cnc-tabs">
+            <button class="tab-btn active" onclick="switchTab('form')">📝 Nhập liệu thay dao</button>
+            <button class="tab-btn" onclick="switchTab('dashboard')">📊 Quản lý</button>
+            <button class="tab-btn" onclick="switchTab('history')">📋 Lịch sử</button>
+        </div>
+        
+        <!-- Tab 1: Form nhập liệu -->
+        <div id="tab-form" class="tab-content active">
+            <div class="form-container-table">
+                <!-- HEADER SECTION -->
+                <div class="form-header-section">
+                    <div class="header-row">
+                        <div class="header-group">
+                            <label>Ca:</label>
+                            <select id="shift" class="header-input">
+                                <option value="Day Shift">Day Shift</option>
+                                <option value="Night Shift">Night Shift</option>
+                            </select>
+                        </div>
+                        
+                        <div class="header-group" style="margin-left: auto;">
+                            <label>MSS:</label>
+                            <input type="text" id="mss" class="header-input" placeholder="0708">
+                        </div>
+                    </div>
+                    
+                    <div class="header-row">
+                        <div class="header-group">
+                            <label>Supervisor:</label>
+                            <select id="supervisor" class="header-input supervisor-input"></select>
+                            <button type="button" id="btnAddSupervisor"
+                                    style="padding:4px 8px; margin-left:6px; border-radius:4px; border:none; background:#27ae60; color:#fff; cursor:pointer;">
+                                +
+                            </button>
+                            <button type="button" id="btnRemoveSupervisor"
+                                    style="padding:4px 8px; margin-left:6px; border-radius:4px; border:none; background:#e74c3c; color:#fff; cursor:pointer;">
+                                -
+                            </button>
+                        </div>
+                        
+                        <div class="header-group" style="margin-left: auto;">
+                            <label>Ngày:</label>
+                            <input type="date" id="date" class="header-input">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- MACHINE SECTION -->
+                <div class="machine-section">
+                    <label class="machine-label">Máy:</label>
+                    <select id="machine" class="machine-select" required>
+                        <option value="">-- Chọn máy --</option>
+                    </select>
+                </div>
+                
+                <!-- TABLE SECTION - 4 DAO CỐ ĐỊNH -->
+                <table class="tool-input-table">
+                    <thead>
+                        <!-- Dòng nhãn nhóm -->
+                        <tr>
+                            <th></th>                         <!-- STT Dao không thuộc nhóm -->
+                            <th colspan="4">THAY DAO</th>    <!-- Ngày/giờ/lần chạy/lý do -->
+                            <th colspan="3">LẮP DAO</th>     <!-- Ngày/giờ/loại dao -->
+                        </tr>
+                        <!-- Dòng tiêu đề chi tiết -->
+                        <tr>
+                            <th>STT Dao</th>
+                            <th>Ngày thay</th>
+                            <th>Giờ thay</th>
+                            <th>Giờ thực tế</th>
+                            <th>Lý do thay</th>
+                            <th>Ngày lắp</th>
+                            <th>Giờ lắp</th>
+                            <th>Loại dao</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        <!-- DAO 1 -->
+                        <tr>
+                            <td class="tool-name-cell">Đầu dao 1</td>
+                            <td><input type="date" id="replaceDate1"></td>
+                            <td><input type="time" id="replaceTime1"></td>
+                            <td>
+                                <select id="actualHours1">
+                                    <option value="0">0</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                    <option value="11">11</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select id="reason1">
+                                    <option value="">-- Chọn --</option>
+                                    <option value="Cuối ca thay">Cuối ca thay</option>
+                                    <option value="Cháy">Cháy</option>
+                                    <option value="Cùn">Cùn</option>
+                                    <option value="Mẻ">Mẻ</option>
+                                    <option value="Gãy">Gãy</option>
+                                </select>
+                            </td>
+                            <td><input type="date" id="installDate1"></td>
+                            <td><input type="time" id="installTime1"></td>
+                            <td>
+                                <select id="toolType1">
+                                    <option value="MỚI">MỚI</option>
+                                    <option value="MÀI LẦN 1">MÀI LẦN 1</option>
+                                    <option value="MÀI LẦN 2">MÀI LẦN 2</option>
+                                </select>
+                            </td>
+                        </tr>
+                        
+                        <!-- DAO 2 -->
+                        <tr>
+                            <td class="tool-name-cell">Đầu dao 2</td>
+                            <td><input type="date" id="replaceDate2" ></td>
+                            <td><input type="time" id="replaceTime2"></td>
+                            <td>
+                                <select id="actualHours2">
+                                    <option value="0">0</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                    <option value="11">11</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select id="reason2">
+                                    <option value="">-- Chọn --</option>
+                                    <option value="Cuối ca thay">Cuối ca thay</option>
+                                    <option value="Cháy">Cháy</option>
+                                    <option value="Cùn">Cùn</option>
+                                    <option value="Mẻ">Mẻ</option>
+                                    <option value="Gãy">Gãy</option>
+                                </select>
+                            </td>
+                            <td><input type="date" id="installDate2"></td>
+                            <td><input type="time" id="installTime2"></td>
+                            <td>
+                                <select id="toolType2">
+                                    <option value="MỚI">MỚI</option>
+                                    <option value="MÀI LẦN 1">MÀI LẦN 1</option>
+                                    <option value="MÀI LẦN 2">MÀI LẦN 2</option>
+                                </select>
+                            </td>
+                        </tr>
+                        
+                        <!-- DAO 3 -->
+                        <tr>
+                            <td class="tool-name-cell">Đầu dao 3</td>
+                            <td><input type="date" id="replaceDate3"></td>
+                            <td><input type="time" id="replaceTime3"></td>
+                            <td>
+                                <select id="actualHours3">
+                                    <option value="0">0</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                    <option value="11">11</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select id="reason3">
+                                    <option value="">-- Chọn --</option>
+                                    <option value="Cuối ca thay">Cuối ca thay</option>
+                                    <option value="Cháy">Cháy</option>
+                                    <option value="Cùn">Cùn</option>
+                                    <option value="Mẻ">Mẻ</option>
+                                    <option value="Gãy">Gãy</option>
+                                </select>
+                            </td>
+                            <td><input type="date" id="installDate3"></td>
+                            <td><input type="time" id="installTime3"></td>
+                            <td>
+                                <select id="toolType3">
+                                    <option value="MỚI">MỚI</option>
+                                    <option value="MÀI LẦN 1">MÀI LẦN 1</option>
+                                    <option value="MÀI LẦN 2">MÀI LẦN 2</option>
+                                </select>
+                            </td>
+                        </tr>
+                        
+                        <!-- DAO 4 -->
+                        <tr>
+                            <td class="tool-name-cell">Đầu dao 4</td>
+                            <td><input type="date" id="replaceDate4"></td>
+                            <td><input type="time" id="replaceTime4"></td>
+                            <td>
+                                <select id="actualHours4">
+                                    <option value="0">0</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                    <option value="11">11</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select id="reason4">
+                                    <option value="">-- Chọn --</option>
+                                    <option value="Cuối ca thay">Cuối ca thay</option>
+                                    <option value="Cháy">Cháy</option>
+                                    <option value="Cùn">Cùn</option>
+                                    <option value="Mẻ">Mẻ</option>
+                                    <option value="Gãy">Gãy</option>
+                                </select>
+                            </td>
+                            <td><input type="date" id="installDate4"></td>
+                            <td><input type="time" id="installTime4"></td>
+                            <td>
+                                <select id="toolType4">
+                                    <option value="MỚI">MỚI</option>
+                                    <option value="MÀI LẦN 1">MÀI LẦN 1</option>
+                                    <option value="MÀI LẦN 2">MÀI LẦN 2</option>
+                                </select>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <!-- ACTION BUTTONS -->
+                <div class="table-actions">
+                    <button type="button" class="btn btn-primary" onclick="saveAllTools()">💾 Lưu tất cả</button>
+                    <button type="button" class="btn btn-secondary" onclick="clearAllRows()">🔄 Làm mới</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tab 2: Quản lý -->
+        <div id="tab-dashboard" class="tab-content">
+            <div id="dashboardContent">
+                <p class="loading-text">Đang tải dữ liệu...</p>
+            </div>
+        </div>
+        
+        <!-- Tab 3: Lịch sử -->
+        <div id="tab-history" class="tab-content">
+            <div id="historyContent">
+                <p class="loading-text">Đang tải dữ liệu...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr/dist/browser/signalr.min.js"></script>
+    <script src="/js/cnc-go.js"></script>
+</body>
+</html>

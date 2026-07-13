@@ -520,60 +520,117 @@
 
         <!-- Control Panel -->
         <div class="control-panel">
-            <label>🔧 Test Weight:</label>
-            <input type="number" id="testWeight" step="0.01" oninput="simulateWeight()">
-            <button class="btn-reload" onclick="loadExcelData()">🔄 Reload Excel</button>
-            <button class="btn-reset" onclick="resetCounter()">🔄 Reset Counter</button>
+            <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+                <button class="btn-reload" onclick="loadExcelData()">🔄 Reload Định Mức</button>
+                <button class="btn-reset" onclick="resetCounter()">🔄 Reset Counter</button>
+            </div>
         </div>
-    </div>
 
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
     <script>
+        // ===============================================================
+        // BIẾN TOÀN CỤC (GLOBAL VARIABLES)
+        // ===============================================================
         let productDatabase = {};
         let currentProduct = null;
         let currentStep = 0;
         let totalSteps = 0;
         let targetWeight = 0;
-        let currentWeight = 0;
+        let currentWeight = 0; // Sẽ được cập nhật bởi SignalR
         let tolerance = 0.05;
         let productCounter = 0;
         let stepCompleted = false;
         let weightStableTime = 0;
         let offScaleTime = 0;
-        let currentWc = 'UBF12';
-        let moScanTimer = null;
+        let currentWc = 'UBF12'; // Giá trị mặc định
+        let machineId = null;
 
-        const OFF_SCALE_DELAY = 1.0; // seconds
-        const WEIGHT_STABLE_TIME = 0.5; // seconds
+        const OFF_SCALE_DELAY = 1.0;
+        const WEIGHT_STABLE_TIME = 0.5;
 
-        // Initialize
-        window.onload = function() {
-            loadExcelData();
+        // ===============================================================
+        // SIGNALR SETUP (ĐỂ NHẬN DỮ LIỆU CÂN REAL-TIME)
+        // ===============================================================
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/orderHub")
+            .withAutomaticReconnect()
+            .build();
 
-            // Chọn WC mặc định + handler đổi WC
+        // Lắng nghe dữ liệu cân từ server
+        connection.on("ReceiveScaleData", (weight) => {
+            console.log(`[SignalR] Received weight: ${weight}`);
+            currentWeight = weight;
+        });
+
+
+        async function startSignalR() {
+            try {
+                await connection.start();
+                console.log("✅ SignalR Connected to Scale.");
+
+                // Sau khi kết nối, join group theo MachineId
+                if (machineId) {
+                    await connection.invoke("JoinGroup", machineId);
+                    console.log(`✅ Joined group: ${machineId}`);
+                }
+            } catch (err) {
+                console.error("SignalR Connection Error: ", err);
+                setTimeout(startSignalR, 5000);
+            }
+        }
+
+        // ===============================================================
+        // KHỞI TẠO KHI TRANG TẢI XONG (INITIALIZATION)
+        // ===============================================================
+        window.onload = async function() {
+            // 0. Hỏi MachineId cho máy này
+            machineId = prompt("Nhập mã máy (vd: PC01):");
+            if (!machineId) {
+                alert("Bạn phải nhập mã máy để sử dụng hệ thống.");
+                return;
+            }
+
+            // 1. Tải định mức gòn
+            await loadExcelData();
+
+            // 2. Khởi động SignalR để nhận dữ liệu từ server
+            await startSignalR();
+
+            // 3. Gắn sự kiện cho WC selector
             const wcSelect = document.getElementById('wcSelect');
             if (wcSelect) {
                 wcSelect.value = currentWc;
                 wcSelect.addEventListener('change', () => {
                     currentWc = wcSelect.value;
-                    console.log('🔧 Selected WC =', currentWc);
+                    console.log(`🔧 Selected WC changed to: ${currentWc}`);
+                    resetDisplay();
+                    document.getElementById('moInput').focus();
                 });
             }
 
-            // 🔍 BẮT ENTER KHI SCAN MO
+            // 4. Gắn sự kiện cho ô MO
             const moInput = document.getElementById('moInput');
             if (moInput) {
+                moInput.focus();
                 moInput.addEventListener('keydown', (event) => {
                     if (event.key === 'Enter') {
-                        onMoEntered();   // gọi API kế hoạch + fill FiberKit + load weight
-                        event.preventDefault(); // tránh form submit, nếu có
+                        onMoEntered();
+                        event.preventDefault();
                     }
                 });
             }
 
+            // 5. Cập nhật tolerance
             updateTolerance();
 
+            // 6. Bắt đầu vòng lặp cập nhật UI weight
             setInterval(checkWeightStatus, 100);
         };
+
+        // ===============================================================
+        // CÁC HÀM XỬ LÝ LOGIC (Không thay đổi)
+        // ===============================================================
 
         async function onMoEntered() {
             const moInput = document.getElementById('moInput');
@@ -584,7 +641,6 @@
                 resetDisplay();
                 return;
             }
-
             if (!currentWc) {
                 alert('Vui lòng chọn Work Center (WC) trước.');
                 return;
@@ -592,51 +648,34 @@
 
             try {
                 console.log(`🔍 Lấy kế hoạch cho MO=${mo}, WC=${currentWc} ...`);
-
                 const res = await fetch(`/api/blow-fill/plan?wc=${encodeURIComponent(currentWc)}&mo=${encodeURIComponent(mo)}`);
                 if (!res.ok) {
-                    console.error('Error calling /api/blow-fill/plan', res.status);
-                    alert('Không gọi được kế hoạch. Vui lòng thử lại.');
-                    return;
+                    throw new Error(`Server error: ${res.status}`);
                 }
-
                 const data = await res.json();
+
                 if (!data.found) {
-                    console.log('❌', data.message || 'Không tìm thấy kế hoạch');
                     alert(data.message || `Không tìm thấy kế hoạch cho MO ${mo} tại WC ${currentWc}`);
-                    fiberInput.value = '';
                     resetDisplay();
                     return;
                 }
-
-                // ✅ Gán Fiber Kit và PlannedQty
+                
                 fiberInput.value = data.fiberKit || '';
-                console.log(`✅ MO ${data.mo} tại ${data.workCenter} có FiberKit = ${data.fiberKit}, PlannedQty = ${data.plannedQty}`);
-
-                // Gọi logic tìm standard weight bằng FiberKit như trước
-                searchProduct(); // dùng hàm bạn đã có, sẽ dùng fiberInput.value
-
-                // TODO: sau này có thể hiển thị "Completed Today = actual/planned" ở đây
-                // Ví dụ: document.getElementById('counterDisplay').innerText = `${actual} / ${data.plannedQty}`;
+                console.log(`✅ MO ${data.mo} có FiberKit = ${data.fiberKit}, PlannedQty = ${data.plannedQty}`);
+                searchProduct();
             } catch (e) {
                 console.error('Error in onMoEntered:', e);
                 alert('Có lỗi khi lấy kế hoạch MO. Xem console để biết chi tiết.');
             }
         }
 
-
-        // ✅ DYNAMIC STEP CREATION - Only create needed steps
         function createStepIndicators(numSteps) {
             const container = document.getElementById('stepsContainer');
-            container.innerHTML = ''; // Clear existing
-            
+            container.innerHTML = '';
             for (let i = 1; i <= numSteps; i++) {
                 const div = document.createElement('div');
                 div.className = 'step-indicator';
-                div.innerHTML = `
-                    <div class="label">Step ${i}</div>
-                    <div class="circle pending" id="step${i}">●</div>
-                `;
+                div.innerHTML = `<div class="label">Step ${i}</div><div class="circle pending" id="step${i}">●</div>`;
                 container.appendChild(div);
             }
         }
@@ -644,56 +683,44 @@
         async function loadExcelData() {
             try {
                 document.getElementById('fiberInput').placeholder = 'Loading Excel...';
-                
                 const response = await fetch('/api/blow-fill/load-excel');
                 const data = await response.json();
 
                 if (data.success) {
                     productDatabase = data.products;
-                    console.log(`✅ Loaded ${data.productCount} products`);
-                    document.getElementById('fiberInput').placeholder = 'Enter Fiber Kit code...';
-                    alert(`Excel loaded!\nTotal Products: ${data.productCount}`);
+                    console.log(`✅ Loaded ${data.productCount} products from 'Định mức gòn.xlsb'`);
+                    document.getElementById('fiberInput').placeholder = '---';
                 } else {
                     throw new Error('Failed to load Excel');
                 }
             } catch (error) {
                 console.error('Error loading Excel:', error);
-                alert('Failed to load Excel data');
-                document.getElementById('fiberInput').placeholder = 'Error loading data';
+                // Bỏ alert đi để không làm phiền khi trang tải
+                // alert("Lỗi khi tải file 'Định mức gòn.xlsb'.");
+                document.getElementById('fiberInput').placeholder = 'Error';
             }
         }
 
         function searchProduct() {
             const fiberKit = document.getElementById('fiberInput').value.trim().toUpperCase();
-            
             if (!fiberKit) {
                 resetDisplay();
                 return;
             }
 
-            console.log(`🔍 Searching: ${fiberKit}`);
-
-            // Search in database
             for (const [key, data] of Object.entries(productDatabase)) {
                 if (key.toUpperCase().includes(fiberKit)) {
                     currentProduct = data;
                     totalSteps = data.steps.length;
-                    tolerance = data.tolerance;
                     currentStep = 0;
-
-                    // ✅ Create only the needed number of step indicators
                     createStepIndicators(totalSteps);
-
                     loadStep(0);
-                    
-                    console.log(`✅ Found: ${key}`);
-                    console.log(`   Steps: ${totalSteps}`);
+                    console.log(`✅ Found standard weight for: ${key}`);
                     return;
                 }
             }
-
-            // Not found
-            console.log(`❌ Not found: ${fiberKit}`);
+            
+            console.log(`❌ Not found standard weight for: ${fiberKit}`);
             const currentWeightEl = document.getElementById('currentWeight');
             currentWeightEl.textContent = 'NOT FOUND';
             currentWeightEl.className = 'weight-value not-found';
@@ -702,32 +729,24 @@
 
         function loadStep(stepIndex) {
             if (!currentProduct || stepIndex >= totalSteps) return;
-
             const step = currentProduct.steps[stepIndex];
             targetWeight = step.target_weight;
-            
             document.getElementById('targetWeight').textContent = targetWeight.toFixed(2);
             document.getElementById('stepInfo').textContent = `Step ${stepIndex + 1} of ${totalSteps}`;
-            
             updateStepIndicators(stepIndex);
-            
             stepCompleted = false;
             weightStableTime = 0;
             offScaleTime = 0;
-
             console.log(`📍 Step ${stepIndex + 1}/${totalSteps}: Target = ${targetWeight.toFixed(2)} kg`);
         }
 
         function updateTolerance() {
             const input = document.getElementById('toleranceInput');
             const value = parseFloat(input.value);
-
             if (!isNaN(value) && value >= 0) {
-                // Chuyển đổi từ % (ví dụ: 5) sang dạng thập phân (ví dụ: 0.05)
                 tolerance = value / 100.0;
-                console.log(`Tolerance đã được cập nhật thành: ${tolerance} (${value}%)`);
+                console.log(`Tolerance updated to: ${tolerance} (${value}%)`);
             } else {
-                // Nếu giá trị không hợp lệ, quay về mặc định
                 tolerance = 0.05;
             }
         }
@@ -736,120 +755,80 @@
             for (let i = 0; i < totalSteps; i++) {
                 const circle = document.getElementById(`step${i + 1}`);
                 if (circle) {
-                    if (i < currentStepIndex) {
-                        circle.className = 'circle completed';
-                    } else if (i === currentStepIndex) {
-                        circle.className = 'circle current';
-                    } else {
-                        circle.className = 'circle pending';
-                    }
+                    if (i < currentStepIndex) circle.className = 'circle completed';
+                    else if (i === currentStepIndex) circle.className = 'circle current';
+                    else circle.className = 'circle pending';
                 }
             }
-        }
-
-        function simulateWeight() {
-            const input = document.getElementById('testWeight').value;
-            currentWeight = input ? parseFloat(input) : 0;
         }
 
         function checkWeightStatus() {
-            if (!currentProduct) return;
-
-            // Update display
             const currentWeightEl = document.getElementById('currentWeight');
-            if (currentWeight > 0) {
-                currentWeightEl.textContent = currentWeight.toFixed(2);
-            } else {
-                currentWeightEl.textContent = '-';
+
+            // ✅ Luôn hiển thị số cân lên màn hình
+            currentWeightEl.textContent =
+                currentWeight > 0 ? currentWeight.toFixed(2) : '-';
+
+            // Nếu chưa chọn MO / chưa tìm được sản phẩm, chỉ hiển thị số, không kiểm tra UNDER/OVER
+            if (!currentProduct) {
+                currentWeightEl.className = 'weight-value'; // reset màu
+                return;
             }
 
-            // Calculate tolerance
+            // Phần dưới giữ nguyên logic cũ (UNDER / OK / OVER)
             const lowerLimit = targetWeight * (1 - tolerance);
             const upperLimit = targetWeight * (1 + tolerance);
 
-            // Check status
             currentWeightEl.className = 'weight-value';
-            
             if (currentWeight >= lowerLimit && currentWeight <= upperLimit) {
-                // OK
                 currentWeightEl.classList.add('ok');
-                if (!stepCompleted) {
-                    weightStableTime += 0.1;
-                }
+                if (!stepCompleted) weightStableTime += 0.1;
             } else if (currentWeight > 0 && currentWeight < lowerLimit) {
-                // UNDER
                 currentWeightEl.classList.add('under');
                 weightStableTime = 0;
             } else if (currentWeight > upperLimit) {
-                // OVER
                 currentWeightEl.classList.add('over');
                 weightStableTime = 0;
             }
 
-            // Step transition
-            if (stepCompleted && currentWeight === 0) {
+            if (stepCompleted && currentWeight <= 0.1) { 
                 offScaleTime += 0.1;
-                
                 if (offScaleTime >= OFF_SCALE_DELAY) {
                     currentStep++;
-                    
                     if (currentStep < totalSteps) {
-                        console.log(`✅ Step ${currentStep} completed!`);
-                        console.log(`➡️  Moving to Step ${currentStep + 1}...`);
                         loadStep(currentStep);
                     } else {
                         completeProduct();
                     }
-                    
                     offScaleTime = 0;
                 }
-            } else if (currentWeight > 0) {
+            } else if (currentWeight > 0.1) { // Cũng sửa ở đây để logic đồng bộ
                 offScaleTime = 0;
             }
 
-            // Mark step completed
             if (weightStableTime >= WEIGHT_STABLE_TIME && !stepCompleted) {
                 stepCompleted = true;
                 console.log(`✅ Step ${currentStep + 1} confirmed: ${currentWeight.toFixed(2)} kg`);
-
-                // Xác định trạng thái
-                let status = "";
-                if (currentWeight >= targetWeight * (1 - tolerance) && currentWeight <= targetWeight * (1 + tolerance))
-                    status = "OK";
-                else if (currentWeight < targetWeight * (1 - tolerance))
-                    status = "UNDER";
-                else
-                    status = "OVER";
-
-                // Gửi log về server
+                let status = "OK";
+                if (currentWeight < lowerLimit) status = "UNDER";
+                else if (currentWeight > upperLimit) status = "OVER";
                 logWeighStep(currentStep + 1, targetWeight, currentWeight, tolerance, status);
             }
         }
 
         function completeProduct() {
-            // Mark all steps complete
             for (let i = 0; i < totalSteps; i++) {
                 const circle = document.getElementById(`step${i + 1}`);
-                if (circle) {
-                    circle.className = 'circle completed';
-                }
+                if (circle) circle.className = 'circle completed';
             }
-
             productCounter++;
             document.getElementById('counterDisplay').textContent = productCounter;
-
             console.log(`🎉 PRODUCT #${productCounter} COMPLETED!`);
-            console.log(`♻️  Restarting at Step 1...`);
-
-            // Restart at Step 1
             currentStep = 0;
             loadStep(0);
-
-            // Reset weight
             currentWeight = 0;
-            const currentWeightEl = document.getElementById('currentWeight');
-            currentWeightEl.textContent = '-';
-            currentWeightEl.className = 'weight-value';
+            document.getElementById('currentWeight').textContent = '-';
+            document.getElementById('currentWeight').className = 'weight-value';
         }
 
         function resetDisplay() {
@@ -859,14 +838,13 @@
             targetWeight = 0;
             currentWeight = 0;
             stepCompleted = false;
-
             document.getElementById('targetWeight').textContent = '-';
             document.getElementById('currentWeight').textContent = '-';
             document.getElementById('currentWeight').className = 'weight-value';
             document.getElementById('stepInfo').textContent = '-';
-            
-            // Clear all step indicators
             document.getElementById('stepsContainer').innerHTML = '';
+            document.getElementById('moInput').value = '';
+            document.getElementById('fiberInput').value = '';
         }
 
         function resetCounter() {
@@ -879,19 +857,10 @@
             try {
                 const mo = document.getElementById('moInput').value.trim().toUpperCase();
                 const fiber = document.getElementById('fiberInput').value.trim().toUpperCase();
-
                 const body = {
-                    workCenter: currentWc, // ✅ THÊM DÒNG NÀY (biến currentWc đã có sẵn)
-                    mo: mo,
-                    fiberKit: fiber,
-                    stepNumber: stepNumber,
-                    targetWeight: target,
-                    actualWeight: actual,
-                    tolerance: tol,
-                    status: status,
-                    operatorName: ""
+                    machineId: machineId, workCenter: currentWc, mo: mo, fiberKit: fiber, stepNumber: stepNumber,
+                    targetWeight: target, actualWeight: actual, tolerance: tol, status: status, operatorName: ""
                 };
-
                 await fetch('/api/blow-fill/log-step', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

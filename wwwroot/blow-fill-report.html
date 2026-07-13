@@ -30,11 +30,12 @@
         <table class="summary-table">
             <thead>
                 <tr>
+                    <th>Machine ID</th>
                     <th>Work Center</th>
                     <th>MO</th>
                     <th>Fiber Kit</th>
-                    <th>Số lượng hoàn thành</th> <!-- ✅ CỘT 1 -->
-                    <th>Số lượng kế hoạch</th>   <!-- ✅ CỘT 2 -->
+                    <th>Số lượng hoàn thành</th> 
+                    <th>Số lượng kế hoạch</th> 
                     <th>Số lần cân quá</th>
                     <th>Số lần cân thiếu</th>
                     <th>Hoàn thành lần cuối</th>
@@ -47,6 +48,7 @@
             <thead>
                 <tr>
                     <th>Thời gian</th>
+                    <th>Machine ID</th>
                     <th>Work Center</th>
                     <th>MO</th>
                     <th>Fiber Kit</th>
@@ -76,6 +78,7 @@
                 data.summary.forEach(row => {
                     sBody.innerHTML += `
                         <tr>
+                            <td>${row.machineId}</td>
                             <td>${row.workCenter}</td>
                             <td>${row.mo}</td>
                             <td>${row.fiberKit}</td>
@@ -94,7 +97,8 @@
                 data.logs.forEach(log => {
                     lBody.innerHTML += `
                         <tr>
-                            <td>${new Date(log.timestamp).toLocaleString('vi-VN')}</td>
+                            <td>${new Date(log.timestamp).toLocaleString('vi-VN')}</td>2
+                            <td>${log.machineId}</td>
                             <td>${log.workCenter}</td>
                             <td>${log.mo}</td>
                             <td>${log.fiberKit}</td>

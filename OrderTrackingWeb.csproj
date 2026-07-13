@@ -20,6 +20,7 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.2.10" />
     <PackageReference Include="Microsoft.Office.Interop.Excel" Version="16.0.18925.20022" />
     <PackageReference Include="System.Data.Odbc" Version="10.0.8" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.9" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
   </ItemGroup>
   
