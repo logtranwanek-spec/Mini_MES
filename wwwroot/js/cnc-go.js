@@ -5,6 +5,9 @@ for (let i = 4; i <= 21; i++) {
     MACHINES.push(`Heian ${i}`);
 }
 
+const SUPPLIERS = ["Supplier A", "Supplier B", "Supplier C"]; // Danh sách mặc định
+let currentToolIndexForSupplier = null; // Lưu lại index của dao đang cần nhập supplier
+
 // Supervisor mapping theo máy
 const SUPERVISORS = {
     group_4_14: [
@@ -25,6 +28,23 @@ document.addEventListener('DOMContentLoaded', () => {
     initSupervisorAuto();
     setDefaultDateTime();
     initSignalR();
+
+    const modalSupplier = document.getElementById('modalSupplier');
+    const btnConfirmSupplier = document.getElementById('btnConfirmSupplier');
+    const btnCancelSupplier = document.getElementById('btnCancelSupplier');
+    
+    if (btnConfirmSupplier) btnConfirmSupplier.addEventListener('click', confirmSupplier);
+    if (btnCancelSupplier) btnCancelSupplier.addEventListener('click', cancelSupplier);
+    if (modalSupplier) {
+        modalSupplier.addEventListener('click', (e) => {
+            if (e.target === modalSupplier) cancelSupplier();
+        });
+    }
+
+    for (let i = 1; i <= 4; i++) {
+        const toolTypeSelect = document.getElementById(`toolType${i}`);
+        if(toolTypeSelect) toolTypeSelect.addEventListener('change', () => handleToolTypeChange(i));
+    }
 });
 
 // 1. Điền dropdown máy
@@ -313,6 +333,8 @@ async function saveAllTools() {
         const installTime = document.getElementById(`installTime${i}`).value || null;
         const toolType = document.getElementById(`toolType${i}`).value;
         const material = "PLYWOOD";
+        const supplierHiddenInput = document.getElementById(`supplier${i}`);
+        const supplier = supplierHiddenInput ? supplierHiddenInput.value : '';
 
         // Nếu không có lý do thay → bỏ qua dao đó
         if (!reason) continue;
@@ -331,8 +353,12 @@ async function saveAllTools() {
             replaceTime: replaceTime,
             actualHours: actualHours,
             reason: reason,
-            material: material
+            material: material,
+            supplier: supplier
         });
+        if (supplierHiddenInput) {
+            supplierHiddenInput.value = '';
+        }
     }
 
     if (toolsData.length === 0) {
@@ -436,7 +462,6 @@ function renderMachineGrid(data, shiftType) {
     let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px;">';
 
     MACHINES.forEach(machine => {
-        // ✅ Thêm prefix DS- hoặc NS- chỉ để hiển thị
         const prefix = shiftType === 'night' ? 'NS' : 'DS';
         const displayName = `${prefix}-${machine}`;
 
@@ -446,16 +471,39 @@ function renderMachineGrid(data, shiftType) {
         for (let pos = 1; pos <= 4; pos++) {
             const tool = machineMap[machine]?.[pos];
             const version = tool?.currentVersion || '-';
-            const hours = tool?.totalHours || '';
+            const hours = tool?.currentVersionHours || 0;
 
-            // DS: Dao 1–4 ; NS: Dao 5–8
             const displayIndex = shiftType === 'night' ? pos + 4 : pos;
+
+            // Phân loại màu sắc theo giờ chạy
+            let hoursStyle = '';
+            let hoursLabel = '';
+
+            if (hours === 0 && version !== '-') {
+                hoursStyle = 'color: #27ae60; font-weight: bold;';
+                hoursLabel = 'MỚI';
+            } else if (hours > 0 && hours <= 20) {
+                hoursStyle = 'color: #3498db;';
+                hoursLabel = `${hours}h`;
+            } else if (hours > 20 && hours <= 40) {
+                hoursStyle = 'color: #f39c12;';
+                hoursLabel = `${hours}h ⚠️`;
+            } else if (hours > 40) {
+                hoursStyle = 'color: #e74c3c; font-weight: bold;';
+                hoursLabel = `${hours}h 🔴`;
+            }
 
             html += '<div style="display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #2c3e50;">';
             html += `<span style="color: #bdc3c7;">Dao số ${displayIndex}</span>`;
-            html += `<span><strong style="color: #f39c12;">${version}</strong> ${
-                hours ? `<span style="color: #95a5a6; font-size: 12px;">${hours}h</span>` : ''
-            }</span>`;
+            html += `<span>`;
+            // ✅ THÊM margin-right: 8px; để đẩy số sang trái
+            html += `<strong style="color: #f39c12; margin-right: 8px;">${version}</strong>`;
+            
+            if (version !== '-') {
+                html += `<span style="${hoursStyle} font-size: 12px;">${hoursLabel}</span>`;
+            }
+            
+            html += `</span>`;
             html += '</div>';
         }
 
@@ -576,6 +624,15 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 5000);
 }
 
+// ==================== MODAL HELPERS ====================
+function openModal(modal) {
+    if (modal) modal.classList.add('active');
+}
+
+function closeModal(modal) {
+    if (modal) modal.classList.remove('active');
+}
+
 // ==================== SIGNALR ====================
 function initSignalR() {
     if (!window.signalR) return;
@@ -621,4 +678,60 @@ function rebuildMachineOptions() {
     if (currentValue) {
         select.value = currentValue;
     }
+}
+
+// ==================== SUPPLIER LOGIC ====================
+function populateSupplierDatalist() {
+    const datalist = document.getElementById('supplierList');
+    if (datalist) {
+        datalist.innerHTML = SUPPLIERS.map(s => `<option value="${s}"></option>`).join('');
+    }
+}
+
+function handleToolTypeChange(toolIndex) {
+    const toolTypeSelect = document.getElementById(`toolType${toolIndex}`);
+    if (toolTypeSelect.value === 'MÀI LẦN 1' || toolTypeSelect.value === 'MÀI LẦN 2') {
+        currentToolIndexForSupplier = toolIndex;
+        const supplierInput = document.getElementById('supplierInput');
+        supplierInput.value = '';
+        populateSupplierDatalist();
+        openModal(document.getElementById('modalSupplier'));
+        setTimeout(() => supplierInput.focus(), 100);
+    } else {
+        const supplierHiddenInput = document.getElementById(`supplier${toolIndex}`);
+        if (supplierHiddenInput) {
+            supplierHiddenInput.value = '';
+        }
+    }
+}
+
+function confirmSupplier() {
+    const supplierInput = document.getElementById('supplierInput');
+    const supplierName = supplierInput.value.trim();
+    if (!supplierName) {
+        showToast('Vui lòng nhập tên Supplier', 'error');
+        return;
+    }
+
+    let supplierHiddenInput = document.getElementById(`supplier${currentToolIndexForSupplier}`);
+    if (!supplierHiddenInput) {
+        supplierHiddenInput = document.createElement('input');
+        supplierHiddenInput.type = 'hidden';
+        supplierHiddenInput.id = `supplier${currentToolIndexForSupplier}`;
+        document.body.appendChild(supplierHiddenInput);
+    }
+    supplierHiddenInput.value = supplierName;
+
+    if (!SUPPLIERS.includes(supplierName)) {
+        SUPPLIERS.push(supplierName);
+    }
+    
+    closeModal(document.getElementById('modalSupplier'));
+    showToast(`Đã gán Supplier "${supplierName}" cho dao ${currentToolIndexForSupplier}`, 'success');
+}
+
+function cancelSupplier() {
+    const toolTypeSelect = document.getElementById(`toolType${currentToolIndexForSupplier}`);
+    toolTypeSelect.value = 'MỚI';
+    closeModal(document.getElementById('modalSupplier'));
 }

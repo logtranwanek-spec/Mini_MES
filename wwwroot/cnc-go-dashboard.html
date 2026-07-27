@@ -365,12 +365,12 @@
                 for (let pos = 1; pos <= 4; pos++) {
                     const tool = machineMap[machine]?.[pos];
                     const version = tool?.currentVersion || '-';
-                    const hours = tool?.totalHours || 0;
+                    const hours = tool?.currentVersionHours || 0; // ✅ SỬA: Dùng currentVersionHours
                     
                     html += '<div class="tool-row">';
                     html += `<span class="tool-label">Dao ${pos}</span>`;
                     html += '<span class="tool-status">';
-                    html += `<span class="tool-version">${version}</span>`;
+                    html += `<span class="tool-version">v${version}</span>`; // ✅ Thêm "v" cho rõ ràng
                     if (hours > 0) {
                         html += `<span class="tool-hours">${hours}h</span>`;
                     } else if (version !== '-') {
@@ -383,7 +383,8 @@
                 html += '</div>';
             });
             
-            container.innerHTML = html;
+            html += '</div>';
+            return html;
         }
         
         // Update stats

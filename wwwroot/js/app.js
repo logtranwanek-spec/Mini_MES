@@ -4,6 +4,8 @@ const AppState = {
     currentFileType: null,
     allOrders: [],
     filteredOrders: [],
+    currentLanguage: 'vi',
+    lastLoadedPartsData: [],
     searchTerm: '',
     filters: {
         pending: true,
@@ -15,7 +17,9 @@ const AppState = {
     isScannerReady: false,
     currentTime: new Date(),
     pendingScan: null,
-    scanTimeout: null
+    scanTimeout: null,
+    globalScanBuffer: '',    
+    globalScanTimeout: null
 };
 
 // ==================== DOM ELEMENTS ====================
@@ -55,6 +59,8 @@ const DOM = {
     notFoundOdrno: document.getElementById('notFoundOdrno'),
     btnConfirmNotFound: document.getElementById('btnConfirmNotFound'),
     btnCancelNotFound: document.getElementById('btnCancelNotFound'),
+
+    btnToggleLang: document.getElementById('btnToggleLang'),
     
     btnCloseMxDetail: document.getElementById('btnCloseMxDetail'),
     mxDetailOdrno: document.getElementById('mxDetailOdrno'),
@@ -63,6 +69,7 @@ const DOM = {
     mxPartsList: document.getElementById('mxPartsList'),
     btnExportMxDetail: document.getElementById('btnExportMxDetail'),
     btnPrintMxDetail: document.getElementById('btnPrintMxDetail'),
+    btnConfirmReceivedLack: document.getElementById('btnConfirmReceivedLack'),
     
     toastContainer: document.getElementById('toastContainer')
 };
@@ -88,6 +95,8 @@ function setupEventListeners() {
     
     DOM.btnSync.addEventListener('click', performSync);
     DOM.btnExport.addEventListener('click', exportReport);
+
+    DOM.btnToggleLang.addEventListener('click', toggleLanguage);
     
     DOM.searchInput.addEventListener('input', () => { AppState.searchTerm = DOM.searchInput.value.toLowerCase().trim(); applyFilters(); });
     DOM.btnClearSearch.addEventListener('click', () => { DOM.searchInput.value = ''; AppState.searchTerm = ''; applyFilters(); });
@@ -116,8 +125,15 @@ function setupEventListeners() {
     
     DOM.barcodeInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
+            // ✅ Xóa bộ đệm toàn cục để tránh xử lý 2 lần
+            clearTimeout(AppState.globalScanTimeout);
+            AppState.globalScanBuffer = '';
+
             const barcode = DOM.barcodeInput.value.trim().toUpperCase();
-            if (barcode) { processScan(barcode); DOM.barcodeInput.value = ''; }
+            if (barcode) { 
+                processScan(barcode); 
+                DOM.barcodeInput.value = ''; 
+            }
         }
     });
     
@@ -129,6 +145,7 @@ function setupEventListeners() {
     DOM.btnCloseMxDetail.addEventListener('click', () => closeModal(DOM.modalMxDetail));
     DOM.btnExportMxDetail.addEventListener('click', exportMxDetail);
     DOM.btnPrintMxDetail.addEventListener('click', printMxDetail);
+    DOM.btnConfirmReceivedLack.addEventListener('click', confirmReceivedLack);
     
     [DOM.modalCheck, DOM.modalNotFound, DOM.modalMxDetail].forEach(modal => {
         modal.addEventListener('click', (e) => {
@@ -138,13 +155,19 @@ function setupEventListeners() {
             }
         });
     });
-    
+
     document.addEventListener('keydown', (e) => {
+        // Xử lý phím Escape
         if (e.key === 'Escape') {
             clearPendingScan();
-            closeModal(DOM.modalCheck); closeModal(DOM.modalNotFound); closeModal(DOM.modalMxDetail);
+            closeModal(DOM.modalCheck);
+            closeModal(DOM.modalNotFound);
+            closeModal(DOM.modalMxDetail);
             refocusScanner();
         }
+        
+        // Gọi hàm xử lý quét toàn cục
+        handleGlobalScan(e);
     });
 }
 
@@ -295,7 +318,7 @@ async function processScan(odrno) {
     
     // KỊCH BẢN QUÉT LẦN 1
     showToast(`📷 Đã quét: ${odrno}`, 'info');
-    const order = AppState.allOrders.find(o => o.odrno.toUpperCase() === odrno);
+    const order = AppState.allOrders.find(o => o.odrno && o.odrno.toUpperCase() === odrno);
     
     if (order) {
         setPendingScan(order);
@@ -557,6 +580,11 @@ async function showMxDetail(odrno, isFromScan = false) {
         DOM.mxPartsList.innerHTML = '<div class="loading-text">⏳ Đang tải chi tiết Parts...</div>';
         
         const order = AppState.allOrders.find(o => o.odrno.toUpperCase() === odrno.toUpperCase());
+        if (order && order.status.toLowerCase() === 'lack') {
+            DOM.btnConfirmReceivedLack.style.display = 'inline-block';
+        } else {
+            DOM.btnConfirmReceivedLack.style.display = 'none';
+        }
         const oldNote = document.getElementById('mxDetailNoteBox');
         if (oldNote) oldNote.remove(); 
         
@@ -587,35 +615,47 @@ async function showMxDetail(odrno, isFromScan = false) {
         
         DOM.mxDetailTotalItems.textContent = data.items.reduce((sum, item) => sum + item.quantity, 0);
         
+        // 1. Tạo HTML cho danh sách Items (giữ nguyên)
+        let itemsHtml = '';
         if (data.items && data.items.length > 0) {
-            DOM.mxItemsList.innerHTML = data.items.map(item => `
-                <div class="mx-item-card"><div class="item-code">📦 ${item.itemCode}</div><div class="item-qty">Số lượng: ${item.quantity}</div></div>
-            `).join('');
-        } else DOM.mxItemsList.innerHTML = '<div class="mx-parts-empty">Không có Items</div>';
-        
-        if (data.parts && data.parts.length > 0) {
-            DOM.mxPartsList.innerHTML = data.parts.map(part => `
-                <div class="mx-part-row">
-                    <div class="mx-part-name">${part.partName}</div>
-                    <div class="mx-part-qty" style="margin-right: 20px;">${part.quantity}</div>
-                    ${isFromScan ? `
-                    <div class="mx-part-action">
-                        <label class="lack-checkbox-label"><input type="checkbox" class="part-lack-cb" data-part="${part.partName}"> Thiếu</label>
-                        <input type="text" class="part-note-input" data-part="${part.partName}" placeholder="Thiếu bao nhiêu?" style="display: none;">
-                    </div>` : ''}
+            itemsHtml = data.items.map(item => `
+                <div class="mx-item-card">
+                    <div class="item-code">📦 ${item.itemCode}</div>
+                    <div class="item-qty">Số lượng: ${item.quantity}</div>
                 </div>
             `).join('');
+        } else {
+            itemsHtml = '<div class="mx-parts-empty">Không có Items</div>';
+        }
 
-            if (isFromScan) {
-                document.querySelectorAll('.part-lack-cb').forEach(cb => {
-                    cb.addEventListener('change', function() {
-                        const inputEl = document.querySelector(`.part-note-input[data-part="${this.dataset.part}"]`);
-                        inputEl.style.display = this.checked ? 'block' : 'none';
-                        if (this.checked) inputEl.focus(); else inputEl.value = '';
-                    });
-                });
-            }
-        } else DOM.mxPartsList.innerHTML = '<div class="mx-parts-empty">Không có Parts</div>';
+        // 2. Tạo HTML cho UPH Line (giữ nguyên)
+        let uphLineHtml = '';
+        if (data.uphLine && data.uphLine.trim() !== '') {
+            uphLineHtml = `
+                <div class="mx-item-card" style="background: linear-gradient(135deg, rgba(39, 174, 96, 0.25) 0%, rgba(46, 204, 113, 0.25) 100%); border-color: #27ae60;">
+                    <div class="item-code" style="font-size: 14px; color: #ecf0f1; font-weight: normal;">UPH Line</div>
+                    <div class="item-qty" style="font-size: 22px; font-weight: bold; color: #fff; margin-top: 5px;">${data.uphLine}</div>
+                </div>
+            `;
+        }
+
+        // 3. ✅ TẠO HTML CHO #EXP (THAY THẾ C&S LINE)
+        let expValueHtml = '';
+        if (data.expValue && data.expValue.trim() !== '') {
+            expValueHtml = `
+                <div class="mx-item-card" style="background: linear-gradient(135deg, rgba(243, 156, 18, 0.25) 0%, rgba(230, 126, 34, 0.25) 100%); border-color: #f39c12;">
+                    <div class="item-code" style="font-size: 14px; color: #ecf0f1; font-weight: normal;">#EXP</div>
+                    <div class="item-qty" style="font-size: 22px; font-weight: bold; color: #fff; margin-top: 5px;">${data.expValue}</div>
+                </div>
+            `;
+        }
+
+        // 4. ✅ GỘP CẢ BA VÀ HIỂN THỊ
+        DOM.mxItemsList.innerHTML = itemsHtml + uphLineHtml + expValueHtml;
+
+        AppState.lastLoadedPartsData = data.parts || [];
+        renderPartsList(AppState.lastLoadedPartsData);
+
     } catch (error) {
         DOM.mxItemsList.innerHTML = `<div class="mx-parts-empty">❌ Lỗi tải dữ liệu</div>`;
         DOM.mxPartsList.innerHTML = `<div class="mx-parts-empty">${error.message}</div>`;
@@ -708,6 +748,135 @@ async function initSignalR() {
         });
         await signalRConnection.start();
     } catch (err) { setTimeout(initSignalR, 5000); }
+}
+
+// ==================== GLOBAL BARCODE SCANNER ====================
+function handleGlobalScan(e) {
+    // Nếu đang gõ vào các ô input chính thì bỏ qua, để listener cũ xử lý
+    if (e.target.id === 'searchInput' || e.target.id === 'barcodeInput') {
+        return;
+    }
+
+    // Nếu phím là Enter, xử lý chuỗi đã quét
+    if (e.key === 'Enter') {
+        if (AppState.globalScanBuffer.length > 3) { // Chỉ xử lý nếu chuỗi đủ dài
+            console.log('Global scan detected:', AppState.globalScanBuffer);
+            processScan(AppState.globalScanBuffer);
+            e.preventDefault(); // Ngăn hành động mặc định của phím Enter
+        }
+        // Xóa bộ đệm sau khi xử lý
+        clearTimeout(AppState.globalScanTimeout);
+        AppState.globalScanBuffer = '';
+        return;
+    }
+
+    // Chỉ bắt các ký tự đơn (chữ, số, ký tự đặc biệt)
+    if (e.key.length === 1) {
+        AppState.globalScanBuffer += e.key;
+    }
+
+    // Xóa bộ đệm nếu có khoảng dừng khi gõ (để phân biệt gõ tay và quét)
+    clearTimeout(AppState.globalScanTimeout);
+    AppState.globalScanTimeout = setTimeout(() => {
+        AppState.globalScanBuffer = '';
+    }, 100); // Máy quét thường gõ rất nhanh, 100ms là đủ
+}
+
+async function confirmReceivedLack() {
+    const odrno = DOM.mxDetailOdrno.textContent;
+    if (!odrno) return;
+
+    showToast(`Đang cập nhật trạng thái cho ${odrno}...`, 'info');
+    
+    // Gọi API để cập nhật status thành "Received" và xóa ghi chú
+    await updateOrderStatus(odrno, 'Received', 'Đã nhận đủ hàng thiếu.');
+    
+    // Cập nhật trạng thái trong AppState
+    const orderIndex = AppState.allOrders.findIndex(o => o.odrno === odrno);
+    if (orderIndex !== -1) {
+        AppState.allOrders[orderIndex].status = 'Received';
+        AppState.allOrders[orderIndex].note = 'Đã nhận đủ hàng thiếu.'; // Cập nhật ghi chú
+        AppState.allOrders[orderIndex].time = new Date().toLocaleString('vi-VN');
+    }
+    
+    closeModal(DOM.modalMxDetail);
+    applyFilters(); // Cập nhật lại giao diện
+    showToast(`✅ ${odrno} đã được cập nhật thành "Đã nhận"`, 'success');
+}
+
+function toggleLanguage() {
+    if (AppState.currentLanguage === 'vi') {
+        AppState.currentLanguage = 'en';
+        DOM.btnToggleLang.textContent = 'VN';
+    } else {
+        AppState.currentLanguage = 'vi';
+        DOM.btnToggleLang.textContent = 'EN';
+    }
+    
+    // Nếu modal chi tiết đang mở, render lại danh sách parts
+    if (DOM.modalMxDetail.classList.contains('active')) {
+        // Cần có cách để lấy lại dữ liệu parts đã tải
+        // Chúng ta sẽ lưu nó vào một biến tạm
+        renderPartsList(AppState.lastLoadedPartsData);
+    }
+    showToast(`Đã chuyển sang ngôn ngữ: ${AppState.currentLanguage === 'vi' ? 'Tiếng Việt' : 'Tiếng Anh'}`, 'info');
+}
+
+function renderPartsList(partsData) {
+    if (!partsData || partsData.length === 0) {
+        DOM.mxPartsList.innerHTML = '<div class="mx-parts-empty">Không có Parts</div>';
+        return;
+    }
+
+    // Xác định xem có cần hiển thị checkbox hay không
+    const isFromScan = !!document.getElementById('scanInstructionBox');
+
+    DOM.mxPartsList.innerHTML = partsData.map(part => {
+        // ✅ CHỌN TÊN PART DỰA TRÊN NGÔN NGỮ HIỆN TẠI
+        const partNameDisplay = AppState.currentLanguage === 'vi' && part.partNameVN ? part.partNameVN : part.partName;
+
+        return `
+            <div class="mx-part-row">
+                <div class="mx-part-name">${partNameDisplay}</div>
+                <div class="mx-part-qty" style="margin-right: 20px;">${part.quantity}</div>
+                ${isFromScan ? `
+                <div class="mx-part-action">
+                    <label class="lack-checkbox-label"><input type="checkbox" class="part-lack-cb" data-part="${part.partName}"> Thiếu</label>
+                    <input type="text" class="part-note-input" data-part="${part.partName}" placeholder="Thiếu bao nhiêu?" style="display: none;">
+                </div>` : ''}
+            </div>
+        `;
+    }).join('');
+
+    if (isFromScan) {
+        // Gắn lại sự kiện cho các checkbox mới được tạo
+        document.querySelectorAll('.part-lack-cb').forEach(cb => {
+            cb.addEventListener('change', function() {
+                const inputEl = document.querySelector(`.part-note-input[data-part="${this.dataset.part}"]`);
+                inputEl.style.display = this.checked ? 'block' : 'none';
+                if (this.checked) inputEl.focus(); else inputEl.value = '';
+            });
+        });
+    }
+}
+
+// ✅ THÊM HÀM NÀY
+function isInTimeRange(timeRange, currentTime) {
+    try {
+        const [start, end] = timeRange.split('-').map(t => t.trim());
+        const [startH, startM] = start.split(':').map(Number);
+        const [endH, endM] = end.split(':').map(Number);
+
+        const startTime = new Date(currentTime);
+        startTime.setHours(startH, startM, 0, 0);
+
+        const endTime = new Date(currentTime);
+        endTime.setHours(endH, endM, 0, 0);
+
+        return currentTime >= startTime && currentTime <= endTime;
+    } catch {
+        return false;
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => { init(); initSignalR(); });

@@ -77,54 +77,58 @@
             <button onclick="fetchData()">Xem</button>
         </div>
 
-        <div class="dashboard-container">
-            <!-- Hàng 1 -->
-            <div class="card kpi-card">
-                <div id="kpiTotalCompleted" class="value">0</div>
-                <div class="label">Tổng sản phẩm hoàn thành</div>
-            </div>
-            <div class="card kpi-card">
-                <div id="kpiProgress" class="value">0%</div>
-                <div class="label">Tiến độ / Kế hoạch</div>
-            </div>
-            <div class="card kpi-card">
-                <div id="kpiErrorRate" class="value">0%</div>
-                <div class="label">Tỷ lệ cân lỗi</div>
-            </div>
-            <div class="card">
-                <h2>Tỷ lệ chất lượng</h2>
-                <div class="chart-container">
-                    <canvas id="qualityPieChart"></canvas>
+        <div class="dashboard-container" style="grid-template-columns: 1fr; grid-template-rows: auto auto;">
+            <!-- Hàng 1: 8 máy + tổng -->
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <!-- Dòng tổng (bên phải) -->
+                <div id="totalBar" style="
+                    display:flex;
+                    justify-content:flex-end;
+                    gap:30px;
+                    margin:0 5px;
+                    padding:10px 15px;
+                    border-radius:8px;
+                    background:#ffffff;
+                    box-shadow:0 2px 4px rgba(0,0,0,0.1);
+                ">
+                    <div style="text-align:right;">
+                        <div style="font-size:12px;color:#666;">Tổng số kit đã hoàn thành</div>
+                        <div id="totalKits" style="font-size:22px;font-weight:bold;color:#007bff;">0</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:12px;color:#666;">Tổng khối lượng gòn đã sử dụng (kg)</div>
+                        <div id="totalFiber" style="font-size:22px;font-weight:bold;color:#28a745;">0.0</div>
+                    </div>
+                </div>
+
+                <!-- 8 block máy xếp ngang -->
+                <div id="machinesGrid" style="
+                    display:grid;
+                    grid-template-columns:repeat(8,1fr);
+                    gap:10px;
+                    margin:0 5px;
+                ">
+                    <!-- JS sẽ render 8 máy vào đây -->
                 </div>
             </div>
 
-            <!-- Hàng 2 -->
-            <div class="card" id="hourlyTrendCard">
-                <h2>Xu hướng sản xuất theo giờ</h2>
+            <!-- Hàng 2: Chart tổng -->
+            <div class="card" style="margin-top:10px;">
+                <h2>Tổng quan 8 máy</h2>
                 <div class="chart-container">
-                    <canvas id="hourlyTrendChart"></canvas>
+                    <canvas id="machinesChart"></canvas>
                 </div>
-            </div>
-            <div class="card">
-                <h2>Sản lượng theo WC</h2>
-                <div class="chart-container">
-                    <canvas id="wcBarChart"></canvas>
-                </div>
-            </div>
-            <div class="card">
-                <h2>Top 5 sản phẩm lỗi</h2>
-                <div class="table-container">
-                    <table id="topErrorsTable">
-                        <thead><tr><th>MO</th><th>Fiber Kit</th><th>Số lỗi</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
+                <div style="margin-top:10px;font-size:12px;color:#666;">
+                    <span style="background:#f8c291;padding:4px 8px;border-radius:4px;">Cột cam: Số kit đã hoàn thành</span>
+                    <span style="background:#82ccdd;padding:4px 8px;border-radius:4px;margin-left:10px;">Cột xanh nhạt: Số MO đã hoàn thành</span>
+                    <span style="margin-left:10px;">Đường xanh: Khối lượng fiber đã dùng (kg)</span>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        let qualityPieChart, wcBarChart, hourlyTrendChart;
+        let machinesChart = null;
 
         async function fetchData() {
             const date = document.getElementById('dateInput').value;
@@ -140,99 +144,142 @@
                     return;
                 }
 
-                // Update KPIs
-                document.getElementById('kpiTotalCompleted').innerText = data.totalCompleted;
-                document.getElementById('kpiProgress').innerText = data.totalPlanned > 0 
-                    ? `${((data.totalCompleted / data.totalPlanned) * 100).toFixed(1)}%`
-                    : 'N/A';
-                document.getElementById('kpiErrorRate').innerText = `${(data.errorRate * 100).toFixed(1)}%`;
+                // 1. Tổng
+                document.getElementById('totalKits').innerText = data.totalCompletedKits;
+                document.getElementById('totalFiber').innerText = data.totalFiberKg.toFixed(1);
 
-                // Update Charts
-                renderQualityPieChart(data.qualityRatio);
-                renderWcBarChart(data.productionByWc);
-                renderHourlyTrendChart(data.productionByHour);
+                // 2. Chuẩn hóa 8 máy M1..M8
+                const machineStats = normalizeMachines(data.perMachine || []);
 
-                // Update Table
-                renderTopErrorsTable(data.topErrors);
+                // 3. Render 8 block xanh
+                renderMachineBlocks(machineStats);
+
+                // 4. Render chart tổng
+                renderMachinesChart(machineStats);
 
             } catch (error) {
                 console.error("Failed to fetch dashboard data:", error);
+                resetDashboard();
             }
         }
         
         function resetDashboard() {
-            document.getElementById('kpiTotalCompleted').innerText = 0;
-            document.getElementById('kpiProgress').innerText = '0%';
-            document.getElementById('kpiErrorRate').innerText = '0%';
-            if (qualityPieChart) qualityPieChart.destroy();
-            if (wcBarChart) wcBarChart.destroy();
-            if (hourlyTrendChart) hourlyTrendChart.destroy();
-            document.querySelector('#topErrorsTable tbody').innerHTML = '';
+            document.getElementById('totalKits').innerText = '0';
+            document.getElementById('totalFiber').innerText = '0.0';
+            document.getElementById('machinesGrid').innerHTML = '';
+            if (machinesChart) machinesChart.destroy();
         }
 
-        function renderQualityPieChart(data) {
-            const ctx = document.getElementById('qualityPieChart').getContext('2d');
-            if (qualityPieChart) qualityPieChart.destroy();
-            qualityPieChart = new Chart(ctx, {
-                type: 'doughnut', // Doughnut gọn hơn Pie
-                data: {
-                    labels: ['OK', 'Thiếu (Under)', 'Thừa (Over)'],
-                    datasets: [{
-                        data: [data.ok, data.under, data.over],
-                        backgroundColor: ['#4CAF50', '#FFEB3B', '#F44336']
-                    }]
-                },
-                options: { maintainAspectRatio: false } // ✅ Quan trọng
+        // Đảm bảo luôn có M1..M8
+        function normalizeMachines(perMachine) {
+            const map = {};
+            perMachine.forEach(m => {
+                map[m.machineId] = m;
             });
+
+            const ids = ['M1','M2','M3','M4','M5','M6','M7','M8'];
+            const result = [];
+
+            ids.forEach(id => {
+                const m = map[id] || { machineId: id, completedMos: 0, completedKits: 0, usedFiberKg: 0 };
+                result.push(m);
+            });
+
+            return result;
         }
 
-        function renderWcBarChart(data) {
-            const ctx = document.getElementById('wcBarChart').getContext('2d');
-            if (wcBarChart) wcBarChart.destroy();
-            wcBarChart = new Chart(ctx, {
+        function renderMachineBlocks(machineStats) {
+            const container = document.getElementById('machinesGrid');
+            container.innerHTML = machineStats.map(m => `
+                <div style="
+                        background:#7bed9f;
+                        border-radius:8px;
+                        padding:10px;
+                        box-shadow:0 1px 4px rgba(0,0,0,0.15);
+                        min-height:90px;
+                        display:flex;
+                        flex-direction:column;
+                        justify-content:center;
+                        cursor:pointer;
+                    "
+                    onclick="openBlowFillForMachine('${m.machineId}')"
+                >
+                    <div style="font-size:16px;font-weight:bold;margin-bottom:6px;text-align:center;">
+                        ${m.machineId}
+                    </div>
+                    <div style="font-size:12px;margin-bottom:2px;">${m.completedMos} MO</div>
+                    <div style="font-size:12px;margin-bottom:2px;">${m.completedKits} kit</div>
+                    <div style="font-size:12px;">${m.usedFiberKg.toFixed(1)} kg Fiber</div>
+                </div>
+            `).join('');
+        }
+
+        function renderMachinesChart(machineStats) {
+            const ctx = document.getElementById('machinesChart').getContext('2d');
+            if (machinesChart) machinesChart.destroy();
+
+            const labels = machineStats.map(m => m.machineId);
+            const kitsData = machineStats.map(m => m.completedKits);
+            const mosData = machineStats.map(m => m.completedMos);
+            const fiberData = machineStats.map(m => m.usedFiberKg);
+
+            machinesChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: Object.keys(data),
-                    datasets: [{
-                        label: 'Sản phẩm hoàn thành',
-                        data: Object.values(data),
-                        backgroundColor: '#36A2EB'
-                    }]
+                    labels,
+                    datasets: [
+                        {
+                            type: 'line',
+                            label: 'Fiber đã dùng (kg)',
+                            data: fiberData,
+                            borderColor: '#2980b9',
+                            borderWidth: 2,
+                            yAxisID: 'y1',
+                            fill: false,
+                            tension: 0.2,
+                            order: 0 
+                        },
+                        {
+                            label: 'Số kit hoàn thành',
+                            data: kitsData,
+                            backgroundColor: '#f8c291',
+                            order: 1
+                        },
+                        {
+                            label: 'Số MO hoàn thành',
+                            data: mosData,
+                            backgroundColor: '#82ccdd',
+                            order: 2
+                        }
+                    ]
                 },
-                options: { maintainAspectRatio: false, indexAxis: 'y' } // ✅ Quan trọng
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'MO / kit' }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            position: 'right',
+                            title: { display: true, text: 'Fiber (kg)' },
+                            grid: { drawOnChartArea: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: true }
+                    }
+                }
             });
+        }
+
+        function openBlowFillForMachine(machineId) {
+            // Điều hướng sang blow-fill, kèm query machineId
+            window.location.href = `/blow-fill?machine=${encodeURIComponent(machineId)}`;
         }
         
-        function renderHourlyTrendChart(data) {
-            const ctx = document.getElementById('hourlyTrendChart').getContext('2d');
-            const labels = Array.from({ length: 24 }, (_, i) => `${i}`);
-            const chartData = labels.map((_, i) => data[i] || 0);
-
-            if (hourlyTrendChart) hourlyTrendChart.destroy();
-            hourlyTrendChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Số lần cân OK',
-                        data: chartData,
-                        borderColor: '#FF6384',
-                        tension: 0.1,
-                        fill: false
-                    }]
-                },
-                options: { maintainAspectRatio: false } // ✅ Quan trọng
-            });
-        }
-
-        function renderTopErrorsTable(data) {
-            const tbody = document.querySelector('#topErrorsTable tbody');
-            tbody.innerHTML = '';
-            data.forEach(item => {
-                tbody.innerHTML += `<tr><td>${item.mo}</td><td>${item.fiberKit}</td><td>${item.errorCount}</td></tr>`;
-            });
-        }
-
         window.onload = () => {
             const today = new Date().toISOString().slice(0, 10);
             document.getElementById('dateInput').value = today;

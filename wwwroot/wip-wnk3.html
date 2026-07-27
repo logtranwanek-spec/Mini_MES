@@ -16,6 +16,7 @@
         </div>
         
         <div style="display: flex; gap: 15px; align-items: center;">
+            <button id="btnToggleLang" class="btn-view-toggle" style="position: static; transform: none; margin: 0;">EN</button>
             <a href="/dashboard" class="btn btn-primary" style="text-decoration: none; padding: 10px 20px; width: auto; font-size: 14px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);">📊 MỞ DASHBOARD</a>
             <button class="btn-global-toggle btn-view-toggle" style="position: static; transform: none; margin: 0;">🎨 Chế độ đơn giản</button>
         </div>
@@ -94,13 +95,27 @@
 
                 <div class="filter-wrapper" style="width: 100%; display: flex; align-items: flex-start; gap: 20px;">
                     <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
-                        <label style="font-weight: bold; font-size: 14px; color: #bdc3c7; white-space: nowrap; margin-top: 10px;">Lọc hiển thị:</label>
+                        <label style="font-weight: bold; font-size: 14px; color: #bdc3c7; white-space: nowrap; margin-top: 0;">Lọc hiển thị:</label>
                         <div class="filter-group-box">
-                            <label class="checkbox-label"><input type="checkbox" id="filterPending" checked><span>⏳ Chưa nhận</span></label>
-                            <div class="filter-divider"></div>
-                            <label class="checkbox-label"><input type="checkbox" id="filterReceived" checked><span>✅ Đã nhận</span></label>
-                            <div class="filter-divider"></div>
-                            <label class="checkbox-label"><input type="checkbox" id="filterLack" checked><span>❌ Thiếu hàng</span></label>
+                            <div class="filter-group-box">
+                                <label class="checkbox-label custom-checkbox">
+                                    <input type="checkbox" id="filterPending" checked>
+                                    <span class="checkmark"></span>
+                                    <span>⏳ Chưa nhận</span>
+                                </label>
+                                <div class="filter-divider"></div>
+                                <label class="checkbox-label custom-checkbox">
+                                    <input type="checkbox" id="filterReceived" checked>
+                                    <span class="checkmark"></span>
+                                    <span>✅ Đã nhận</span>
+                                </label>
+                                <div class="filter-divider"></div>
+                                <label class="checkbox-label custom-checkbox">
+                                    <input type="checkbox" id="filterLack" checked>
+                                    <span class="checkmark"></span>
+                                    <span>❌ Thiếu hàng</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                     <div style="width: 2px; align-self: stretch; background: rgba(255,255,255,0.1); margin: 0 5px;"></div>
@@ -179,6 +194,7 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <button id="btnConfirmReceivedLack" class="btn btn-success" style="display: none;">✅ Xác nhận đã nhận đủ</button>
                 <button id="btnExportMxDetail" class="btn btn-export">📊 Xuất Excel</button>
                 <button id="btnPrintMxDetail" class="btn btn-primary">🖨️ In</button>
             </div>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNC - Báo cáo hiệu suất Supplier</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="/js/theme.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .report-container { max-width: 1400px; margin: 30px auto; padding: 0 20px; }
+        .report-header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); padding: 20px 30px; border-radius: 12px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+        .chart-card { background: #1a1a1a; border: 1px solid #333; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        html.simple-view .report-header { background: #fff; border-bottom: 1px solid #e2e8f0; }
+        html.simple-view .chart-card { background: #fff; border: 1px solid #e2e8f0; }
+    </style>
+</head>
+<body>
+    <div class="report-container">
+        <!-- Header -->
+        <div class="report-header">
+            <h1>📊 Báo cáo hiệu suất Supplier</h1>
+            <div style="display: flex; gap: 15px;">
+                <a href="/cnc-go" class="btn btn-primary" style="text-decoration: none;">📝 Nhập liệu</a>
+                <a href="/" class="btn-back-home">🏠 Trang chủ</a>
+                <button class="btn-view-toggle btn-global-toggle">🎨 Chế độ đơn giản</button>
+            </div>
+        </div>
+        
+        <!-- Chart -->
+        <div class="chart-card">
+            <h2 style="text-align: center; margin-bottom: 20px;">So sánh giờ chạy trung bình</h2>
+            <canvas id="performanceChart" height="120"></canvas>
+        </div>
+
+        <!-- Table -->
+        <div style="overflow-x: auto;">
+            <h2>Chi tiết dữ liệu</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Supplier</th>
+                        <th>Loại dao (Lần mài)</th>
+                        <th>Số giờ chạy trung bình</th>
+                        <th>Tổng số lần thay</th>
+                    </tr>
+                </thead>
+                <tbody id="supplierReportBody">
+                    <tr><td colspan="4" class="loading-text">Đang tải dữ liệu...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        let performanceChart = null;
+
+        async function loadReport() {
+            const tbody = document.getElementById('supplierReportBody');
+            try {
+                const response = await fetch('/api/tools/supplier-performance');
+                const data = await response.json();
+
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px;">Không có dữ liệu</td></tr>';
+                    return;
+                }
+                
+                renderTable(data);
+                renderChart(data);
+
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #e74c3c;">❌ Lỗi: ${error.message}</td></tr>`;
+            }
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('supplierReportBody');
+            tbody.innerHTML = '';
+            data.forEach(item => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-weight: bold;">${item.supplier}</td>
+                        <td>${item.toolType}</td>
+                        <td style="font-weight: bold; color: #3498db;">${item.averageHours.toFixed(1)} giờ</td>
+                        <td style="text-align: center;">${item.totalChanges}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderChart(data) {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            if (performanceChart) performanceChart.destroy();
+
+            const labels = data.map(item => `${item.supplier} - ${item.toolType}`);
+            const chartData = data.map(item => item.averageHours);
+            
+            // Tạo màu ngẫu nhiên cho mỗi supplier
+            const suppliers = [...new Set(data.map(item => item.supplier))];
+            const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#1abc9c'];
+            const backgroundColors = data.map(item => {
+                const index = suppliers.indexOf(item.supplier);
+                return colors[index % colors.length];
+            });
+
+            performanceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Số giờ chạy trung bình',
+                        data: chartData,
+                        backgroundColor: backgroundColors,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Số giờ chạy trung bình' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        window.onload = loadReport;
+    </script>
+</body>
+</html>

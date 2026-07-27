@@ -11,19 +11,67 @@
         th, td { border: 1px solid #ddd; padding: 10px 12px; font-size: 14px; text-align: left; }
         th { background-color: #f2f2f2; font-weight: bold; }
         tr:nth-child(even) { background-color: #f9f9f9; }
-        .controls { margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-        input[type="date"], button { padding: 8px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
-        button { background-color: #007bff; color: white; cursor: pointer; border-color: #007bff; }
-        button:hover { background-color: #0056b3; }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px; /* khoảng cách giữa các control */
+        }
+
+        /* Áp dụng chung cho date, select, button */
+        .controls input[type="date"],
+        .controls select,
+        .controls button {
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            height: 34px;
+            box-sizing: border-box;
+        }
+
+        /* Căn giữa chữ trong select */
+        .controls select {
+            text-align: center;          /* căn giữa */
+            text-align-last: center;     /* Chrome / Edge */
+        }
+
+        /* Nút Xem */
+        .controls button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            border-color: #007bff;
+            margin-left: 6px;            /* cách thêm 1 chút với select */
+        }
+
+        .controls button:hover {
+            background-color: #0056b3;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Blow Fill - Báo cáo các lần cân</h1>
         <div class="controls">
-            <label for="dateInput">Chọn ngày:</label>
+            <label>Chọn ngày:</label>
             <input type="date" id="dateInput">
-            <button onclick="loadReport()">Xem báo cáo</button>
+            
+            <!-- ✅ Thêm chọn máy -->
+            <label>Máy:</label>
+            <select id="machineSelect">
+                <option value="">Tất cả</option>
+                <option value="M1">M1</option>
+                <option value="M2">M2</option>
+                <option value="M3">M3</option>
+                <option value="M4">M4</option>
+                <option value="M5">M5</option>
+                <option value="M6">M6</option>
+                <option value="M7">M7</option>
+                <option value="M8">M8</option>
+            </select>
+
+            <button onclick="loadReport()">Xem</button>
         </div>
 
         <h2>Tổng hợp theo Fiber Kit</h2>
@@ -65,7 +113,21 @@
     <script>
         async function loadReport() {
             const date = document.getElementById('dateInput').value;
-            const url = date ? `/api/blow-fill/logs?date=${date}` : '/api/blow-fill/logs';
+            const machineId = document.getElementById('machineSelect').value; // M1..M8 hoặc ''
+
+            let url = '/api/blow-fill/logs';
+            const params = [];
+
+            if (date) {
+                params.push(`date=${encodeURIComponent(date)}`);
+            }
+            if (machineId) {
+                params.push(`machineId=${encodeURIComponent(machineId)}`);
+            }
+
+            if (params.length > 0) {
+                url += '?' + params.join('&');
+            }
             
             try {
                 const res = await fetch(url);
@@ -82,8 +144,8 @@
                             <td>${row.workCenter}</td>
                             <td>${row.mo}</td>
                             <td>${row.fiberKit}</td>
-                            <td style="text-align:right">${row.completedQty}</td> <!-- ✅ CỘT 1 -->
-                            <td style="text-align:right">${row.plannedQty}</td>   <!-- ✅ CỘT 2 -->
+                            <td style="text-align:right">${row.completedQty}</td>
+                            <td style="text-align:right">${row.plannedQty}</td>
                             <td style="text-align:right">${row.overCount}</td>
                             <td style="text-align:right">${row.underCount}</td>
                             <td>${row.lastTime}</td>
@@ -97,7 +159,7 @@
                 data.logs.forEach(log => {
                     lBody.innerHTML += `
                         <tr>
-                            <td>${new Date(log.timestamp).toLocaleString('vi-VN')}</td>2
+                            <td>${new Date(log.timestamp).toLocaleString('vi-VN')}</td>
                             <td>${log.machineId}</td>
                             <td>${log.workCenter}</td>
                             <td>${log.mo}</td>

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;          // ✅ cần cho FirstOrDefaultAsync       
 
 namespace OrderTrackingWeb.Hubs
 {
@@ -7,7 +8,12 @@ namespace OrderTrackingWeb.Hubs
     /// </summary>
     public class OrderHub : Hub
     {
-        // Dictionary để track số người online (static để share giữa các instance)
+        // Dictionary để track số người online (static để share giữa các instance),
+        private readonly BlowFillDbContext _blowDb;
+        public OrderHub(BlowFillDbContext blowDb)
+        {
+            _blowDb = blowDb;
+        }
         private static readonly Dictionary<string, DateTime> ConnectedUsers = new();
         private static readonly object LockObject = new();
 
@@ -147,6 +153,17 @@ namespace OrderTrackingWeb.Hubs
             }
         }
 
+        public static int OnlineUserCount
+        {
+            get
+            {
+                lock (LockObject)
+                {
+                    return ConnectedUsers.Count;
+                }
+            }
+        }
+
         /// <summary>
         /// Lấy danh sách connection IDs đang online
         /// </summary>
@@ -167,6 +184,72 @@ namespace OrderTrackingWeb.Hubs
                 await Groups.AddToGroupAsync(Context.ConnectionId, machineId.Trim());
                 Console.WriteLine($"🔗 Connection {Context.ConnectionId} joined group '{machineId.Trim()}'");
             }
+        }
+
+        /// <summary>
+        /// Nhận dữ liệu cân từ BlowFillClient và broadcast cho các trình duyệt.
+        /// </summary>
+        public async Task PushWeightFromClient(string machineId, double weight)
+        {
+            if (string.IsNullOrWhiteSpace(machineId)) return;
+            var machine = machineId.Trim();
+            await Clients.Group(machine).SendAsync("ReceiveScaleData", weight);
+        }
+
+        /// <summary>
+        /// Broadcast context BlowFill (MO, Fiber kit, Target weight, số step)
+        /// cho tất cả client trong group MachineId.
+        /// </summary>
+        public async Task BroadcastBlowFillContext(
+            string machineId,
+            string mo,
+            string fiberKit,
+            double targetWeight,
+            int totalSteps)
+        {
+            if (string.IsNullOrWhiteSpace(machineId)) return;
+
+            string machine = machineId.Trim();
+
+            // 1. Broadcast cho tất cả client trong group MachineId
+            await Clients.OthersInGroup(machine).SendAsync("BlowFillContextUpdated", new
+            {
+                machineId = machine,
+                mo,
+                fiberKit,
+                targetWeight,
+                totalSteps
+            });
+
+            // 2. Lưu trạng thái hiện tại vào DB
+            try
+            {
+                var existing = await _blowDb.BlowFillContexts
+                    .FirstOrDefaultAsync(c => c.MachineId == machine);
+
+                if (existing == null)
+                {
+                    existing = new BlowFillContext
+                    {
+                        MachineId = machine
+                    };
+                    _blowDb.BlowFillContexts.Add(existing);
+                }
+
+                existing.MO = mo ?? "";
+                existing.FiberKit = fiberKit ?? "";
+                existing.TargetWeight = targetWeight;
+                existing.TotalSteps = totalSteps;
+                existing.LastUpdate = DateTime.Now;
+
+                await _blowDb.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error saving BlowFillContext: {ex.Message}");
+            }
+
+            Console.WriteLine($"📡 BlowFillContextUpdated → Machine={machine}, MO={mo}, FiberKit={fiberKit}, Target={targetWeight}, Steps={totalSteps}");
         }
     }
 }

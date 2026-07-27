@@ -271,6 +271,7 @@
             <button class="tab-btn active" onclick="switchTab('form')">📝 Nhập liệu thay dao</button>
             <button class="tab-btn" onclick="switchTab('dashboard')">📊 Quản lý</button>
             <button class="tab-btn" onclick="switchTab('history')">📋 Lịch sử</button>
+            <button class="tab-btn" onclick="window.location.href='/cnc-go-supplier-report'">📈 Báo cáo Supplier</button>
         </div>
         
         <!-- Tab 1: Form nhập liệu -->
@@ -534,6 +535,26 @@
         <div id="tab-history" class="tab-content">
             <div id="historyContent">
                 <p class="loading-text">Đang tải dữ liệu...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ✅ MODAL NHẬP TÊN SUPPLIER -->
+    <div id="modalSupplier" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>Nhập tên Supplier mài dao</h2>
+            </div>
+            <div class="modal-body">
+                <label for="supplierInput">Supplier:</label>
+                <input type="text" id="supplierInput" class="input-field" list="supplierList" placeholder="Chọn hoặc nhập tên Supplier...">
+                <datalist id="supplierList">
+                    <!-- Danh sách supplier sẽ được thêm vào đây bằng JS -->
+                </datalist>
+            </div>
+            <div class="modal-footer">
+                <button id="btnConfirmSupplier" class="btn btn-primary">Xác nhận</button>
+                <button id="btnCancelSupplier" class="btn btn-secondary">Bỏ qua</button>
             </div>
         </div>
     </div>
