@@ -277,7 +277,7 @@
 
         function openBlowFillForMachine(machineId) {
             // Điều hướng sang blow-fill, kèm query machineId
-            window.location.href = `/blow-fill?machine=${encodeURIComponent(machineId)}`;
+            window.location.href = `/blow-fill?machine=${encodeURIComponent(machineId)}&role=viewer`;
         }
         
         window.onload = () => {

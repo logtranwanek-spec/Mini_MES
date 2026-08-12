@@ -288,11 +288,26 @@ async function processScan(odrno) {
         
         document.querySelectorAll('.part-lack-cb:checked').forEach(cb => {
             isLack = true;
-            let partName = cb.dataset.part;
-            let inputEl = document.querySelector(`.part-note-input[data-part="${partName}"]`);
-            let missingQty = inputEl ? inputEl.value.trim() : "";
-            notesArr.push(missingQty ? `${partName} (Thiếu ${missingQty})` : `${partName} (Thiếu)`);
+            const partName = cb.dataset.part;
+            const inputEl = document.querySelector(`.part-note-input[data-part="${partName}"]`);
+            
+            let raw = inputEl ? inputEl.value.trim() : "";
+            
+            // 🔎 Chỉ lấy phần số đầu tiên trong chuỗi (ví dụ: "8MXL4H80" -> "8")
+            const qtyMatch = raw.match(/\d+/);
+            const missingQty = qtyMatch ? qtyMatch[0] : "";
+            
+            if (inputEl) {
+                inputEl.value = missingQty;
+            }
+            
+            notesArr.push(
+                missingQty 
+                    ? `${partName} (Thiếu ${missingQty})` 
+                    : `${partName} (Thiếu)`
+            );
         });
+
         
         let finalStatus = isLack ? 'Lack' : 'Received';
         let finalNote = notesArr.join(' | ');

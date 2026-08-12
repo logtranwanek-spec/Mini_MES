@@ -1,0 +1,20 @@
+2026-08-02 07:17:28.249 +07:00 [ERR] [AS400 Polling] Error reading schedule files.
+System.IO.IOException: The network path was not found. : 'V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\LEADTIME UPH SUPPORT'
+   at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+   at FileHelpers.FindLatestScheduleFile(DateTime targetDate, String schedulePath) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4805
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4483
+2026-08-02 07:17:38.278 +07:00 [ERR] [AS400 Polling] Error reading schedule files.
+System.IO.IOException: The network location cannot be reached. For information about network troubleshooting, see Windows Help. : 'V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\LEADTIME UPH SUPPORT'
+   at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+   at FileHelpers.FindLatestScheduleFile(DateTime targetDate, String schedulePath) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4805
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4483
+2026-08-02 07:17:48.292 +07:00 [ERR] [AS400 Polling] Error reading schedule files.
+System.IO.IOException: The network location cannot be reached. For information about network troubleshooting, see Windows Help. : 'V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\LEADTIME UPH SUPPORT'
+   at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+   at FileHelpers.FindLatestScheduleFile(DateTime targetDate, String schedulePath) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4805
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4483
+2026-08-02 15:43:26.267 +07:00 [ERR] [AS400 Polling] Error reading schedule files.
+System.IO.IOException: The network path was not found. : 'V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\LEADTIME UPH SUPPORT'
+   at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+   at FileHelpers.FindLatestScheduleFile(DateTime targetDate, String schedulePath) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4805
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4483

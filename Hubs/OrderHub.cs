@@ -205,7 +205,10 @@ namespace OrderTrackingWeb.Hubs
             string mo,
             string fiberKit,
             double targetWeight,
-            int totalSteps)
+            int totalSteps,
+            int currentStep,
+            int currentPartIndex
+        )
         {
             if (string.IsNullOrWhiteSpace(machineId)) return;
 
@@ -218,7 +221,9 @@ namespace OrderTrackingWeb.Hubs
                 mo,
                 fiberKit,
                 targetWeight,
-                totalSteps
+                totalSteps,
+                currentStep,
+                currentPartIndex
             });
 
             // 2. Lưu trạng thái hiện tại vào DB

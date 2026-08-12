@@ -179,6 +179,19 @@
             text-align: center;
             outline: none;
         }
+        
+        /* Ô đầu dao tháo / lắp – hiển thị như text, không khung */
+        .head-input {
+            max-width: 40px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            text-align: center;
+            color: #fff;              /* hoặc #333 nếu dùng theme sáng */
+            font-size: 14px;
+            pointer-events: none;  
+        }
 
         .tool-input-table input:focus,
         .tool-input-table select:focus {
@@ -252,6 +265,20 @@
 
         html.simple-view .tool-name-cell {
             color: #0369a1;
+        }
+
+        /* Hiển thị đầu dao tháo / lắp như text, to và đậm */
+        .head-text {
+            display: inline-block;
+            min-width: 30px;
+            text-align: center;
+            color: #70c7f0;
+            font-size: 16px;        /* tăng kích thước chữ */
+            font-weight: bold;      /* đậm hơn */
+        }
+
+        html.simple-view .head-text {
+            color: #aa1010;
         }
     </style>
 </head>
@@ -328,17 +355,19 @@
                     <thead>
                         <!-- Dòng nhãn nhóm -->
                         <tr>
-                            <th></th>                         <!-- STT Dao không thuộc nhóm -->
-                            <th colspan="4">THAY DAO</th>    <!-- Ngày/giờ/lần chạy/lý do -->
-                            <th colspan="3">LẮP DAO</th>     <!-- Ngày/giờ/loại dao -->
+                            <th></th>                         <!-- STT Dao -->
+                            <th colspan="5">THAY DAO</th>    <!-- Ngày/giờ/đầu dao/giờ chạy/lý do -->
+                            <th colspan="4">LẮP DAO</th>     <!-- Ngày/giờ/đầu dao/loại dao -->
                         </tr>
                         <!-- Dòng tiêu đề chi tiết -->
                         <tr>
                             <th>STT Dao</th>
+                            <th>Đầu dao tháo</th>    <!-- NEW -->
                             <th>Ngày thay</th>
                             <th>Giờ thay</th>
                             <th>Giờ thực tế</th>
                             <th>Lý do thay</th>
+                            <th>Đầu dao lắp</th>     <!-- NEW -->
                             <th>Ngày lắp</th>
                             <th>Giờ lắp</th>
                             <th>Loại dao</th>
@@ -348,7 +377,8 @@
                     <tbody>
                         <!-- DAO 1 -->
                         <tr>
-                            <td class="tool-name-cell">Đầu dao 1</td>
+                            <td class="tool-name-cell">Vị trí 1</td>
+                            <td><span id="removeHead1" class="head-text"></span></td>
                             <td><input type="date" id="replaceDate1"></td>
                             <td><input type="time" id="replaceTime1"></td>
                             <td>
@@ -377,6 +407,7 @@
                                     <option value="Gãy">Gãy</option>
                                 </select>
                             </td>
+                            <td><span id="installHead1" class="head-text"></span></td>
                             <td><input type="date" id="installDate1"></td>
                             <td><input type="time" id="installTime1"></td>
                             <td>
@@ -390,7 +421,8 @@
                         
                         <!-- DAO 2 -->
                         <tr>
-                            <td class="tool-name-cell">Đầu dao 2</td>
+                            <td class="tool-name-cell">Vị trí 2</td>
+                            <td><span id="removeHead2" class="head-text"></span></td>
                             <td><input type="date" id="replaceDate2" ></td>
                             <td><input type="time" id="replaceTime2"></td>
                             <td>
@@ -419,6 +451,7 @@
                                     <option value="Gãy">Gãy</option>
                                 </select>
                             </td>
+                            <td><span id="installHead2" class="head-text"></span></td>
                             <td><input type="date" id="installDate2"></td>
                             <td><input type="time" id="installTime2"></td>
                             <td>
@@ -432,7 +465,8 @@
                         
                         <!-- DAO 3 -->
                         <tr>
-                            <td class="tool-name-cell">Đầu dao 3</td>
+                            <td class="tool-name-cell">Vị trí 3</td>
+                            <td><span id="removeHead3" class="head-text"></span></td>
                             <td><input type="date" id="replaceDate3"></td>
                             <td><input type="time" id="replaceTime3"></td>
                             <td>
@@ -461,6 +495,7 @@
                                     <option value="Gãy">Gãy</option>
                                 </select>
                             </td>
+                            <td><span id="installHead3" class="head-text"></span></td>
                             <td><input type="date" id="installDate3"></td>
                             <td><input type="time" id="installTime3"></td>
                             <td>
@@ -474,7 +509,8 @@
                         
                         <!-- DAO 4 -->
                         <tr>
-                            <td class="tool-name-cell">Đầu dao 4</td>
+                            <td class="tool-name-cell">Vị trí 4</td>
+                            <td><span id="removeHead4" class="head-text"></span></td>
                             <td><input type="date" id="replaceDate4"></td>
                             <td><input type="time" id="replaceTime4"></td>
                             <td>
@@ -503,6 +539,7 @@
                                     <option value="Gãy">Gãy</option>
                                 </select>
                             </td>
+                            <td><span id="installHead4" class="head-text"></span></td>
                             <td><input type="date" id="installDate4"></td>
                             <td><input type="time" id="installTime4"></td>
                             <td>

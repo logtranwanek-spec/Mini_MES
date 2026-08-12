@@ -6,6 +6,23 @@ for (let i = 4; i <= 21; i++) {
 }
 
 const SUPPLIERS = ["Supplier A", "Supplier B", "Supplier C"]; // Danh sách mặc định
+
+let tool1OldValue = null; // Dùng để lưu giá trị cũ của ô input của dao 1
+
+// Hàm helper để đồng bộ giá trị từ dao 1 sang các dao còn lại
+function syncTool1Values(sourceElement, fieldPrefix) {
+    const newValue = sourceElement.value;
+    
+    // Chỉ cập nhật cho các dao 2, 3, 4 nếu giá trị của chúng
+    // giống với giá trị CŨ của dao 1 (tức là chúng chưa bị sửa thủ công)
+    for (let i = 2; i <= 4; i++) {
+        const targetElement = document.getElementById(`${fieldPrefix}${i}`);
+        if (targetElement && targetElement.value === tool1OldValue) {
+            targetElement.value = newValue;
+        }
+    }
+}
+
 let currentToolIndexForSupplier = null; // Lưu lại index của dao đang cần nhập supplier
 
 // Supervisor mapping theo máy
@@ -42,9 +59,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     for (let i = 1; i <= 4; i++) {
-        const toolTypeSelect = document.getElementById(`toolType${i}`);
-        if(toolTypeSelect) toolTypeSelect.addEventListener('change', () => handleToolTypeChange(i));
+        const hoursSelect  = document.getElementById(`actualHours${i}`);
+        const reasonSelect = document.getElementById(`reason${i}`);
+
+        if (hoursSelect) {
+            hoursSelect.addEventListener('change', () => updateInstallHead(i));
+        }
+        if (reasonSelect) {
+            reasonSelect.addEventListener('change', () => updateInstallHead(i));
+        }
     }
+    const fieldsToSync = ['replaceDate', 'replaceTime', 'installDate', 'installTime'];
+
+    fieldsToSync.forEach(prefix => {
+        const sourceInput = document.getElementById(`${prefix}1`); // Chỉ áp dụng cho dao 1
+        if (sourceInput) {
+            // 1. Lưu lại giá trị cũ khi người dùng focus vào ô
+            sourceInput.addEventListener('focus', () => {
+                tool1OldValue = sourceInput.value;
+            });
+
+            // 2. Khi giá trị thay đổi, đồng bộ cho các dao còn lại
+            sourceInput.addEventListener('change', () => {
+                syncTool1Values(sourceInput, prefix);
+            });
+        }
+    });
 });
 
 // 1. Điền dropdown máy
@@ -63,6 +103,7 @@ function initMachineList() {
     // Khi đổi Ca → cập nhật lại text "DS-/NS-" nhưng giữ nguyên máy đang chọn
     shiftSelect.addEventListener('change', () => {
         rebuildMachineOptions();
+        setDefaultDateTime(); 
     });
 }
 
@@ -298,7 +339,7 @@ function setDefaultDateTime() {
         document.getElementById(`replaceTime${i}`).value = defaultReplaceTime;
         document.getElementById(`installTime${i}`).value = defaultInstallTime;
 
-        // Giờ thực tế mặc định 0 (công nhân sẽ sửa theo controller)
+        // Giờ thực tế mặc định 0
         document.getElementById(`actualHours${i}`).value = "0";
 
         // Lý do thay mặc định Cuối ca thay
@@ -306,6 +347,51 @@ function setDefaultDateTime() {
 
         // Loại dao mặc định MỚI
         document.getElementById(`toolType${i}`).value = "MỚI";
+
+        // ⭐ ĐẦU DAO THÁO / LẮP THEO CA
+        const removeHeadSpan  = document.getElementById(`removeHead${i}`);
+        const installHeadSpan = document.getElementById(`installHead${i}`);
+
+        if (shift === "Day Shift") {
+            // Ca ngày: tháo 1–4, lắp 5–8
+            if (removeHeadSpan)  removeHeadSpan.textContent  = i;       // 1..4
+            if (installHeadSpan) installHeadSpan.textContent = 4 + i;   // 5..8
+        } else {
+            // Ca đêm: tháo 5–8, lắp 1–4
+            if (removeHeadSpan)  removeHeadSpan.textContent  = 4 + i;   // 5..8
+            if (installHeadSpan) installHeadSpan.textContent = i;       // 1..4
+        }
+        updateInstallHead(i);
+    }
+}
+
+// Cập nhật Đầu dao lắp cho 1 vị trí dao (1..4) dựa trên giờ thực tế + lý do + ca
+function updateInstallHead(i) {
+    const shift = document.getElementById('shift').value;
+
+    const actualHours = parseInt(document.getElementById(`actualHours${i}`).value || "0", 10);
+    const reason      = document.getElementById(`reason${i}`).value || "";
+
+    const removeHeadSpan  = document.getElementById(`removeHead${i}`);
+    const installHeadSpan = document.getElementById(`installHead${i}`);
+
+    if (!removeHeadSpan || !installHeadSpan) return;
+
+    // Nếu dao bị hư: giờ > 0 và lý do ≠ "Cuối ca thay"
+    const isDamaged = actualHours > 0 && reason && reason !== "Cuối ca thay";
+
+    if (isDamaged) {
+        // 🔧 Dao hư → lắp lại dao mới vào đúng vị trí vừa tháo (Đầu dao lắp = Đầu dao tháo)
+        installHeadSpan.textContent = removeHeadSpan.textContent;
+    } else {
+        // Cuối ca thay hoặc giờ chạy = 0 → dùng mapping bộ dao mặc định
+        if (shift === "Day Shift") {
+            // Ca ngày: tháo 1–4, lắp 5–8
+            installHeadSpan.textContent = (4 + i).toString();
+        } else {
+            // Ca đêm: tháo 5–8, lắp 1–4
+            installHeadSpan.textContent = i.toString();
+        }
     }
 }
 
@@ -322,6 +408,7 @@ async function saveAllTools() {
         return;
     }
 
+    // Thu thập dữ liệu 4 dao
     const toolsData = [];
 
     for (let i = 1; i <= 4; i++) {
@@ -333,29 +420,28 @@ async function saveAllTools() {
         const installTime = document.getElementById(`installTime${i}`).value || null;
         const toolType = document.getElementById(`toolType${i}`).value;
         const material = "PLYWOOD";
+        
+        // Lấy Supplier (nếu có)
         const supplierHiddenInput = document.getElementById(`supplier${i}`);
         const supplier = supplierHiddenInput ? supplierHiddenInput.value : '';
 
-        // Nếu không có lý do thay → bỏ qua dao đó
+        // Bỏ qua dao không có lý do thay
         if (!reason) continue;
 
         toolsData.push({
-            machineName: machine,
-            shift: shift,
             toolPosition: i,
-            supervisor: supervisor,
-            mss: mss,
-            date: date,
-            toolType: toolType,
-            installDate: installDate,
-            installTime: installTime,
             replaceDate: replaceDate,
             replaceTime: replaceTime,
             actualHours: actualHours,
             reason: reason,
             material: material,
+            installDate: installDate,
+            installTime: installTime,
+            toolType: toolType,
             supplier: supplier
         });
+
+        // Xóa supplier sau khi lưu
         if (supplierHiddenInput) {
             supplierHiddenInput.value = '';
         }
@@ -366,38 +452,38 @@ async function saveAllTools() {
         return;
     }
 
-    let successCount = 0;
-    for (const toolData of toolsData) {
-        try {
-            const response = await fetch('/api/tools/change', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(toolData)
-            });
+    // Gửi 1 request duy nhất
+    try {
+        const response = await fetch('/api/tools/change', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                machineName: machine,
+                shift: shift,
+                supervisor: supervisor,
+                mss: mss,
+                date: date,
+                tools: toolsData
+            })
+        });
 
-            if (response.ok) {
-                successCount++;
-            } else {
-                let errorMessage = `HTTP ${response.status}`;
-                try {
-                    const text = await response.text();      // lấy raw text
-                    if (text) errorMessage += ` - ${text}`;
-                } catch (_) {
-                    // bỏ qua
-                }
-                showToast(`❌ Lỗi lưu dao ${toolData.toolPosition}: ${errorMessage}`, 'error');
-            }
-        } catch (error) {
-            showToast(`❌ Lỗi kết nối: ${error.message}`, 'error');
+        if (response.ok) {
+            const result = await response.json();
+            showToast(`✅ ${result.message}`, 'success');
+            clearAllRows();
+            setDefaultDateTime();
+            loadDashboard();
+            loadHistory();
+        } else {
+            let errorMessage = `HTTP ${response.status}`;
+            try {
+                const text = await response.text();
+                if (text) errorMessage += ` - ${text}`;
+            } catch (_) {}
+            showToast(`❌ Lỗi lưu: ${errorMessage}`, 'error');
         }
-    }
-
-    if (successCount > 0) {
-        showToast(`✅ Đã lưu thành công ${successCount} dao`, 'success');
-        clearAllRows();
-        setDefaultDateTime();  // reset lại mặc định mới
-        loadDashboard();
-        loadHistory();
+    } catch (error) {
+        showToast(`❌ Lỗi kết nối: ${error.message}`, 'error');
     }
 }
 
@@ -514,6 +600,73 @@ function renderMachineGrid(data, shiftType) {
     return html;
 }
 
+function buildMissingSummary(data) {
+    const now = new Date();
+    const currentTimeStr = now.toTimeString().substring(0, 5); // "HH:mm"
+    const today = now.toISOString().split('T')[0];             // "yyyy-MM-dd"
+
+    // Khung giờ cảnh báo
+    const dayAlertFrom = "19:45";
+    const dayAlertTo   = "20:00";
+    const nightAlertFrom = "06:45";
+    const nightAlertTo   = "07:00";
+
+    const isDayAlertTime = isTimeInRange(currentTimeStr, dayAlertFrom, dayAlertTo);
+    const isNightAlertTime = isTimeInRange(currentTimeStr, nightAlertFrom, nightAlertTo);
+
+    // Nếu không trong khung giờ cảnh báo → không hiển thị gì
+    if (!isDayAlertTime && !isNightAlertTime) {
+        return "";
+    }
+
+    // Lấy danh sách máy từ MACHINES global
+    const allMachines = MACHINES;
+
+    const missingMachines = [];
+
+    allMachines.forEach(machine => {
+        if (isDayAlertTime) {
+            // Kiểm tra ca ngày
+            const hasDayLog = data.some(t =>
+                t.machineName === machine &&
+                t.shift === "Day Shift" &&
+                t.reason === "Cuối ca thay" &&
+                t.replaceDate && t.replaceDate.startsWith(today)
+            );
+            if (!hasDayLog) {
+                missingMachines.push({ machine, shift: "Day Shift", time: `${dayAlertFrom}–${dayAlertTo}` });
+            }
+        }
+
+        if (isNightAlertTime) {
+            // Kiểm tra ca đêm
+            const hasNightLog = data.some(t =>
+                t.machineName === machine &&
+                t.shift === "Night Shift" &&
+                t.reason === "Cuối ca thay" &&
+                t.replaceDate && t.replaceDate.startsWith(today)
+            );
+            if (!hasNightLog) {
+                missingMachines.push({ machine, shift: "Night Shift", time: `${nightAlertFrom}–${nightAlertTo}` });
+            }
+        }
+    });
+
+    if (missingMachines.length === 0) return "";
+
+    let html = `<div style="margin-bottom: 20px; padding: 15px; border-radius: 8px; background: rgba(231, 76, 60, 0.1); border:1px solid #e74c3c;">`;
+    html += `<h3 style="margin-bottom: 10px; color: #e74c3c;">⚠️ CẢNH BÁO: Máy chưa ghi “Cuối ca thay” trong hôm nay</h3>`;
+
+    missingMachines.forEach(m => {
+        html += `<div style="margin-bottom: 5px;">
+                     - <strong>${m.machine}</strong> (${m.shift}) – đang trong khung giờ cảnh báo ${m.time}
+                 </div>`;
+    });
+
+    html += `</div>`;
+    return html;
+}
+
 // ==================== LỊCH SỬ (giữ nguyên như trước) ====================
 async function loadHistory() {
     const container = document.getElementById('historyContent');
@@ -523,9 +676,23 @@ async function loadHistory() {
 
     try {
         const response = await fetch('/api/tools/history');
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || `HTTP ${response.status}`);
+        }
+
         const data = await response.json();
 
+        if (!Array.isArray(data)) {
+            throw new Error('Response /api/tools/history không phải dạng mảng.');
+        }
+
+        // ⭐ TÍNH DANH SÁCH MÁY CHƯA GHI TRONG KHUNG GIỜ BẮT BUỘC
+        const missingSummaryHtml = buildMissingSummary(data);
+
         let html = `
+            ${missingSummaryHtml}
             <div style="margin-bottom: 20px; display: flex; gap: 15px;">
                 <button class="btn btn-export" onclick="exportToExcel()">📊 Xuất Excel</button>
                 <input type="text" id="searchHistory" placeholder="🔍 Tìm kiếm..." style="flex: 1;" class="input-field">
@@ -559,7 +726,11 @@ async function loadHistory() {
                     <td>${item.replaceDate ? new Date(item.replaceDate).toLocaleDateString('vi-VN') : '-'}</td>
                     <td style="font-weight: bold; color: #3498db;">${item.actualHours}h</td>
                     <td>${item.reason}</td>
-                    <td><button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="deleteRecord(${item.id})">🗑️</button></td>
+                    <td>
+                        <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="deleteRecord(${item.id})">
+                            🗑️
+                        </button>
+                    </td>
                 </tr>
             `;
         });
@@ -735,3 +906,39 @@ function cancelSupplier() {
     toolTypeSelect.value = 'MỚI';
     closeModal(document.getElementById('modalSupplier'));
 }
+
+function clearAllRows() {
+    // Xóa supplier ẩn, nếu có
+    for (let i = 1; i <= 4; i++) {
+        const supplierHiddenInput = document.getElementById(`supplier${i}`);
+        if (supplierHiddenInput) {
+            supplierHiddenInput.value = '';
+        }
+    }
+    
+    // Nếu muốn xóa hết dữ liệu người nhập trước khi setDefaultDateTime:
+    // for (let i = 1; i <= 4; i++) {
+    //     document.getElementById(`replaceDate${i}`).value = '';
+    //     document.getElementById(`replaceTime${i}`).value = '';
+    //     document.getElementById(`actualHours${i}`).value = '0';
+    //     document.getElementById(`reason${i}`).value = '';
+    //     document.getElementById(`installDate${i}`).value = '';
+    //     document.getElementById(`installTime${i}`).value = '';
+    //     document.getElementById(`toolType${i}`).value = 'MỚI';
+    // }
+}
+
+function isTimeInRange(timeStr, fromStr, toStr) {
+    // timeStr, fromStr, toStr: "HH:mm"
+    if (!timeStr) return false;
+    const [th, tm] = timeStr.split(':').map(Number);
+    const [fh, fm] = fromStr.split(':').map(Number);
+    const [ph, pm] = toStr.split(':').map(Number);
+
+    const total = th * 60 + tm;
+    const from  = fh * 60 + fm;
+    const to    = ph * 60 + pm;
+
+    return total >= from && total <= to;
+}
+

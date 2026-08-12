@@ -551,23 +551,36 @@
         let currentWc = '';
         let machineId = null;
         let scanTimeout = null;
+        let partSelected = false;
+        let currentPartIndex = 0;
         const SCAN_DELAY = 300;
-        const WEIGHT_STABLE_TIME = 3.0;
+        const WEIGHT_STABLE_TIME = 2.0;
 
         // ==================== DOM ELEMENTS CACHE ====================
         const DOM = {}; // Sẽ cache các element ở onload
 
         // ==================== SIGNALR SETUP ====================
-        const connection = new signalR.HubConnectionBuilder().withUrl("/orderHub").withAutomaticReconnect().build();
-        connection.on("ReceiveScaleData", (weight) => { currentWeight = weight; });
-        connection.on("BlowFillContextUpdated", (ctx) => {
-            console.log("Context updated from other client:", ctx);
-            // Cập nhật UI cho máy view
-        });
+        let connection = null;
+
         async function startSignalR() {
             try {
+                connection = new signalR.HubConnectionBuilder()
+                    .withUrl("/orderHub")
+                    .withAutomaticReconnect()
+                    .build();
+
+                connection.on("ReceiveScaleData", (weight) => {
+                    currentWeight = weight;
+                });
+
+                connection.on("BlowFillContextUpdated", (ctx) => {
+                    console.log("📡 Context updated from other client:", ctx);
+                    applyContextFromServer(ctx);
+                });
+
                 await connection.start();
                 console.log("✅ SignalR Connected.");
+
                 if (machineId) {
                     await connection.invoke("JoinGroup", machineId);
                     console.log(`✅ Joined group: ${machineId}`);
@@ -578,10 +591,89 @@
             }
         }
 
+        async function loadExistingContext() {
+            try {
+                const res = await fetch(`/api/blow-fill/context?machineId=${encodeURIComponent(machineId)}`);
+                const data = await res.json();
+                if (!data.found) {
+                    console.log(`No existing context for machine ${machineId}`);
+                    return;
+                }
+                console.log("🔁 Loaded context from server:", data);
+                applyContextFromServer(data);
+            } catch (err) {
+                console.error("❌ Error loading context:", err);
+            }
+        }
+
+        function applyContextFromServer(ctx) {
+            if (!ctx || !ctx.mo) return;
+
+            // MO, FiberKit, WC
+            DOM.moInput.value = ctx.mo;
+            DOM.fiberInput.value = ctx.fiberKit || '';
+            DOM.wcDisplay.textContent = ctx.workCenter || '---';
+
+            // Tìm FiberKit trong Excel
+            if (ctx.fiberKit) {
+                const fiberKitKey = ctx.fiberKit.trim().toUpperCase();
+                currentFiberKitParts = productDatabase[fiberKitKey] || [];
+                // ⭐ Loại bỏ part trùng description
+                currentFiberKitParts = dedupePartsByDescription(currentFiberKitParts);
+            } else {
+                currentFiberKitParts = [];
+            }
+
+            // Xác định currentPartIndex, currentStepIndex
+            const partIndex = ctx.currentPartIndex != null ? ctx.currentPartIndex : 0;
+            const stepIndex = ctx.currentStep != null ? ctx.currentStep - 1 : 0;
+
+            if (currentFiberKitParts.length > 0) {
+                renderPartTabs();
+
+                // clamp partIndex
+                currentPartIndex = Math.max(0, Math.min(partIndex, currentFiberKitParts.length - 1));
+                currentProductData = currentFiberKitParts[currentPartIndex];
+
+                totalSteps = ctx.totalSteps || currentProductData.steps.length;
+
+                // clamp stepIndex
+                const safeStepIndex = Math.max(0, Math.min(stepIndex, totalSteps - 1));
+
+                targetWeight = ctx.targetWeight || currentProductData.steps[safeStepIndex].target_weight;
+
+                createStepIndicators(totalSteps);
+                updateStepIndicators(safeStepIndex);
+
+                DOM.targetWeight.textContent = targetWeight.toFixed(2);
+                DOM.stepInfo.textContent = `Step ${safeStepIndex + 1} of ${totalSteps}`;
+
+                currentStep = safeStepIndex;
+                partSelected = true;
+            } else {
+                totalSteps = ctx.totalSteps || 0;
+                targetWeight = ctx.targetWeight || 0;
+
+                createStepIndicators(totalSteps);
+                const safeStepIndex = Math.max(0, Math.min(stepIndex, totalSteps - 1));
+                updateStepIndicators(safeStepIndex);
+
+                DOM.targetWeight.textContent = targetWeight > 0 ? targetWeight.toFixed(2) : '-';
+                DOM.stepInfo.textContent = totalSteps > 0
+                    ? `Step ${safeStepIndex + 1} of ${totalSteps}`
+                    : '-';
+
+                currentStep = safeStepIndex;
+                partSelected = totalSteps > 0;
+            }
+        }
+
         // ==================== INITIALIZATION ====================
         function getQueryParam(name) {
             return new URLSearchParams(window.location.search).get(name);
         }
+
+        let role = null;
 
         window.onload = async function() {
             // Cache DOM elements
@@ -596,86 +688,131 @@
             DOM.counterDisplay = document.getElementById('counterDisplay');
 
             machineId = getQueryParam('machine');
+            role = getQueryParam('role') || 'operator';
             if (!machineId) machineId = prompt("Nhập mã máy (vd: M1, M2):");
             if (!machineId) {
                 alert("Bạn phải nhập mã máy để sử dụng hệ thống.");
                 return;
             }
-            console.log(`✅ MachineId = ${machineId}`);
 
             await loadExcelData();
             await startSignalR();
+            await loadExistingContext();
             
             setupEventListeners();
             updateTolerance();
             setInterval(checkWeightStatus, 100);
         };
-        
+
         function setupEventListeners() {
-            DOM.moInput.focus();
-            DOM.moInput.addEventListener('input', () => {
-                if (scanTimeout) clearTimeout(scanTimeout);
-                if (DOM.moInput.value.trim().length === 7) {
-                    scanTimeout = setTimeout(() => onMoEntered(), SCAN_DELAY);
-                }
-            });
-            DOM.moInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
+            if (role === 'operator') {
+                DOM.moInput.focus();
+                DOM.moInput.addEventListener('input', () => {
                     if (scanTimeout) clearTimeout(scanTimeout);
-                    onMoEntered();
+                    if (DOM.moInput.value.trim().length === 7) {
+                        scanTimeout = setTimeout(() => onMoEntered(), SCAN_DELAY);
+                    }
+                });
+                DOM.moInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        if (scanTimeout) clearTimeout(scanTimeout);
+                        onMoEntered();
+                        e.preventDefault();
+                    }
+                });
+                DOM.moInput.addEventListener('paste', (e) => {
                     e.preventDefault();
-                }
-            });
-            DOM.moInput.addEventListener('paste', (e) => {
-                e.preventDefault();
-                const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-                DOM.moInput.value = pastedText.trim().toUpperCase();
-                onMoEntered();
-            });
+                    const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+                    DOM.moInput.value = pastedText.trim().toUpperCase();
+                    onMoEntered();
+                });
+            } else {
+                // ⭐ Viewer: không cho nhập MO
+                DOM.moInput.readOnly = true;
+                DOM.moInput.placeholder = "Viewer mode - chỉ xem";
+            }
         }
 
         // ==================== CORE LOGIC ====================
         async function onMoEntered() {
+            if (role !== 'operator') {
+                return;
+            }
+
             const mo = DOM.moInput.value.trim().toUpperCase();
             if (!mo) {
                 resetDisplay();
                 return;
             }
+            
             try {
                 const res = await fetch(`/api/blow-fill/plan?mo=${encodeURIComponent(mo)}`);
                 const data = await res.json();
+
                 if (!data.found) {
                     alert(data.message || `Không tìm thấy kế hoạch cho MO ${mo}`);
                     resetDisplay();
                     return;
                 }
+                
                 DOM.fiberInput.value = data.fiberKit || '';
                 currentWc = data.workCenter || '';
                 DOM.wcDisplay.textContent = currentWc || '---';
+                
                 searchProduct();
+
+                setTimeout(async () => {
+                    try {
+                        if (!connection || !currentProductData || totalSteps <= 0 || targetWeight <= 0) return;
+
+                        await connection.invoke(
+                            "BroadcastBlowFillContext",
+                            machineId,
+                            mo,
+                            DOM.fiberInput.value.trim().toUpperCase(),
+                            targetWeight,
+                            totalSteps,
+                            1,
+                            0
+                        );
+                    } catch (err) {
+                        console.error("❌ Error broadcasting context:", err);
+                    }
+                }, 300);
             } catch (e) {
-                console.error('Error in onMoEntered:', e);
+                console.error('❌ Error in onMoEntered:', e);
                 alert('Có lỗi khi lấy kế hoạch MO.');
             }
         }
 
         function searchProduct() {
             const fiberKit = DOM.fiberInput.value.trim().toUpperCase();
+            
             if (!fiberKit) {
                 resetDisplay();
                 return;
             }
+            
             currentFiberKitParts = productDatabase[fiberKit] || [];
+
+            // ⭐ Loại bỏ các part trùng description
+            currentFiberKitParts = dedupePartsByDescription(currentFiberKitParts);
 
             if (currentFiberKitParts.length === 0) {
                 showNotFound();
                 return;
             }
 
-            renderPartTabs();
-            loadPart(0); // Tự động chọn part đầu tiên
+            if (currentFiberKitParts.length > 1) {
+                renderPartTabs();
+            } else {
+                DOM.partTabs.innerHTML = '';
+                DOM.partTabs.style.display = 'none';
+                partSelected = true;
+                loadPart(0);
+            }
         }
-        
+
         function renderPartTabs() {
             if (currentFiberKitParts.length > 1) {
                 DOM.partTabs.innerHTML = currentFiberKitParts.map((part, index) => 
@@ -684,9 +821,21 @@
                     </button>`
                 ).join('');
                 DOM.partTabs.style.display = 'flex';
+                
+                partSelected = false;
+                DOM.targetWeight.textContent = '0';
+                DOM.stepInfo.textContent = '-';
+                DOM.stepsContainer.innerHTML = '';
+                
+            } else if (currentFiberKitParts.length === 1) {
+                DOM.partTabs.innerHTML = '';
+                DOM.partTabs.style.display = 'none';
+                partSelected = true;
+                loadPart(0);
             } else {
                 DOM.partTabs.innerHTML = '';
                 DOM.partTabs.style.display = 'none';
+                partSelected = false;
             }
         }
 
@@ -694,82 +843,111 @@
             currentProductData = currentFiberKitParts[partIndex];
             totalSteps = currentProductData.steps.length;
             currentStep = 0;
+            currentPartIndex = partIndex; 
             
-            // Cập nhật trạng thái active cho tab
+            partSelected = true;
+            
             document.querySelectorAll('.part-tab').forEach((tab, index) => {
                 tab.classList.toggle('active', index === partIndex);
             });
 
             createStepIndicators(totalSteps);
             loadStep(0);
-            
-            console.log(`✅ Selected part: ${currentProductData.description}`);
         }
 
         function loadStep(stepIndex) {
             if (!currentProductData || stepIndex >= totalSteps) return;
-
+            
             const step = currentProductData.steps[stepIndex];
             targetWeight = step.target_weight;
+            
             DOM.targetWeight.textContent = targetWeight.toFixed(2);
             DOM.stepInfo.textContent = `Step ${stepIndex + 1} of ${totalSteps}`;
             updateStepIndicators(stepIndex);
             
             stepCompleted = false;
             weightStableTime = 0;
-            
-            console.log(`📍 Step ${stepIndex + 1}/${totalSteps}: Target = ${targetWeight.toFixed(2)} kg`);
+            currentStep = stepIndex; 
+
+            if (role === 'operator' && connection) {
+                const mo = DOM.moInput.value.trim().toUpperCase();
+                const fiber = DOM.fiberInput.value.trim().toUpperCase();
+                
+                connection.invoke(
+                    "BroadcastBlowFillContext",
+                    machineId,
+                    mo,
+                    fiber,
+                    targetWeight,
+                    totalSteps,
+                    stepIndex + 1,   
+                    currentPartIndex  
+                ).catch(err => console.error("❌ Error broadcasting context on step change:", err));
+            }
         }
 
         function checkWeightStatus() {
-            DOM.currentWeight.textContent = currentWeight.toFixed(2);
-
-            if (!currentProductData) {
-                DOM.currentWeight.className = 'weight-value';
-                if(currentWeight < 0) DOM.currentWeight.classList.add('negative');
+            if (!partSelected || !currentProductData) {
+                DOM.currentWeight.textContent = currentWeight.toFixed(2);
                 return;
             }
 
+            DOM.currentWeight.textContent = currentWeight.toFixed(2);
+            
             const lowerLimit = targetWeight - toleranceKg;
             const upperLimit = targetWeight + toleranceKg;
 
             DOM.currentWeight.className = 'weight-value';
+            
+            // ⭐ Nếu số âm → Không xử lý trạng thái
             if (currentWeight < 0) {
-                DOM.currentWeight.classList.add('negative');
                 weightStableTime = 0;
                 return;
             }
-
+            
             if (currentWeight >= lowerLimit && currentWeight <= upperLimit) {
                 DOM.currentWeight.classList.add('ok');
-                weightStableTime += 0.1;
-                if (weightStableTime >= WEIGHT_STABLE_TIME && !stepCompleted) {
-                    stepCompleted = true;
-                    logWeighStep(currentStep + 1, targetWeight, currentWeight, toleranceKg, "OK");
-                    currentStep++;
-                    if (currentStep >= totalSteps) {
-                        completeProduct();
-                    } else {
-                        loadStep(currentStep);
-                    }
-                }
-            } else {
+                if (!stepCompleted) weightStableTime += 0.1;
+            } else if (currentWeight > 0 && currentWeight < lowerLimit) {
+                DOM.currentWeight.classList.add('under');
                 weightStableTime = 0;
-                if (currentWeight > 0 && currentWeight < lowerLimit) {
-                    DOM.currentWeight.classList.add('under');
-                } else if (currentWeight > upperLimit) {
-                    DOM.currentWeight.classList.add('over');
+            } else if (currentWeight > upperLimit) {
+                DOM.currentWeight.classList.add('over');
+                weightStableTime = 0;
+            }
+
+            if (weightStableTime >= WEIGHT_STABLE_TIME && !stepCompleted) {
+                stepCompleted = true;
+                
+                let status = "OK";
+                if (currentWeight < lowerLimit) status = "UNDER";
+                else if (currentWeight > upperLimit) status = "OVER";
+                
+                logWeighStep(currentStep + 1, targetWeight, currentWeight, toleranceKg, status);
+                
+                currentStep++;
+                if (currentStep >= totalSteps) {
+                    completeProduct();
+                } else {
+                    loadStep(currentStep);
                 }
             }
         }
 
         function completeProduct() {
+            for (let i = 0; i < totalSteps; i++) {
+                const circle = document.getElementById(`step${i + 1}`);
+                if (circle) circle.className = 'circle completed';
+            }
+            
             productCounter++;
             DOM.counterDisplay.textContent = productCounter;
-            console.log(`🎉 PRODUCT #${productCounter} COMPLETED!`);
+            
             currentStep = 0;
             loadStep(0);
             currentWeight = 0;
+            DOM.currentWeight.textContent = '-';
+            DOM.currentWeight.className = 'weight-value';
         }
 
         // ==================== UI HELPERS ====================
@@ -780,13 +958,16 @@
             totalSteps = 0;
             targetWeight = 0;
             stepCompleted = false;
+            partSelected = false;  // ⭐ Reset
+            
             DOM.targetWeight.textContent = '-';
+            DOM.currentWeight.textContent = '-';
             DOM.stepInfo.textContent = '-';
             DOM.stepsContainer.innerHTML = '';
             DOM.partTabs.innerHTML = '';
+            DOM.partTabs.style.display = 'none';
             DOM.moInput.value = '';
             DOM.fiberInput.value = '';
-            DOM.wcDisplay.textContent = '---';
         }
 
         function showNotFound() {
@@ -805,16 +986,25 @@
         async function loadExcelData() {
             try {
                 DOM.fiberInput.placeholder = 'Loading Excel...';
+                
                 const response = await fetch('/api/blow-fill/load-excel');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
+                
                 if (data.success) {
                     productDatabase = data.products;
-                    console.log(`✅ Loaded ${Object.keys(productDatabase).length} Fiber Kits.`);
                     DOM.fiberInput.placeholder = '---';
-                } else { throw new Error('Failed to load Excel'); }
+                } else {
+                    throw new Error('Failed to load Excel');
+                }
             } catch (error) {
-                console.error('Error loading Excel:', error);
+                console.error('❌ Error loading Excel:', error);
                 DOM.fiberInput.placeholder = 'Error';
+                alert(`Không thể load dữ liệu định mức!\n\nLỗi: ${error.message}`);
             }
         }
 
@@ -851,6 +1041,10 @@
         }
 
         async function logWeighStep(stepNumber, target, actual, tolKg, status) {
+            if (role !== 'operator') {
+                return;
+            }
+
             try {
                 const mo = DOM.moInput.value.trim().toUpperCase();
                 const fiber = DOM.fiberInput.value.trim().toUpperCase();
@@ -874,6 +1068,27 @@
             } catch (e) {
                 console.error('Error logging weigh step:', e);
             }
+        }
+        function dedupePartsByDescription(parts) {
+            if (!Array.isArray(parts)) return parts;
+            
+            const seen = new Set();
+            const result = [];
+            
+            for (const part of parts) {
+                const desc = (part.description || "").trim().toUpperCase();
+                if (!desc) {
+                    // nếu không có description thì cứ giữ
+                    result.push(part);
+                    continue;
+                }
+                if (!seen.has(desc)) {
+                    seen.add(desc);
+                    result.push(part);
+                }
+                // nếu đã thấy description này rồi → bỏ qua (không thêm nữa)
+            }
+            return result;
         }
     </script>
 </body>

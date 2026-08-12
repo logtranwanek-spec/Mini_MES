@@ -1,0 +1,220 @@
+2026-08-10 07:21:48.893 +07:00 [ERR] [AS400 Polling] Error reading schedule files.
+System.IO.IOException: The network location cannot be reached. For information about network troubleshooting, see Windows Help. : 'V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\LEADTIME UPH SUPPORT'
+   at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+   at FileHelpers.FindLatestScheduleFile(DateTime targetDate, String schedulePath) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4677
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4355
+2026-08-10 07:22:01.893 +07:00 [ERR] [AS400 Polling] Error reading schedule files.
+System.IO.IOException: The network location cannot be reached. For information about network troubleshooting, see Windows Help. : 'V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\LEADTIME UPH SUPPORT'
+   at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+   at FileHelpers.FindLatestScheduleFile(DateTime targetDate, String schedulePath) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4677
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4355
+2026-08-10 07:31:38.898 +07:00 [ERR] [AS400 Polling] Exception for WC UFGL2.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 07:31:38.928 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL3.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 07:31:38.947 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL1.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 07:31:38.963 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL4.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 07:58:03.491 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCH.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=10053 - CWBCO1003 - Sockets error, function  returned 10053, WFVNPROD.ASHLEYFURNITURE.COM
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 07:58:03.558 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCO.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 07:58:03.573 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL6.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 07:58:03.586 +07:00 [ERR] [AS400 Polling] Exception for WC WLGL2.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 07:58:03.598 +07:00 [ERR] [AS400 Polling] Exception for WC UFGL2.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 07:58:03.610 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL3.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 07:58:03.748 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL1.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 07:58:03.813 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL4.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4471
+2026-08-10 08:09:14.232 +07:00 [ERR] [AS400 Polling] Exception for WC UBF05.
+System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4486
+2026-08-10 09:20:44.018 +07:00 [ERR] [AS400 Polling] Exception for WC UBF13.
+System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4487
+2026-08-10 10:14:52.180 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL3.
+System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4487
+2026-08-10 11:51:04.367 +07:00 [ERR] [AS400 Polling] Exception for WC UBF03.
+System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4528
+2026-08-10 12:49:54.521 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCO.
+System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4531
+2026-08-10 13:25:17.192 +07:00 [ERR] [AS400 Polling] Exception for WC UBF03.
+System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4531
+2026-08-10 13:28:43.326 +07:00 [ERR] Connection id "0HNNML29N4DD4", Request id "0HNNML29N4DD4:00000005": An unhandled exception was thrown by the application.
+Microsoft.AspNetCore.Routing.Matching.AmbiguousMatchException: The request matched multiple endpoints. Matches: 
+
+HTTP: POST /api/tools/change
+HTTP: POST /api/tools/change
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ReportAmbiguity(Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ProcessFinalCandidates(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.Select(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DfaMatcher.MatchAsync(HttpContext httpContext)
+   at Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.Invoke(HttpContext httpContext)
+   at Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
+2026-08-10 13:28:43.404 +07:00 [ERR] Connection id "0HNNML29N4DD4", Request id "0HNNML29N4DD4:00000006": An unhandled exception was thrown by the application.
+Microsoft.AspNetCore.Routing.Matching.AmbiguousMatchException: The request matched multiple endpoints. Matches: 
+
+HTTP: POST /api/tools/change
+HTTP: POST /api/tools/change
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ReportAmbiguity(Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ProcessFinalCandidates(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.Select(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DfaMatcher.MatchAsync(HttpContext httpContext)
+   at Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.Invoke(HttpContext httpContext)
+   at Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
+2026-08-10 13:28:43.422 +07:00 [ERR] Connection id "0HNNML29N4DD4", Request id "0HNNML29N4DD4:00000007": An unhandled exception was thrown by the application.
+Microsoft.AspNetCore.Routing.Matching.AmbiguousMatchException: The request matched multiple endpoints. Matches: 
+
+HTTP: POST /api/tools/change
+HTTP: POST /api/tools/change
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ReportAmbiguity(Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ProcessFinalCandidates(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.Select(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DfaMatcher.MatchAsync(HttpContext httpContext)
+   at Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.Invoke(HttpContext httpContext)
+   at Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
+2026-08-10 13:28:43.431 +07:00 [ERR] Connection id "0HNNML29N4DD4", Request id "0HNNML29N4DD4:00000008": An unhandled exception was thrown by the application.
+Microsoft.AspNetCore.Routing.Matching.AmbiguousMatchException: The request matched multiple endpoints. Matches: 
+
+HTTP: POST /api/tools/change
+HTTP: POST /api/tools/change
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ReportAmbiguity(Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ProcessFinalCandidates(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.Select(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DfaMatcher.MatchAsync(HttpContext httpContext)
+   at Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.Invoke(HttpContext httpContext)
+   at Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
+2026-08-10 13:59:34.732 +07:00 [ERR] Connection id "0HNNML29N4DD7", Request id "0HNNML29N4DD7:00000001": An unhandled exception was thrown by the application.
+Microsoft.AspNetCore.Routing.Matching.AmbiguousMatchException: The request matched multiple endpoints. Matches: 
+
+HTTP: POST /api/tools/change
+HTTP: POST /api/tools/change
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ReportAmbiguity(Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ProcessFinalCandidates(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.Select(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DfaMatcher.MatchAsync(HttpContext httpContext)
+   at Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.Invoke(HttpContext httpContext)
+   at Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
+2026-08-10 13:59:34.774 +07:00 [ERR] Connection id "0HNNML29N4DD7", Request id "0HNNML29N4DD7:00000002": An unhandled exception was thrown by the application.
+Microsoft.AspNetCore.Routing.Matching.AmbiguousMatchException: The request matched multiple endpoints. Matches: 
+
+HTTP: POST /api/tools/change
+HTTP: POST /api/tools/change
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ReportAmbiguity(Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ProcessFinalCandidates(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.Select(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DfaMatcher.MatchAsync(HttpContext httpContext)
+   at Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.Invoke(HttpContext httpContext)
+   at Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
+2026-08-10 13:59:34.785 +07:00 [ERR] Connection id "0HNNML29N4DD7", Request id "0HNNML29N4DD7:00000003": An unhandled exception was thrown by the application.
+Microsoft.AspNetCore.Routing.Matching.AmbiguousMatchException: The request matched multiple endpoints. Matches: 
+
+HTTP: POST /api/tools/change
+HTTP: POST /api/tools/change
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ReportAmbiguity(Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ProcessFinalCandidates(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.Select(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DfaMatcher.MatchAsync(HttpContext httpContext)
+   at Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.Invoke(HttpContext httpContext)
+   at Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
+2026-08-10 13:59:34.796 +07:00 [ERR] Connection id "0HNNML29N4DD7", Request id "0HNNML29N4DD7:00000004": An unhandled exception was thrown by the application.
+Microsoft.AspNetCore.Routing.Matching.AmbiguousMatchException: The request matched multiple endpoints. Matches: 
+
+HTTP: POST /api/tools/change
+HTTP: POST /api/tools/change
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ReportAmbiguity(Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.ProcessFinalCandidates(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DefaultEndpointSelector.Select(HttpContext httpContext, Span`1 candidateState)
+   at Microsoft.AspNetCore.Routing.Matching.DfaMatcher.MatchAsync(HttpContext httpContext)
+   at Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.Invoke(HttpContext httpContext)
+   at Microsoft.AspNetCore.HostFiltering.HostFilteringMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)

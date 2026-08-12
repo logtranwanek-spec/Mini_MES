@@ -1,0 +1,3 @@
+2026-08-13 00:12:49.709 +07:00 [ERR] [AS400 Polling] Exception for WC UBF03.
+System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4621

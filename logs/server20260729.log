@@ -1,0 +1,9 @@
+2026-07-29 00:04:07.556 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCT.
+System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4657
+2026-07-29 00:06:56.649 +07:00 [ERR] [AS400 Polling] Exception for WC UBF05.
+System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4657
+2026-07-29 00:18:49.105 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCM.
+System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4658

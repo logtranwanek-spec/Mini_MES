@@ -1,0 +1,473 @@
+2026-08-01 08:04:35.777 +07:00 [ERR] [AS400 Polling] Exception for WC UBF12.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.824 +07:00 [ERR] [AS400 Polling] Exception for WC UBF13.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.837 +07:00 [ERR] [AS400 Polling] Exception for WC UBF03.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.853 +07:00 [ERR] [AS400 Polling] Exception for WC UBF04.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.863 +07:00 [ERR] [AS400 Polling] Exception for WC UBF05.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.877 +07:00 [ERR] [AS400 Polling] Exception for WC UCFHM.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.887 +07:00 [ERR] [AS400 Polling] Exception for WC UCFHS.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.898 +07:00 [ERR] [AS400 Polling] Exception for WC UPHD1.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.915 +07:00 [ERR] [AS400 Polling] Exception for WC UCFBP.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.928 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCM.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.943 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCT.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.960 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCS.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.971 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCV.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.982 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCH.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:35.998 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCO.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:36.010 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL6.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:36.024 +07:00 [ERR] [AS400 Polling] Exception for WC WLGL2.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:36.041 +07:00 [ERR] [AS400 Polling] Exception for WC UFGL2.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:36.056 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL1.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:36.072 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL4.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:04:36.088 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL3.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.Odbc.OdbcConnection.HandleError(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcConnectionHandle..ctor(OdbcConnection connection, OdbcConnectionString constr, OdbcEnvironmentHandle environmentHandle)
+   at System.Data.Odbc.OdbcConnectionOpen..ctor(OdbcConnection outerConnection, OdbcConnectionString connectionOptions)
+   at System.Data.Odbc.OdbcConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningObject)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.CreateNonPooledConnection(DbConnection owningConnection, DbConnectionPoolGroup poolGroup, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.ProviderBase.DbConnectionInternal.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4598
+2026-08-01 08:50:42.718 +07:00 [ERR] [AS400 Polling] Error reading schedule files.
+System.IO.IOException: The network location cannot be reached. For information about network troubleshooting, see Windows Help. : 'V:\UPH Support\Public\B2\Data\nhung\LEADTIME B2\LEADTIME UPH SUPPORT'
+   at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+   at System.IO.Enumeration.FileSystemEnumerableFactory.UserFiles(String directory, String expression, EnumerationOptions options)
+   at System.IO.Directory.InternalEnumeratePaths(String path, String searchPattern, SearchTarget searchTarget, EnumerationOptions options)
+   at System.IO.Directory.GetFiles(String path, String searchPattern, EnumerationOptions enumerationOptions)
+   at FileHelpers.FindLatestScheduleFile(DateTime targetDate, String schedulePath) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4804
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4482
+2026-08-01 11:45:46.841 +07:00 [ERR] [AS400 Polling] Exception for WC WLGL2.
+System.InvalidOperationException: The connection has been disabled.
+ ---> System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=10053 - CWBCO1003 - Sockets error, function  returned 10053, WFVNPROD.ASHLEYFURNITURE.COM
+   --- End of inner exception stack trace ---
+   at System.Data.Odbc.OdbcConnection.ConnectionIsAlive(Exception innerException)
+   at System.Data.Odbc.OdbcConnection.HandleErrorNoThrow(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcCommand.ExecuteReaderObject(CommandBehavior behavior, String method, Boolean needReader, Object[] methodArguments, SQL_API odbcApiMethod)
+   at System.Data.Odbc.OdbcCommand.ExecuteDbDataReader(CommandBehavior behavior)
+   at System.Data.Common.DbCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4614
+2026-08-01 12:33:06.459 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCM.
+System.InvalidOperationException: The connection has been disabled.
+ ---> System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=10053 - CWBCO1003 - Sockets error, function  returned 10053, WFVNPROD.ASHLEYFURNITURE.COM
+   --- End of inner exception stack trace ---
+   at System.Data.Odbc.OdbcConnection.ConnectionIsAlive(Exception innerException)
+   at System.Data.Odbc.OdbcConnection.HandleErrorNoThrow(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcCommand.ExecuteReaderObject(CommandBehavior behavior, String method, Boolean needReader, Object[] methodArguments, SQL_API odbcApiMethod)
+   at System.Data.Odbc.OdbcCommand.ExecuteDbDataReader(CommandBehavior behavior)
+   at System.Data.Common.DbCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4614
+2026-08-01 12:33:09.422 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCT.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
+2026-08-01 12:33:10.264 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCS.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
+2026-08-01 12:33:10.385 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCV.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
+2026-08-01 12:33:10.549 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCH.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
+2026-08-01 12:33:10.642 +07:00 [ERR] [AS400 Polling] Exception for WC UCFCO.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
+2026-08-01 12:33:10.699 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL6.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
+2026-08-01 12:33:11.045 +07:00 [ERR] [AS400 Polling] Exception for WC WLGL2.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
+2026-08-01 12:33:11.200 +07:00 [ERR] [AS400 Polling] Exception for WC UFGL2.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
+2026-08-01 12:33:11.247 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL1.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
+2026-08-01 12:33:11.280 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL4.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
+2026-08-01 12:33:11.345 +07:00 [ERR] [AS400 Polling] Exception for WC UPGL3.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
+2026-08-01 14:27:16.093 +07:00 [ERR] [AS400 Polling] Exception for WC UBF12.
+System.InvalidOperationException: The connection has been disabled.
+ ---> System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=10053 - CWBCO1003 - Sockets error, function  returned 10053, WFVNPROD.ASHLEYFURNITURE.COM
+   --- End of inner exception stack trace ---
+   at System.Data.Odbc.OdbcConnection.ConnectionIsAlive(Exception innerException)
+   at System.Data.Odbc.OdbcConnection.HandleErrorNoThrow(OdbcHandle hrHandle, SQLRETURN retcode)
+   at System.Data.Odbc.OdbcCommand.ExecuteReaderObject(CommandBehavior behavior, String method, Boolean needReader, Object[] methodArguments, SQL_API odbcApiMethod)
+   at System.Data.Odbc.OdbcCommand.ExecuteDbDataReader(CommandBehavior behavior)
+   at System.Data.Common.DbCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4614
+2026-08-01 14:27:19.479 +07:00 [ERR] [AS400 Polling] Exception for WC UBF13.
+System.Data.Odbc.OdbcException (0x80131937): ERROR [08S01] [IBM][System i Access ODBC Driver]Communication link failure. comm rc=11001 - CWBCO1004 - Remote address could not be resolved
+   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal& connection)
+   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   at System.Data.Odbc.OdbcConnection.Open()
+   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at As400ScanPollingService.PollOnceAsync(IServiceScope scope, CancellationToken token) in C:\Users\logtran\OneDrive - Ashley Furniture Industries, Inc\1. Project\logtran\1. Project\CI Project\4.OrderTrackingWeb\Program.cs:line 4599
