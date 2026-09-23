@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+
+  <!-- Viewport -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+
+  <title>Kho WIP B3 - L2</title>
+
+  <!-- Tailwind đã biên dịch sẵn: trình duyệt không phải phân tích lại CSS khi mở trang. -->
+  <link rel="stylesheet" href="css/tailwind.generated.css?v=20260918">
+
+  <!-- Custom styles (olive theme, layout, glass, hero, storage...) -->
+  <link rel="stylesheet" href="css/main.css?v=20260923-location-larger">
+
+  <!-- Fira Sans Font (tuỳ chọn) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap"
+        rel="stylesheet">
+
+  <!-- Iconify -->
+  <script src="js/iconify-icon.min.js"></script>
+  <!-- Solar Icons  -->
+  <script src="js/solar-icon.js"></script>
+
+  <!-- High-DPI Display Support -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Force high-quality rendering -->
+  <style>
+    * {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+    }
+    img, svg, canvas {
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     NAVBAR WITH DELIVERY SCHEDULE
+════════════════════════════════════════════════════════════ -->
+<nav id="navbar" class="fixed top-0 w-full z-50 border-b border-transparent py-4" style="transition: all 0.4s cubic-bezier(0.16,1,0.3,1)">
+  <div class="max-w-7x2 mx-auto px-10 flex justify-between items-center">
+
+    <!-- Logo -->
+    <a href="#" class="flex items-center gap-3" id="logo">
+      <img src="assets\logo-wanek.png"
+           alt="Wanek Furniture" class="h-16 w-16 object-contain transition-all duration-300" id="logoImage">
+    </a>
+
+    <!-- Nav Links -->
+    <div class="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center gap-8">
+      <a href="#destinations" class="text-sm font-medium transition-colors nav-link" style="color: rgba(12,12,9,0.55)">Kho</a>
+      <a href="#packages"     class="text-sm font-medium transition-colors nav-link" style="color: rgba(12,12,9,0.55)">Dây chuyền</a>
+      <a href="#why-us"       class="text-sm font-medium transition-colors nav-link" style="color: rgba(12,12,9,0.55)">Báo cáo</a>
+      <a href="dashboard.html" class="text-sm font-medium transition-colors nav-link" style="color: rgba(12,12,9,0.55)">Dashboard</a>
+      <a href="delivery.html" class="text-sm font-medium transition-colors nav-link" style="color: rgba(12,12,9,0.55)">Giao WIP WNK3</a>
+    </div>
+
+    <!-- Right Side: Delivery Schedule + Export Button -->
+    <div class="hidden md:flex items-center gap-3">
+      
+      <!-- ═══════════════════════════════════════════════════════════
+           DELIVERY SCHEDULE INDICATOR
+      ════════════════════════════════════════════════════════════ -->
+      <div id="delivery-schedule-indicator" class="hidden relative">
+        <button id="schedule-toggle-btn" 
+                class="px-4 py-2 rounded-full text-xs font-medium transition-all duration-300 flex items-center gap-2"
+                style="background: rgba(12,12,9,0.07); color: #0c0c09; border: 1px solid rgba(12,12,9,0.12)"
+                title="Click to view delivery schedule">
+          <iconify-icon icon="solar:clipboard-list-bold" width="16"></iconify-icon>
+          <span class="font-semibold">Delivery Schedule</span>
+          
+          <!-- Urgent Count (Red Badge) -->
+          <span id="urgent-badge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold"
+                style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white;">
+            0
+          </span>
+          
+          <!-- Upcoming Count (Amber Badge) -->
+          <span id="upcoming-badge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold"
+                style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: white;">
+            0
+          </span>
+          
+          <iconify-icon id="schedule-chevron" icon="solar:alt-arrow-down-linear" width="14" 
+                        style="transition: transform 0.3s ease"></iconify-icon>
+        </button>
+
+        <!-- Dropdown Panel -->
+        <div id="schedule-dropdown" 
+             class="hidden absolute top-full right-0 mt-2 w-96 rounded-2xl shadow-2xl overflow-hidden"
+             style="background: white; border: 1px solid rgba(12,12,9,0.1); max-height: 500px;">
+          
+          <!-- Header -->
+          <div class="px-4 py-3 border-b" style="background: var(--olive-50); border-color: rgba(12,12,9,0.08)">
+            <h3 class="text-sm font-semibold flex items-center gap-2" style="color: var(--olive-950)">
+              <iconify-icon icon="solar:clipboard-list-bold" width="16"></iconify-icon>
+              Today's Delivery Schedule
+            </h3>
+            <p class="text-xs mt-1" style="color: var(--olive-500)" id="schedule-current-time">
+              Current time: --:--
+            </p>
+          </div>
+
+          <!-- Summary Cards -->
+          <div class="grid grid-cols-2 gap-2 p-3 border-b" style="border-color: rgba(12,12,9,0.08)">
+            <div class="p-2 rounded-lg" style="background: rgba(124,156,90,0.1)">
+              <div class="text-xl font-bold" style="color: var(--accent)">
+                <span id="dropdown-in-wip-count">0</span>
+              </div>
+              <div class="text-[10px]" style="color: var(--olive-600)">✅ Ready</div>
+            </div>
+            
+            <div class="p-2 rounded-lg" style="background: rgba(251,191,36,0.1)">
+              <div class="text-xl font-bold" style="color: #f59e0b">
+                <span id="dropdown-missing-count">0</span>
+              </div>
+              <div class="text-[10px]" style="color: var(--olive-600)">⚠️ Missing</div>
+            </div>
+          </div>
+
+          <!-- Scrollable List -->
+          <div class="overflow-y-auto" style="max-height: 350px;">
+            
+            <!-- Urgent Section -->
+            <div id="dropdown-urgent-section" class="hidden">
+              <div class="px-4 py-2 text-xs font-semibold flex items-center gap-2" 
+                   style="background: rgba(220, 38, 38, 0.1); color: #dc2626">
+                <iconify-icon icon="solar:danger-triangle-bold" width="14"></iconify-icon>
+                🚨 URGENT - Delivering NOW!
+              </div>
+              <div id="dropdown-urgent-list" class="px-3 py-2"></div>
+            </div>
+
+            <!-- Upcoming Section -->
+            <div id="dropdown-upcoming-section" class="hidden">
+              <div class="px-4 py-2 text-xs font-semibold flex items-center gap-2" 
+                   style="background: rgba(251, 191, 36, 0.1); color: #f59e0b">
+                <iconify-icon icon="solar:clock-circle-bold" width="14"></iconify-icon>
+                <span id="dropdown-upcoming-title">⏰ Next Hour</span>
+              </div>
+              <div id="dropdown-upcoming-list" class="px-3 py-2"></div>
+            </div>
+
+            <!-- Missing Section -->
+            <div id="dropdown-missing-section" class="hidden">
+              <div class="px-4 py-2 text-xs font-semibold" 
+                   style="background: var(--olive-100); color: var(--olive-700)">
+                All Missing MOs
+              </div>
+              <div id="dropdown-missing-list" class="px-3 py-2" style="max-height: 200px; overflow-y: auto;"></div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="dropdown-empty" class="px-4 py-8 text-center">
+              <iconify-icon icon="solar:clipboard-list-linear" width="32" class="mb-2" 
+                            style="color: var(--olive-300)"></iconify-icon>
+              <p class="text-xs" style="color: var(--olive-400)">No schedule loaded</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Export Log Button -->
+      <button onclick="LogManager.showExportDialog()" 
+              class="px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-300 nav-btn flex items-center gap-2"
+              style="background: rgba(12,12,9,0.07); color: #0c0c09; border: 1px solid rgba(12,12,9,0.12)"
+              title="Xuất Log theo tháng">
+        <iconify-icon icon="solar:download-linear" width="16"></iconify-icon>
+        <span>Xuất Log</span>
+      </button>
+    </div>
+
+    <!-- Mobile -->
+    <button class="md:hidden nav-link" style="color: #0c0c09">
+      <iconify-icon icon="solar:hamburger-menu-linear" width="24" stroke-width="1.5"></iconify-icon>
+    </button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════
+     HERO — olive-50 background, olive-950 text, ONE SCREEN HEIGHT
+════════════════════════════════════════════════════════════ -->
+<header class="hero-section relative min-h-screen max-h-screen flex flex-col justify-between items-start pt-20 overflow-hidden">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       TOP SECTION - Mode Buttons + Content
+  ════════════════════════════════════════════════════════════ -->
+  <div class="relative z-10 w-full max-w-[1920px] mx-auto px-12 flex-1 flex flex-col">
+    
+    <!-- Mode Toggle Buttons - Fixed at Top of Hero -->
+    <div class="flex justify-center gap-6 mb-12 pt-8" style="flex-wrap: wrap; gap: 0.75rem;">
+      <button onclick="UIController.selectProduct('MO')" data-product-type="MO" id="add-mode-btn" class="mode-btn">
+        <iconify-icon icon="solar:add-circle-bold" width="24"></iconify-icon>
+        <span>Thêm MO</span>
+      </button>
+
+      <button onclick="UIController.selectProduct('Cushion')" data-product-type="Cushion" class="mode-btn">Thêm Cushion</button>
+      <button onclick="UIController.selectProduct('Decking')" data-product-type="Decking" class="mode-btn">Thêm Decking</button>
+      <button onclick="UIController.selectProduct('Fiber')" data-product-type="Fiber" class="mode-btn">Thêm Fiber</button>
+      <button onclick="UIController.setMode('find')" id="find-mode-btn" class="mode-btn">
+        <iconify-icon icon="solar:magnifer-linear" width="24" stroke-width="1.5"></iconify-icon>
+        <span>Tìm MO</span>
+      </button>
+    </div>
+
+    <!-- 2-Column Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start flex-1">
+
+      <!-- ═══════════════════════════════════════════════════════════
+           LEFT COLUMN — Title + Add MO (SAME WIDTH AS FIND MO)
+      ════════════════════════════════════════════════════════════ -->
+      <div class="reveal flex flex-col gap-4">
+        <!-- Title -->
+        <div class="mb-2">
+          <h1 class="font-['Playfair_Display'] font-normal tracking-tight mb-4 leading-none hero-title-outline">
+            <span class="block text-7xl md:text-9xl lg:text-[8rem]" style="color: var(--olive-950)">WIP</span>
+            <span class="block text-7xl md:text-9xl lg:text-[8rem]" style="color: var(--olive-950)">STORAGE.</span>
+          </h1>
+
+          <span class="inline-block text-sm md:text-base font-medium uppercase tracking-widest mb-6"
+                style="color: oklch(0.769 0.188 70.08)">
+            We want to be the best furniture company
+          </span>
+        </div>
+
+        <!-- Add MO Bar - FIXED WIDTH (same as Find MO) -->
+        <div class="glass-light p-2.5 rounded-2xl flex items-center gap-2 shadow-lg" style="max-width: 48rem;">
+          <div class="flex-1 flex items-center rounded-xl px-3 py-2.5 border border-transparent"
+              style="background: rgba(12,12,9,0.04)">
+            <iconify-icon icon="solar:add-circle-linear" class="mr-2" stroke-width="1.5"
+                          style="color: var(--olive-500)"></iconify-icon>
+            <input type="text" id="addMOInput" placeholder="Nhập hoặc quét MO (tự động chọn vị trí)"
+                  class="bg-transparent border-none outline-none text-sm w-full font-light focus:ring-0"
+                  style="color: var(--olive-950)">
+          </div>
+          <button id="addMOBtn" class="btn-accent">
+            <iconify-icon icon="solar:box-minimalistic-bold" stroke-width="2" class="text-base"></iconify-icon>
+            Thêm
+          </button>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN - Empty -->
+      <div class="reveal reveal-delay-1">
+        <!-- Intentionally empty - Excel import and search moved to fixed positions -->
+      </div>
+
+    </div>
+  </div>
+
+  <!-- BẮT ĐẦU KHỐI MỚI: KIỂM TRA TRẠNG THÁI MO -->
+  <div class="excel-import-box absolute top-32 right-12 z-20" style="left: auto; width: 20rem;">
+    <div class="glass-light p-3 rounded-xl shadow-lg w-full"
+        style="backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);">
+      
+      <!-- Tiêu đề -->
+      <div class="flex items-center gap-2 mb-3">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="color: var(--olive-700);">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <h3 class="text-xs font-semibold" style="color: var(--olive-950)">Kiểm tra trạng thái MO</h3>
+        <button id="mo-status-close-btn" type="button" class="hidden ml-auto mo-status-close-btn"
+                aria-label="Đóng kết quả kiểm tra" title="Đóng kết quả">×</button>
+      </div>
+      
+      <!-- Thanh nhập liệu và nút kiểm tra -->
+      <div class="flex items-center gap-2 mb-3">
+          <input type="text" id="mo-status-input" placeholder="Nhập mã MO..."
+                class="flex-1 bg-white/50 border border-gray-300 rounded-md px-3 py-1.5 text-xs focus:ring-2 focus:ring-olive-500 outline-none">
+          <button id="mo-status-check-btn" class="px-4 py-1.5 rounded-md text-xs font-semibold text-white" style="background-color: var(--olive-600);">Kiểm tra</button>
+      </div>
+      
+      <!-- Khu vực hiển thị kết quả (mặc định ẩn) -->
+      <div id="mo-status-results" class="hidden mt-3 p-3 rounded-lg text-xs" style="background: rgba(12,12,9,0.04);">
+        <div id="mo-status-single">
+          <div id="mo-status-in" class="mb-1.5"><strong>Scan In:</strong> <span>---</span></div>
+          <div id="mo-status-out" class="mb-1.5"><strong>Scan Out:</strong> <span>---</span></div>
+          <div id="mo-status-duration"><strong>Thời gian lưu kho:</strong> <span>---</span></div>
+          <div id="mo-status-not-found" class="text-center text-gray-500 hidden">Không tìm thấy thông tin cho MO này.</div>
+        </div>
+        <div id="mo-status-family" class="hidden"></div>
+      </div>
+
+    </div>
+  </div>
+  <!-- KẾT THÚC KHỐI MỚI -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FIXED BOTTOM RIGHT - Find MO + Control Panel Card
+  ════════════════════════════════════════════════════════════ -->
+  <div class="absolute bottom-24 right-12 z-20 w-full max-w-2xl" style="left: auto;">
+    <div class="space-y-4">
+      
+      <!-- Search MO Bar -->
+      <div class="glass-light p-2.5 rounded-2xl flex items-center gap-2 shadow-lg reveal reveal-delay-3"
+           style="backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);">
+        <div class="flex-1 flex items-center rounded-xl px-3 py-2.5 border border-transparent"
+             style="background: rgba(12,12,9,0.04)">
+          <iconify-icon icon="solar:magnifer-linear" class="mr-2" stroke-width="1.5"
+                        style="color: var(--olive-500)"></iconify-icon>
+          <input type="text" id="searchMOInput" placeholder="Tìm MO"
+                 class="bg-transparent border-none outline-none text-sm w-full font-light focus:ring-0"
+                 style="color: var(--olive-950)">
+        </div>
+        <button id="searchMOBtn" class="btn-accent">
+          <iconify-icon icon="solar:qr-code-linear" stroke-width="2" class="text-base"></iconify-icon>
+          Scan
+        </button>
+      </div>
+
+      <!-- Search Results Panel -->
+      <div id="search-results-panel" class="glass-light rounded-2xl shadow-lg overflow-hidden reveal reveal-delay-4"
+           style="backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); max-height: 380px; display: flex; flex-direction: column;">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-3.5 border-b flex-shrink-0"
+            style="border-color: rgba(12,12,9,0.07)">
+          <div class="flex items-center gap-3">
+            <h3 class="text-base font-normal" style="color: var(--olive-950)">Kết Quả</h3>
+            
+            <!-- NEW: Select All / Deselect All buttons -->
+            <div id="selection-buttons" class="hidden flex items-center gap-2">
+              <button onclick="UIController.selectAllCards()" 
+                      class="text-xs px-2 py-1 rounded transition-colors hover:bg-olive-100"
+                      style="color: var(--accent); border: 1px solid var(--accent);"
+                      title="Chọn tất cả">
+                <iconify-icon icon="solar:check-square-bold" width="14"></iconify-icon>
+                <span>Chọn tất cả</span>
+              </button>
+              
+              <button onclick="UIController.deselectAllCards()"
+                      class="text-xs px-2 py-1 rounded transition-colors hover:bg-olive-100"
+                      style="color: var(--olive-500); border: 1px solid var(--olive-300);"
+                      title="Bỏ chọn">
+                <span>Bỏ chọn</span>
+              </button>
+            </div>
+          </div>
+          
+          <button onclick="UIController.clearHeroPanel()" id="hero-clear-btn"
+                  class="hidden transition-colors" style="color: var(--olive-400)">
+            <iconify-icon icon="solar:close-circle-linear" width="20" stroke-width="1.5"></iconify-icon>
+          </button>
+        </div>
+
+        <!-- Body (scrollable) -->
+        <div id="hero-panel-body-wrapper" class="hero-panel-scroll-container" style="flex: 1 1 auto; min-height: 0; overflow-y: auto;">
+          <div id="hero-panel-body" class="p-4">
+            <div id="hero-panel-empty" class="flex flex-col items-center justify-center h-full text-center py-8">
+              <iconify-icon icon="solar:magnifer-linear" width="48" class="mb-3" stroke-width="1"
+                            style="color: var(--olive-300)"></iconify-icon>
+              <h4 class="text-sm font-medium mb-1" style="color: var(--olive-400)">Chưa có kết quả</h4>
+              <p class="text-xs" style="color: var(--olive-300)">Tìm kiếm MO để hiển thị kết quả</p>
+            </div>
+            <div id="hero-panel-cards" class="hidden grid grid-cols-3 gap-3"></div>
+          </div>
+        </div>
+
+        <!-- Footer (always visible at bottom) -->
+        <div id="hero-panel-footer" class="hidden px-4 pt-2 pb-4 flex-shrink-0" style="background: oklch(0.988 0.003 106.5); border-top: 1px solid rgba(12,12,9,0.06);">
+          <button onclick="UIController.removeHeroPanelFromShelves()"
+                  class="w-full text-white px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2"
+                  style="background: linear-gradient(135deg, #b85a5a 0%, #d47878 100%); box-shadow: 0 4px 16px rgba(184,90,90,0.25)">
+            <iconify-icon icon="solar:trash-bin-minimalistic-bold" width="20"></iconify-icon>
+            <span>Lấy khỏi kệ</span>
+            <span id="hero-panel-count"
+                  class="px-2 py-0.5 rounded-full text-xs"
+                  style="background: rgba(255,255,255,0.2)">0</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       OVERDUE TICKER BANNER (3+ days) - At Bottom of Hero
+  ════════════════════════════════════════════════════════════ -->
+  <div id="overdue-ticker-banner" class="ticker-hidden absolute bottom-0 left-0 right-0 z-20 overflow-hidden"
+       style="border-top: 1px solid rgba(184,146,58,0.25)">
+    <div class="relative flex items-center" style="background: rgba(251,251,249,0.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);">
+      <div class="flex-shrink-0 flex items-center gap-2 px-4 py-2.5"
+           style="background: linear-gradient(135deg, var(--gold) 0%, #c8832a 100%); border-right: 1px solid rgba(184,146,58,0.3)">
+        <iconify-icon icon="solar:danger-triangle-bold" width="14" style="color: white"></iconify-icon>
+        <span class="text-xs font-semibold uppercase tracking-widest" style="color: white">Quá 4h</span>
+        <span id="overdue-ticker-count"
+              class="text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+              style="background: rgba(255,255,255,0.25); color: white">0</span>
+      </div>
+      <div class="flex-1 overflow-hidden" style="mask-image: linear-gradient(to right, transparent 0%, black 4%, black 96%, transparent 100%); -webkit-mask-image: linear-gradient(to right, transparent 0%, black 4%, black 96%, transparent 100%);">
+        <div id="overdue-ticker-track" class="ticker-track">
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Scroll Down Arrow -->
+  <a href="#storage-layout"
+    onclick="event.preventDefault(); document.getElementById('storage-layout').scrollIntoView({behavior: 'smooth'});"
+    id="scroll-down-arrow"
+    class="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 cursor-pointer"
+    title="Cuộn xuống Sơ Đồ Kho">
+    
+    <div class="w-12 h-12 rounded-full flex items-center justify-center animate-bounce-gentle"
+        style="background: rgba(12, 12, 9, 0.07); border: 1px solid rgba(12, 12, 9, 0.1);">
+      
+      <!-- SVG Icon Mũi tên -->
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="color: var(--olive-700);">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+      
+    </div>
+  </a>
+  <!-- Scroll Up Arrow -->
+  <a href="#"
+    onclick="event.preventDefault(); window.scrollTo({top: 0, behavior: 'smooth'});"
+    id="scroll-up-arrow"
+    class="fixed bottom-8 right-8 z-50 cursor-pointer hidden"
+    title="Cuộn lên đầu trang">
+    
+    <div class="w-12 h-12 rounded-full flex items-center justify-center"
+        style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); backdrop-filter: blur(8px);">
+      
+      <!-- SVG Icon Mũi tên -->
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="color: white;">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+      </svg>
+      
+    </div>
+  </a>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STORAGE LAYOUT VISUALIZATION — 2 Columns, 8 Rows Each
+════════════════════════════════════════════════════════════ -->
+<section id="storage-layout" class="py-24 overflow-hidden relative" style="background-color: var(--olive-950)">
+  <div class="absolute top-0 left-0 w-1/2 h-full pointer-events-none"
+       style="background: linear-gradient(to right, rgba(255,255,255,0.02), transparent)"></div>
+
+  <div class="max-w-[1920px] mx-auto px-6">
+    <!-- Section Header -->
+    <div class="mb-8 reveal relative z-10">
+      <span class="inline-block text-xs font-medium uppercase tracking-widest mb-3"
+            style="color: var(--gold-lt)">Theo Dõi Trực Tiếp</span>
+      <h2 class="font-['Playfair_Display'] text-3xl md:text-4xl font-medium tracking-tight mb-3 text-white">
+        Sơ Đồ Kho
+      </h2>
+
+    </div>
+
+    <!-- 2-Column Layout Container -->
+    <div class="relative z-10">
+      <div id="storage-warehouse-grid" class="storage-warehouse-grid">
+        <!-- Will be rendered by JavaScript -->
+      </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="mt-12 text-center pt-8 border-t relative z-10" style="border-color: rgba(255,255,255,0.1)">
+      <p class="text-sm" style="color: rgba(255,255,255,0.55)">
+        Mức Độ Sử Dụng Kho: 
+        <span id="storage-occupancy-rate" class="font-medium text-lg ml-2" style="color: var(--gold-lt)">0%</span>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SYSTEM FEATURES — olive-50 light, olive-950 text
+════════════════════════════════════════════════════════════ -->
+<section id="why-us" class="py-24" style="background-color: var(--olive-50)">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center max-w-2xl mx-auto mb-16 reveal">
+      <h2 class="font-['Playfair_Display'] text-3xl md:text-4xl font-medium tracking-tight mb-4"
+          style="color: var(--olive-950)">Tính Năng Hệ Thống</h2>
+      <p class="text-sm font-light" style="color: var(--olive-500)">
+        Giải pháp quản lý tồn kho toàn diện với công nghệ hiện đại, giúp tối ưu hóa quy trình sản xuất.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
+      <div class="flex flex-col items-center text-center reveal">
+        <div class="feature-icon"><iconify-icon icon="solar:radar-linear" width="28" stroke-width="1.5"></iconify-icon></div>
+        <h4 class="font-medium text-lg mb-2 tracking-tight" style="color: var(--olive-950)">Theo Dõi Thời Gian Thực</h4>
+        <p class="text-sm font-light leading-relaxed" style="color: var(--olive-500)">Cập nhật trực tiếp vị trí và trạng thái của mọi sản phẩm trong kho.</p>
+      </div>
+      <div class="flex flex-col items-center text-center reveal reveal-delay-1">
+        <div class="feature-icon"><iconify-icon icon="solar:qr-code-linear" width="28" stroke-width="1.5"></iconify-icon></div>
+        <h4 class="font-medium text-lg mb-2 tracking-tight" style="color: var(--olive-950)">Tích Hợp Barcode</h4>
+        <p class="text-sm font-light leading-relaxed" style="color: var(--olive-500)">Quét mã vạch để cập nhật, di chuyển hoặc tra cứu thông tin WIP nhanh chóng.</p>
+      </div>
+      <div class="flex flex-col items-center text-center reveal reveal-delay-2">
+        <div class="feature-icon"><iconify-icon icon="solar:bell-bing-linear" width="28" stroke-width="1.5"></iconify-icon></div>
+        <h4 class="font-medium text-lg mb-2 tracking-tight" style="color: var(--olive-950)">Cảnh Báo Thông Minh</h4>
+        <p class="text-sm font-light leading-relaxed" style="color: var(--olive-500)">Thông báo tự động khi phát hiện tắc nghẽn hoặc vượt quá công suất kệ.</p>
+      </div>
+      <div class="flex flex-col items-center text-center reveal reveal-delay-3">
+        <div class="feature-icon"><iconify-icon icon="solar:graph-up-linear" width="28" stroke-width="1.5"></iconify-icon></div>
+        <h4 class="font-medium text-lg mb-2 tracking-tight" style="color: var(--olive-950)">Truy Xuất Nguồn Gốc</h4>
+        <p class="text-sm font-light leading-relaxed" style="color: var(--olive-500)">Lịch sử đầy đủ từ nguyên liệu thô đến thành phẩm, kiểm soát chất lượng tối ưu.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     FOOTER — olive-950
+════════════════════════════════════════════════════════════ -->
+<footer class="footer-dark text-white pt-20 pb-8 border-t" style="border-color: rgba(255,255,255,0.07)">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
+
+      <div class="lg:pr-8">
+        <div class="flex items-center gap-3 mb-4">
+          <img src="assets\logo-wanek.png"
+               alt="Wanek Furniture" class="h-12 w-12 object-contain">
+          <span class="font-['Playfair_Display'] text-2xl font-medium tracking-tighter text-white">WIP STORAGE</span>
+        </div>
+        <p class="text-sm font-light leading-relaxed mb-6" style="color: rgba(255,255,255,0.45)">
+          Hệ thống quản lý tồn kho thông minh cho ngành sản xuất nội thất.
+        </p>
+      </div>
+
+      <div>
+        <h6 class="font-medium text-white mb-5 tracking-wide text-sm">Chức năng</h6>
+        <ul class="space-y-3">
+          <li><a href="#destinations" class="text-sm font-light transition-colors hover:text-white" style="color: rgba(255,255,255,0.45)">Kho WIP</a></li>
+          <li><a href="#packages" class="text-sm font-light transition-colors hover:text-white" style="color: rgba(255,255,255,0.45)">Dây chuyền</a></li>
+          <li><a href="#why-us" class="text-sm font-light transition-colors hover:text-white" style="color: rgba(255,255,255,0.45)">Báo cáo</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h6 class="font-medium text-white mb-5 tracking-wide text-sm">Hỗ trợ</h6>
+        <ul class="space-y-3">
+          <li><a href="#" class="text-sm font-light transition-colors hover:text-white" style="color: rgba(255,255,255,0.45)">Hướng dẫn</a></li>
+          <li><a href="#" class="text-sm font-light transition-colors hover:text-white" style="color: rgba(255,255,255,0.45)">Video tutorial</a></li>
+          <li><a href="#" class="text-sm font-light transition-colors hover:text-white" style="color: rgba(255,255,255,0.45)">FAQ</a></li>
+          <li><a href="#" class="text-sm font-light transition-colors hover:text-white" style="color: rgba(255,255,255,0.45)">Liên hệ</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h6 class="font-medium text-white mb-5 tracking-wide text-sm">Cài Đặt Log</h6>
+        
+        <div class="mb-4 p-3 rounded-lg" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">
+          <div class="flex items-center gap-2 mb-1">
+            <iconify-icon icon="solar:folder-linear" width="14" style="color: rgba(255,255,255,0.5)"></iconify-icon>
+            <span class="text-xs font-medium" style="color: rgba(255,255,255,0.5)">Vị trí lưu log:</span>
+          </div>
+          <div id="log-directory-display" class="text-xs font-mono truncate" style="color: rgba(255,255,255,0.35)">
+            Chưa chọn thư mục
+          </div>
+        </div>
+        <!--
+        <button onclick="LogManager.promptPasswordAndChangeDirectory()" 
+                class="w-full text-xs px-3 py-2 rounded-lg transition-all hover:bg-white/10 flex items-center justify-center gap-2 mb-2"
+                style="background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.65); border: 1px solid rgba(255,255,255,0.1);"
+                title="Thay đổi vị trí lưu log (yêu cầu mật khẩu)">
+          <iconify-icon icon="solar:lock-keyhole-linear" width="14"></iconify-icon>
+          Đổi vị trí lưu
+        </button>
+        -->
+
+        <button onclick="LogManager.clearOldLogs(3)" 
+                class="w-full text-xs px-3 py-2 rounded-lg transition-all hover:bg-white/10 flex items-center justify-center gap-2"
+                style="background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.65); border: 1px solid rgba(255,255,255,0.1);"
+                title="Xóa log cũ hơn 3 tháng">
+          <iconify-icon icon="solar:trash-bin-minimalistic-linear" width="14"></iconify-icon>
+          Dọn dẹp log cũ
+        </button>
+      </div>
+    </div>
+
+    <div class="pt-8 border-t flex flex-col md:flex-row justify-between items-center gap-4"
+         style="border-color: rgba(255,255,255,0.07)">
+      <p class="text-xs font-light" style="color: rgba(255,255,255,0.35)">© 2024 WIP Storage System. All rights reserved.</p>
+      <span class="text-xs font-light" style="color: rgba(255,255,255,0.35)">Built for furniture excellence.</span>
+    </div>
+  </div>
+</footer>
+
+<!-- Scripts -->
+<script src="js/shelfLocations.js?v=20260923-compact-layout"></script>
+<script src="js/logManager.js?v=20260918-vehicle-family-status"></script>
+<script src="js/wipManager.js?v=20260918-indexed"></script>
+<script src="js/serverApi.js?v=20260923-product-zones"></script>
+<script src="js/excelParser.js?v=20260918-lazy-xlsx"></script>
+<script src="js/barcodeScanner.js"></script>
+<script src="js/uiController.js?v=20260923-search-results"></script>
+<script src="js/navbar.js"></script>
+<script src="js/app.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SHELF DETAIL CARD MODAL
+════════════════════════════════════════════════════════════ -->
+<div id="shelf-detail-modal" class="shelf-modal-overlay hidden">
+  <div class="shelf-detail-card">
+    <!-- Close Button -->
+    <button class="shelf-card-close" onclick="UIController.closeShelfDetailCard()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+
+    <!-- Shelf Location Header -->
+    <div class="shelf-card-header">
+      <iconify-icon icon="solar:map-point-bold" width="32" style="color: var(--gold)"></iconify-icon>
+      <h2 id="shelf-card-location" class="shelf-card-location-text">A-01</h2>
+    </div>
+
+    <!-- MO List (max 3) -->
+    <div id="shelf-card-mo-list" class="shelf-card-mo-list">
+      <!-- MO items will be inserted here -->
+    </div>
+
+    <!-- Add MO Button -->
+    <button id="shelf-card-add-btn" class="shelf-card-add-btn" onclick="UIController.addMOToShelf()">
+      <iconify-icon icon="solar:add-circle-bold" width="20"></iconify-icon>
+      <span>Thêm MO</span>
+    </button>
+  </div>
+</div>
+
+</body>
+</html>

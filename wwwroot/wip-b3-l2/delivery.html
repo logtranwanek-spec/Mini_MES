@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WIP B3–L2 — Giao hàng xuống WIP WNK3</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="css/delivery.css?v=20260922-filter-row">
+  <script src="/js/theme.js"></script>
+</head>
+<body class="delivery-page">
+  <header class="header">
+    <div><a href="index.html" class="btn-back-home">← Kho B3–L2</a><h1>WIP B3–L2 · Giao hàng xuống WIP WNK3</h1></div>
+    <div><a href="/wip-wnk3" class="btn-back-home">Màn hình bên nhận</a>
+      <button class="btn-global-toggle btn-view-toggle">Chế độ đơn giản</button></div>
+  </header>
+  <div class="container">
+    <aside class="sidebar">
+      <section class="section">
+        <h3>📅 NGÀY & FILE KẾ HOẠCH</h3>
+        <label for="deliveryDate">Ngày bên nhận</label>
+        <input id="deliveryDate" type="date" class="input-field">
+        <div class="file-buttons">
+          <button type="button" data-file="" class="btn btn-primary">Tất cả file</button>
+          <button type="button" data-file="Console Lid" class="btn btn-secondary">Console Lid</button>
+          <button type="button" data-file="Other" class="btn btn-secondary">File khác</button>
+        </div>
+        <button id="refreshDelivery" type="button" class="btn btn-sync">↻ Tải lại danh sách</button>
+        <button id="syncDeliveryPlan" type="button" class="btn btn-sync">↻ Cập nhật file kế hoạch</button>
+        <p id="deliveryPlanStatus" role="status" aria-live="polite"></p>
+        <p id="deliveryConnection" role="status" aria-live="polite">Đang tải…</p>
+      </section>
+      <section class="section">
+        <h3>Lead time giao hàng</h3>
+        <p>Đang hiển thị khung giờ của bên nhận WIP WNK3. Lead time riêng của bên giao đang chờ xác nhận.</p>
+        <p>Bấm vào <strong>bất kỳ chỗ nào trên dòng hàng</strong> để xem thông tin phiếu và các vị trí lấy hàng trong kho.</p>
+        <p>Trạng thái và ghi chú thiếu hàng được cập nhật từ bên nhận.</p>
+      </section>
+    </aside>
+    <main class="main-content">
+      <div class="search-filter-bar">
+        <div class="delivery-search">
+          <input id="deliverySearch" class="search-input" placeholder="Tìm MX, MW, FITEM…" aria-label="Tìm hàng giao">
+          <button id="clearDeliverySearch" class="btn-clear">Xóa</button><strong id="deliveryTotal">0 phiếu</strong>
+        </div>
+        <div class="delivery-filter-row">
+        <div class="delivery-filters">
+          <label><input type="checkbox" value="Pending" checked> ⏳ Chưa nhận</label>
+          <label><input type="checkbox" value="Received" checked> ✅ Đã nhận</label>
+          <label><input type="checkbox" value="Lack" checked> ❌ Nhận thiếu</label>
+          <label><input type="checkbox" value="Other" checked> Trạng thái khác</label>
+        </div>
+        <div class="delivery-time-nav"><span>Khung giờ bên nhận:</span><div id="deliveryTimes" class="time-scroll-container"></div></div>
+        </div>
+      </div>
+      <div id="deliveryOrders" class="order-list" aria-live="polite"></div>
+    </main>
+  </div>
+  <dialog id="deliveryLocations" aria-labelledby="deliveryLocationsTitle">
+    <div class="modal-header"><h2 id="deliveryLocationsTitle">Vị trí lấy hàng</h2><button id="closeDeliveryLocations" class="btn-close" aria-label="Đóng">×</button></div>
+    <div class="modal-body">
+      <dl id="deliveryOrderDetails" class="delivery-order-details"></dl>
+      <p id="locationReceipt"></p>
+      <p>Vị trí hàng đang có trong kho. Các dãy chưa được chỉ định Kit / Cushion / Fiber / Seat Decking sẽ hiện “Chưa phân khu”.</p>
+      <div id="deliveryLocationBody" aria-live="polite"></div>
+    </div>
+  </dialog>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+  <script src="js/delivery.js?v=20260923-product-zones"></script>
+</body>
+</html>

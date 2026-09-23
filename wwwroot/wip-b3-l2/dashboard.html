@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | WIP Storage</title>
+    <script src="js/tailwind.cdn.js"></script>
+    <link rel="stylesheet" href="css/main.css?v=20260923-rack-height">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Fira Sans', sans-serif;
+            background: oklch(0.988 0.003 106.5);
+            color: var(--olive-950, #0c0c09);
+        }
+
+        .dashboard-header {
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(12,12,9,0.08);
+        }
+
+
+        .line-clear-btn {
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 0.28rem 0.6rem;
+            border-radius: 0.45rem;
+            border: 1px solid oklch(0.65 0.15 25);
+            background: oklch(0.97 0.02 25);
+            color: oklch(0.45 0.14 25);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        .line-clear-btn:hover {
+            background: oklch(0.62 0.15 25);
+            color: white;
+            border-color: oklch(0.55 0.15 25);
+        }
+
+        .line-section-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--olive-500, #7c7c67);
+            margin: 1.25rem 0 0.6rem;
+            padding-left: 0.15rem;
+        }
+
+        .dash-card {
+            background: oklch(0.988 0.003 106.5);
+            border: 1px solid oklch(0.880 0.011 106.6);
+            border-radius: 0.75rem;
+            padding: 0.75rem 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-height: 92px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dash-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(12,12,9,0.08);
+            border-color: oklch(0.737 0.021 106.9);
+        }
+
+        .dash-card.occupied {
+            background: oklch(0.96 0.02 140);
+            border-color: oklch(0.75 0.08 140);
+        }
+
+        .dash-card.occupied:hover {
+            border-color: oklch(0.58 0.12 140);
+        }
+
+        .dash-card.highlight {
+            outline: 2px solid var(--accent, #7c9c5a);
+            outline-offset: 2px;
+            box-shadow: 0 0 0 4px rgba(124, 156, 90, 0.2);
+        }
+
+        .dash-card-code {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--olive-950, #0c0c09);
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+        }
+
+        .dash-card.occupied .dash-card-code {
+            color: oklch(0.35 0.08 140);
+        }
+
+        .dash-card-sub {
+            font-size: 0.7rem;
+            color: var(--olive-500, #7c7c67);
+            margin-top: 0.2rem;
+            line-height: 1.3;
+            word-break: break-all;
+        }
+
+        .dash-card.occupied .dash-card-sub {
+            color: oklch(0.45 0.06 140);
+        }
+
+        .dash-card-status {
+            font-size: 0.68rem;
+            font-weight: 500;
+            margin-top: 0.45rem;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .dash-card-status .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .dash-card.empty .dash-card-status { color: var(--olive-400, #abab9c); }
+        .dash-card.empty .dash-card-status .dot { background: var(--olive-300, #d8d8d0); }
+        .dash-card.occupied .dash-card-status { color: oklch(0.42 0.1 140); }
+        .dash-card.occupied .dash-card-status .dot { background: oklch(0.55 0.14 140); }
+
+        .dash-card-count {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.55rem;
+            font-size: 0.65rem;
+            font-weight: 600;
+            padding: 0.12rem 0.4rem;
+            border-radius: 999px;
+            background: rgba(12,12,9,0.06);
+            color: var(--olive-600, #5b5b4b);
+        }
+
+        .dash-card.occupied .dash-card-count {
+            background: oklch(0.55 0.12 140 / 0.15);
+            color: oklch(0.38 0.1 140);
+        }
+
+        #dashboard-grid { padding: 0.5rem 1.5rem 2.5rem; }
+
+        .line-group { margin-bottom: 0.5rem; }
+
+        .line-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 0.55rem;
+        }
+
+        /* Hourly chart */
+        .hourly-section {
+            margin: 1rem 1.5rem 0.5rem;
+            background: white;
+            border: 1px solid rgba(12,12,9,0.08);
+            border-radius: 1rem;
+            padding: 1rem 1.25rem 1.15rem;
+            box-shadow: 0 2px 8px rgba(12,12,9,0.04);
+        }
+
+        .hourly-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--olive-950);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .hourly-legend {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: var(--olive-500);
+        }
+        .hourly-legend span { display: flex; align-items: center; gap: 0.35rem; }
+        .hourly-legend i {
+            width: 10px; height: 10px; border-radius: 2px; display: inline-block;
+        }
+        .hourly-legend .in { background: oklch(0.55 0.12 140); }
+        .hourly-legend .out { background: oklch(0.62 0.15 25); }
+
+        .hourly-chart {
+            display: grid;
+            grid-template-columns: repeat(24, 1fr);
+            gap: 4px;
+            align-items: end;
+            height: 120px;
+        }
+
+        .hour-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+            gap: 2px;
+        }
+
+        .hour-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            width: 100%;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .bar {
+            flex: 1;
+            border-radius: 2px 2px 0 0;
+            min-height: 2px;
+            transition: height 0.3s ease;
+        }
+        .bar-in { background: oklch(0.55 0.12 140); }
+        .bar-out { background: oklch(0.62 0.15 25); }
+
+        .hour-label {
+            font-size: 0.58rem;
+            color: var(--olive-400);
+            margin-top: 4px;
+        }
+
+        /* Search */
+        .search-bar-wrap {
+            margin: 0.75rem 1.5rem 0;
+            display: flex;
+            gap: 0.6rem;
+            align-items: center;
+        }
+
+        .search-input {
+            flex: 1;
+            max-width: 320px;
+            padding: 0.55rem 0.9rem 0.55rem 2.4rem;
+            border: 1px solid rgba(12,12,9,0.12);
+            border-radius: 0.75rem;
+            font-size: 0.875rem;
+            background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23abab9c' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='M11 11l3.5 3.5'/%3E%3C/svg%3E") 0.75rem center no-repeat;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-input:focus {
+            border-color: var(--accent, #7c9c5a);
+            box-shadow: 0 0 0 3px rgba(124,156,90,0.15);
+        }
+
+
+        .manager-panel {
+            margin: 1.5rem 1.5rem 2.5rem;
+            padding: 1.15rem 1.25rem;
+            background: white;
+            border: 1px solid rgba(12,12,9,0.08);
+            border-radius: 1rem;
+            box-shadow: 0 2px 8px rgba(12,12,9,0.04);
+        }
+        .manager-panel h3 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--olive-950);
+            margin: 0 0 0.75rem;
+        }
+        .manager-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin-bottom: 0.85rem;
+        }
+        .manager-row:last-child { margin-bottom: 0; }
+        .manager-btn {
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.45rem 0.85rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(12,12,9,0.12);
+            background: #f5f5f0;
+            color: var(--olive-800);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .manager-btn:hover:not(:disabled) {
+            background: var(--olive-100, #ebebe3);
+        }
+        .manager-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .manager-btn.danger {
+            border-color: oklch(0.65 0.15 25);
+            background: oklch(0.97 0.02 25);
+            color: oklch(0.45 0.14 25);
+        }
+        .manager-btn.danger:hover:not(:disabled) {
+            background: oklch(0.62 0.15 25);
+            color: white;
+        }
+        .manager-hint {
+            font-size: 0.75rem;
+            color: var(--olive-500);
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .search-hint {
+            font-size: 0.75rem;
+            color: var(--olive-400);
+        }
+    </style>
+</head>
+<body>
+    <nav class="dashboard-header sticky top-0 z-20 p-4 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <h1 class="text-lg font-semibold" style="color: var(--olive-950)">Dashboard — Trạng thái kho</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(12,12,9,0.06); color: var(--olive-500)">C · D · E · F · G</span>
+        </div>
+        <a href="index.html" class="text-sm font-medium transition-colors hover:opacity-80" style="color: var(--accent, #7c7c67)">← Quay lại trang chính</a>
+    </nav>
+
+    <!-- Tần suất vào/ra theo giờ -->
+    <div class="hourly-section">
+        <div class="hourly-title">
+            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                <span id="hourly-title-text">Tần suất vào / ra theo giờ</span>
+                <input type="date" id="hourly-date" 
+                       style="padding:0.3rem 0.5rem;border:1px solid rgba(12,12,9,0.12);border-radius:0.5rem;font-size:0.8rem;background:white;color:var(--olive-800);outline:none;">
+            </div>
+            <div class="hourly-legend">
+                <span><i class="in"></i> Vào (In)</span>
+                <span><i class="out"></i> Ra (Out)</span>
+            </div>
+        </div>
+        <div id="hourly-chart" class="hourly-chart">
+            <!-- bars rendered by JS -->
+        </div>
+    </div>
+
+    <!-- Ô tìm kiếm vị trí -->
+    <div class="search-bar-wrap">
+        <input type="text" id="dashboard-search" class="search-input"
+               placeholder="Tìm vị trí (vd: C-12, G66, E14)..." autocomplete="off">
+        <span class="search-hint" id="search-result-hint"></span>
+    </div>
+
+    <div id="dashboard-grid"></div>
+
+    <!-- Công cụ manager (cuối trang) -->
+    <div class="manager-panel">
+        <h3>Công cụ manager</h3>
+        <div class="manager-row">
+            <button type="button" id="change-pw-btn" class="manager-btn">Đổi mật khẩu</button>
+            <button type="button" id="undo-clear-btn" class="manager-btn danger" disabled>Hoàn tác xóa hàng loạt</button>
+        </div>
+    </div>
+
+    <div id="shelf-detail-modal" class="shelf-modal-overlay hidden">
+      <div class="shelf-detail-card" style="max-width: 42rem; width: 90%;">
+        <button class="shelf-card-close" onclick="closeShelfModal()">X</button>
+        <div class="shelf-card-header">
+          <h2 id="modal-shelf-code" class="shelf-card-location-text">A-01</h2>
+        </div>
+        <h3 class="text-lg font-semibold mb-2" style="color: var(--olive-700)">Trạng thái hiện tại</h3>
+        <div id="modal-current-status" class="mb-6 p-4 rounded-lg" style="background: rgba(12,12,9,0.04);"></div>
+        <h3 class="text-lg font-semibold mb-2" style="color: var(--olive-700)">Lịch sử gần đây (10)</h3>
+        <div class="overflow-y-auto max-h-64">
+            <table class="w-full text-sm text-left">
+                <thead class="text-xs uppercase" style="background: rgba(12,12,9,0.06); color: var(--olive-600);">
+                    <tr>
+                        <th class="px-4 py-2">Mã MO</th>
+                        <th class="px-4 py-2">Scan In</th>
+                        <th class="px-4 py-2">Scan Out</th>
+                        <th class="px-4 py-2">Thời gian lưu</th>
+                    </tr>
+                </thead>
+                <tbody id="modal-history-body" style="color: var(--olive-600);"></tbody>
+            </table>
+        </div>
+      </div>
+    </div>
+
+    <script src="js/shelfLocations.js?v=20260923-rack-height"></script>
+    <script src="js/logManager.js"></script>
+<script src="js/wipManager.js"></script>
+<script src="js/serverApi.js?v=20260916-empty-json-fix"></script>
+    <script src="js/dashboard.js?v=20260923-rack-height"></script>
+</body>
+</html>
