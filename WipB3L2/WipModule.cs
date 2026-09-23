@@ -111,13 +111,52 @@ public sealed class WipStore
     private readonly object _gate = new();
     private bool _initialized;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    public static readonly int[] Capacities = [76,76,76,76,74,76,76,76,91,76,90,76,76,76,76,76];
     public const int MaxMOsPerShelf = 999;
-    private static readonly string[] Shelves = Capacities.SelectMany((count, i) =>
-        Enumerable.Range(1, count).Select(n => $"{(char)('A' + i)}-{n:00}")).ToArray();
-    // Keep automatic kit placement in the established area until product areas are assigned.
-    private static readonly string[] AutoAssignShelves = Shelves.Where(s => s[0] is >= 'C' and <= 'G').ToArray();
 
+    // A–H, J, L–P: format cũ  A-01 ...
+    // I: I1-1..I1-16, I2-1.1..I2-1.25, I2-2.1..I2-2.25, I3-3.1..I3-3.25
+    // K: K-1.1..K-1.30, K-2.1..K-2.30, K-3.1..K-3.30
+    private static readonly string[] Shelves = BuildShelves();
+
+    private static string[] BuildShelves()
+    {
+        var list = new List<string>();
+        for (var i = 0; i < 16; i++)
+        {
+            var line = (char)('A' + i);
+
+            if (line == 'I')
+            {
+                for (var n = 1; n <= 16; n++)
+                    list.Add($"I1-{n}");
+                for (var pos = 1; pos <= 25; pos++)
+                    list.Add($"I2-1.{pos}");
+                for (var pos = 1; pos <= 25; pos++)
+                    list.Add($"I2-2.{pos}");
+                for (var pos = 1; pos <= 25; pos++)
+                    list.Add($"I2-3.{pos}");
+                continue;
+            }
+
+            if (line == 'K')
+            {
+                for (var tier = 1; tier <= 3; tier++)
+                    for (var pos = 1; pos <= 30; pos++)
+                        list.Add($"K-{tier}.{pos}");
+                continue;
+            }
+
+            var count = line == 'E' ? 74 : 76;
+            for (var n = 1; n <= count; n++)
+                list.Add($"{line}-{n:00}");
+        }
+        return list.ToArray();
+    }
+
+    // Keep automatic kit placement in the established area until product areas are assigned.
+    private static readonly string[] AutoAssignShelves = Shelves
+        .Where(s => s.Length > 0 && s[0] is >= 'C' and <= 'G')
+        .ToArray();
     public WipStore(string databasePath) => _path = Path.GetFullPath(databasePath);
 
     private SqliteConnection Open()
@@ -239,12 +278,34 @@ public sealed class WipStore
             throw new ArgumentException("Mã MO phải có 2–100 ký tự: chữ, số, dấu chấm, gạch ngang, gạch dưới hoặc /.");
         return mo;
     }
-    private static string Area(string shelf) => shelf[0] switch
+    private static string Area(string shelf)
     {
-        'C' or 'D' or 'E' or 'F' or 'G' => "MO",
-        'I' or 'K' => "Cushion", 'A' or 'B' => "Fiber", 'M' or 'N' => "Decking",
-        _ => shelf[..1]
-    };
+        var s = (shelf ?? "").Trim().ToUpperInvariant();
+        if (s.Length == 0) return "";
+
+        // Địa chỉ mới của I / K
+        if (s.StartsWith("I1") || s.StartsWith("I2") || s.StartsWith("I-"))
+            return "Cushion";
+        if (s.StartsWith("K"))
+            return "Cushion";
+
+        return s[0] switch
+        {
+            'C' or 'D' or 'E' or 'F' or 'G' => "MO",
+            'A' or 'B' => "Fiber",
+            'M' or 'N' => "Decking",
+            _ => s[..1]
+        };
+    }
+    private static char LineKey(string shelf)
+    {
+        var s = (shelf ?? "").Trim().ToUpperInvariant();
+        if (s.StartsWith("I1") || s.StartsWith("I2") || s.StartsWith("I3") || s.StartsWith("I-"))
+            return 'I';
+        if (s.StartsWith("K"))
+            return 'K';
+        return s.Length > 0 ? s[0] : '\0';
+    }
     private static string ProductArea(string? type) => type switch
     {
         null or "MO" => "MO", "Cushion" => "Cushion", "Fiber" => "Fiber", "Decking" => "Decking",
@@ -313,8 +374,11 @@ public sealed class WipStore
                     "Decking" => "MN",
                     _ => throw new ArgumentException("Loại hàng không hợp lệ.")
                 };
-                shelf = shelf == null ? Shelves.FirstOrDefault(s => allowedLines.Contains(s[0]) && entries.All(e => e.Shelf != s)) : Shelf(shelf);
-                if (!imported && !restored && request.ProductType != null && shelf != null && !allowedLines.Contains(shelf[0]))
+                shelf = shelf == null
+                    ? Shelves.FirstOrDefault(s => allowedLines.Contains(LineKey(s)) && entries.All(e => e.Shelf != s))
+                    : Shelf(shelf);
+
+                if (!imported && !restored && request.ProductType != null && shelf != null && !allowedLines.Contains(LineKey(shelf)))
                     throw new ArgumentException("Vị trí không thuộc khu của loại hàng đã chọn.");
                 if (shelf == null) throw new WipConflict("Kho đã hết vị trí trống.");
                 if (entries.Any(e => e.Mo == mo && Area(e.Shelf) == Area(shelf)))
@@ -449,7 +513,7 @@ public sealed class WipStore
                     break;
                 case "clear-line":
                     if (request.Line == null || !Regex.IsMatch(request.Line, "^[A-P]$")) throw new ArgumentException("Line không hợp lệ.");
-                    var onLine = entries.Where(e => e.Shelf.StartsWith(request.Line + "-", StringComparison.Ordinal)).ToList();
+                    var onLine = entries.Where(e => LineKey(e.Shelf) == request.Line[0]).ToList();
                     if (onLine.Count == 0) throw new WipConflict("Line không có MO để xuất.");
                     if (request.Items == null || request.Items.Count != onLine.Count ||
                         !onLine.Select(e => new WipRemoval(e.CardId, e.Mo, e.Id)).ToHashSet().SetEquals(request.Items))

@@ -507,6 +507,15 @@ const UIController = {
         }
     },
 
+    getProductTypeFromShelf(shelfCode) {
+        const line = (shelfCode || '').charAt(0).toUpperCase();
+        if ('CDEFG'.includes(line)) return 'MO';
+        if ('IK'.includes(line)) return 'Cushion';
+        if ('AB'.includes(line)) return 'Fiber';
+        if ('MN'.includes(line)) return 'Decking';
+        return 'MO'; // fallback
+    },
+
     /**
      * UPDATED: Handle Add MO - now shows vehicle count dialog
      */
@@ -964,7 +973,7 @@ const UIController = {
     */
     renderNormalLine(dataLine, occupancyMap, displayLine, isLeftColumn = false) {
         if (dataLine === 'I' || dataLine === 'K') return this.renderTieredRack(dataLine, occupancyMap, isLeftColumn);
-        const lineColor = ShelfLocations.getAreaColor(`${dataLine}-01`);
+        const lineColor = ShelfLocations.getAreaColor(dataLine);
         
         // Capacity cho từng line (khớp với shelfLocations.js)
         const lineCapacities = ShelfLocations.lineCapacities;
@@ -983,16 +992,16 @@ const UIController = {
         let slotsHTML = '';
 
         if (isSingleRow) {
-            // ===== SINGLE ROW =====
-            if (dataLine === 'O') {
-                // O: Ngược 38→1
+            // Cột trái (O, và single-row khác): max → 1
+            // Cột phải: 1 → max
+            if (isLeftColumn) {
                 for (let pos = maxPosition; pos >= 1; pos--) {
                     const code = `${dataLine}-${pos.toString().padStart(2, '0')}`;
                     const occupied = occupancyMap[code];
-                    
+
                     let slotClass = 'warehouse-slot empty';
                     let tooltip = `${code} - Trống`;
-                    
+
                     if (occupied) {
                         if (occupied.isOverdue) {
                             slotClass = 'warehouse-slot overdue';
@@ -1002,23 +1011,22 @@ const UIController = {
                             tooltip = `${code} - Đã dùng\nMO: ${occupied.moNumbers.join(', ')}`;
                         }
                     }
-                    
+
                     slotsHTML += `
-                        <div class="${slotClass}" 
-                            data-shelf="${code}" 
+                        <div class="${slotClass}"
+                            data-shelf="${code}"
                             data-tooltip="${tooltip}">
                         </div>
                     `;
                 }
             } else {
-                // G: Thuận 1→38
                 for (let pos = 1; pos <= maxPosition; pos++) {
                     const code = `${dataLine}-${pos.toString().padStart(2, '0')}`;
                     const occupied = occupancyMap[code];
-                    
+
                     let slotClass = 'warehouse-slot empty';
                     let tooltip = `${code} - Trống`;
-                    
+
                     if (occupied) {
                         if (occupied.isOverdue) {
                             slotClass = 'warehouse-slot overdue';
@@ -1028,142 +1036,64 @@ const UIController = {
                             tooltip = `${code} - Đã dùng\nMO: ${occupied.moNumbers.join(', ')}`;
                         }
                     }
-                    
+
                     slotsHTML += `
-                        <div class="${slotClass}" 
-                            data-shelf="${code}" 
+                        <div class="${slotClass}"
+                            data-shelf="${code}"
                             data-tooltip="${tooltip}">
                         </div>
                     `;
                 }
             }
-            
         } else {
             // ===== DOUBLE ROW =====
             const slotsPerRow = Math.ceil(maxPosition / 2);
-            
-            if (dataLine === 'M' || dataLine === 'N') {
-                // M, N: Hàng 1 thuận (39→76), Hàng 2 ngược (38→1)
-                
-                // HÀNG 1: Thuận (slotsPerRow + 1 → maxPosition)
-                for (let pos = slotsPerRow + 1; pos <= maxPosition; pos++) {
-                    const code = `${dataLine}-${pos.toString().padStart(2, '0')}`;
-                    const occupied = occupancyMap[code];
-                    
-                    let slotClass = 'warehouse-slot empty';
-                    let tooltip = `${code} - Trống`;
-                    
-                    if (occupied) {
-                        if (occupied.isOverdue) {
-                            slotClass = 'warehouse-slot overdue';
-                            tooltip = `${code} - QUÁ HẠN\nMO: ${occupied.moNumbers.join(', ')}`;
-                        } else {
-                            slotClass = 'warehouse-slot occupied';
-                            tooltip = `${code} - Đã dùng\nMO: ${occupied.moNumbers.join(', ')}`;
-                        }
+
+            const appendSlot = (pos) => {
+                const code = `${dataLine}-${pos.toString().padStart(2, '0')}`;
+                const occupied = occupancyMap[code];
+
+                let slotClass = 'warehouse-slot empty';
+                let tooltip = `${code} - Trống`;
+
+                if (occupied) {
+                    if (occupied.isOverdue) {
+                        slotClass = 'warehouse-slot overdue';
+                        tooltip = `${code} - QUÁ HẠN\nMO: ${occupied.moNumbers.join(', ')}`;
+                    } else {
+                        slotClass = 'warehouse-slot occupied';
+                        tooltip = `${code} - Đã dùng\nMO: ${occupied.moNumbers.join(', ')}`;
                     }
-                    
-                    slotsHTML += `
-                        <div class="${slotClass}" 
-                            data-shelf="${code}" 
-                            data-tooltip="${tooltip}">
-                        </div>
-                    `;
                 }
-                
-                // HÀNG 2: Ngược (slotsPerRow → 1)
-                for (let pos = slotsPerRow; pos >= 1; pos--) {
-                    const code = `${dataLine}-${pos.toString().padStart(2, '0')}`;
-                    const occupied = occupancyMap[code];
-                    
-                    let slotClass = 'warehouse-slot empty';
-                    let tooltip = `${code} - Trống`;
-                    
-                    if (occupied) {
-                        if (occupied.isOverdue) {
-                            slotClass = 'warehouse-slot overdue';
-                            tooltip = `${code} - QUÁ HẠN\nMO: ${occupied.moNumbers.join(', ')}`;
-                        } else {
-                            slotClass = 'warehouse-slot occupied';
-                            tooltip = `${code} - Đã dùng\nMO: ${occupied.moNumbers.join(', ')}`;
-                        }
-                    }
-                    
-                    slotsHTML += `
-                        <div class="${slotClass}" 
-                            data-shelf="${code}" 
-                            data-tooltip="${tooltip}">
-                        </div>
-                    `;
-                }
-                
+
+                slotsHTML += `
+                    <div class="${slotClass}"
+                        data-shelf="${code}"
+                        data-tooltip="${tooltip}">
+                    </div>
+                `;
+            };
+
+            if (isLeftColumn) {
+                // Trái (J/L/M/N/P): đối xứng — Hàng 1: 39→76, Hàng 2: 38→1
+                for (let pos = slotsPerRow + 1; pos <= maxPosition; pos++) appendSlot(pos);
+                for (let pos = slotsPerRow; pos >= 1; pos--) appendSlot(pos);
             } else {
-                // A-F, H-L: Hàng 1 ngược (76→39), Hàng 2 thuận (1→38)
-                
-                // HÀNG 1: Ngược (maxPosition → slotsPerRow + 1)
-                for (let pos = maxPosition; pos > slotsPerRow; pos--) {
-                    const code = `${dataLine}-${pos.toString().padStart(2, '0')}`;
-                    const occupied = occupancyMap[code];
-                    
-                    let slotClass = 'warehouse-slot empty';
-                    let tooltip = `${code} - Trống`;
-                    
-                    if (occupied) {
-                        if (occupied.isOverdue) {
-                            slotClass = 'warehouse-slot overdue';
-                            tooltip = `${code} - QUÁ HẠN\nMO: ${occupied.moNumbers.join(', ')}`;
-                        } else {
-                            slotClass = 'warehouse-slot occupied';
-                            tooltip = `${code} - Đã dùng\nMO: ${occupied.moNumbers.join(', ')}`;
-                        }
-                    }
-                    
-                    slotsHTML += `
-                        <div class="${slotClass}" 
-                            data-shelf="${code}" 
-                            data-tooltip="${tooltip}">
-                        </div>
-                    `;
-                }
-                
-                // Thêm ô trống cho Line E (hàng 1)
+                // Phải (A–H, …): Hàng 1: 76→39, Hàng 2: 1→38
+                for (let pos = maxPosition; pos > slotsPerRow; pos--) appendSlot(pos);
+
                 if (dataLine === 'E') {
                     slotsHTML += `<div class="warehouse-slot-spacer" style="visibility: hidden; pointer-events: none;"></div>`;
                 }
-                
-                // HÀNG 2: Thuận (1 → slotsPerRow)
-                for (let pos = 1; pos <= slotsPerRow; pos++) {
-                    const code = `${dataLine}-${pos.toString().padStart(2, '0')}`;
-                    const occupied = occupancyMap[code];
-                    
-                    let slotClass = 'warehouse-slot empty';
-                    let tooltip = `${code} - Trống`;
-                    
-                    if (occupied) {
-                        if (occupied.isOverdue) {
-                            slotClass = 'warehouse-slot overdue';
-                            tooltip = `${code} - QUÁ HẠN\nMO: ${occupied.moNumbers.join(', ')}`;
-                        } else {
-                            slotClass = 'warehouse-slot occupied';
-                            tooltip = `${code} - Đã dùng\nMO: ${occupied.moNumbers.join(', ')}`;
-                        }
-                    }
-                    
-                    slotsHTML += `
-                        <div class="${slotClass}" 
-                            data-shelf="${code}" 
-                            data-tooltip="${tooltip}">
-                        </div>
-                    `;
-                }
-                
-                // Thêm ô trống cho Line E (hàng 2)
+
+                for (let pos = 1; pos <= slotsPerRow; pos++) appendSlot(pos);
+
                 if (dataLine === 'E') {
                     slotsHTML += `<div class="warehouse-slot-spacer" style="visibility: hidden; pointer-events: none;"></div>`;
                 }
             }
         }
-
+        
         let containerClass;
         if (isSingleRow) {
             containerClass = 'warehouse-slots-container-single';
@@ -1211,34 +1141,52 @@ const UIController = {
 
     renderTieredRack(line, occupancyMap, isLeftColumn) {
         const capacity = ShelfLocations.lineCapacities[line];
-        const lineIcon = `<iconify-icon icon="solar:box-minimalistic-bold" width="16" style="color: ${ShelfLocations.getAreaColor(`${line}-01`)}"></iconify-icon>`;
+        const lineColor = ShelfLocations.getAreaColor(line);
+        const lineIcon = `<iconify-icon icon="solar:box-minimalistic-bold" width="16" style="color: ${lineColor}"></iconify-icon>`;
         const slotsPerTier = line === 'I' ? 25 : 30;
         const escape = value => String(value).replace(/[&<>"']/g, ch =>
             ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
         let occupiedCount = 0;
+
+        // I: I2-1.x / I2-2.x / I3-3.x
+        // K: K-1.x / K-2.x / K-3.x
         const tiers = [3, 2, 1].map(tier => {
             const slots = Array.from({ length: slotsPerTier }, (_, index) => {
-                const position = (tier - 1) * slotsPerTier + index + 1;
-                const code = `${line}-${String(position).padStart(2, '0')}`;
+                // I (phải): 1 → N (trái sang phải)
+                // K (trái): N → 1 (đối xứng, số hiện = địa chỉ thật)
+                const pos = isLeftColumn
+                    ? (slotsPerTier - index)   // K: 30,29,...,1
+                    : (index + 1);             // I: 1,2,...,25
+
+                const code = line === 'I'
+                    ? `I2-${tier}.${pos}`
+                    : `K-${tier}.${pos}`;
+
                 const occupied = occupancyMap[code];
                 if (occupied) occupiedCount++;
                 const status = occupied ? (occupied.isOverdue ? 'overdue' : 'occupied') : 'empty';
-                const tooltip = `${code} · Tầng ${tier} · Ô ${index + 1}` +
-                    (occupied ? `\nMW: ${occupied.moNumbers.join(', ')}` : ' · Trống');
-                return `<div class="warehouse-slot ${status}" data-shelf="${code}" data-tooltip="${escape(tooltip)}">${position}</div>`;
+                const tooltip = code + (occupied ? `\nMW: ${occupied.moNumbers.join(', ')}` : ' · Trống');
+
+                return `<div class="warehouse-slot ${status}" data-shelf="${escape(code)}" data-tooltip="${escape(tooltip)}">${pos}</div>`;
             }).join('');
             return `<div class="warehouse-rack-tier" data-tier="${tier}"><div class="warehouse-tier-slots" style="--slots-per-tier: ${slotsPerTier}">${slots}</div></div>`;
         }).join('');
+
+        // Hàng 16 ô của I: I1-1 → I1-16
         const extraSlots = line === 'I' ? Array.from({ length: 16 }, (_, index) => {
-            const code = `I-${76 + index}`;
+            const pos = index + 1;
+            const code = `I1-${pos}`;
             const occupied = occupancyMap[code];
             if (occupied) occupiedCount++;
             const status = occupied ? (occupied.isOverdue ? 'overdue' : 'occupied') : 'empty';
-            const tooltip = `${code} · Dãy 1 tầng · Ô ${index + 1}` +
-                (occupied ? `\nMW: ${occupied.moNumbers.join(', ')}` : ' · Trống');
-            return `<div class="warehouse-slot ${status}" data-shelf="${code}" data-tooltip="${escape(tooltip)}">${index + 1}</div>`;
+            const tooltip = code + (occupied ? `\nMW: ${occupied.moNumbers.join(', ')}` : ' · Trống');
+            return `<div class="warehouse-slot ${status}" data-shelf="${escape(code)}" data-tooltip="${escape(tooltip)}">${pos}</div>`;
         }).join('') : '';
-        const extraRow = extraSlots ? `<div class="warehouse-rack-extra" data-extra-row="I"><span>Dãy 1 tầng · Ô 1–16</span><div class="warehouse-tier-slots" style="--slots-per-tier: 16">${extraSlots}</div></div>` : '';
+
+        const extraRow = extraSlots
+            ? `<div class="warehouse-rack-extra" data-extra-row="I"><span>Dãy 1 tầng · Ô 1–16</span><div class="warehouse-tier-slots" style="--slots-per-tier: 16">${extraSlots}</div></div>`
+            : '';
+
         return `<div class="warehouse-line-row warehouse-tiered-rack ${isLeftColumn ? 'warehouse-line-right' : ''}" data-line="${line}">
             <div class="warehouse-line-label">${isLeftColumn ? `<span>${line}</span>${lineIcon}` : `${lineIcon}<span>${line}</span>`}</div>
             <div class="warehouse-rack-tiers">${tiers}${extraRow}</div>
@@ -1260,21 +1208,28 @@ const UIController = {
     openShelfDetailCard(shelfCode) {
         const cards = WIPManager.getByShelf(shelfCode);
         
-        // Update location header
         this.elements.shelfCardLocation.textContent = shelfCode;
-        
-        // Render MO list
         this.renderShelfCardMOList(cards);
         
-        // Show modal
-        this.elements.shelfDetailModal.classList.remove('hidden');
+        // ✅ Tự động đổi loại hàng + chữ nút theo vị trí
+        const productType = this.getProductTypeFromShelf(shelfCode);
+        this.selectedProductType = productType;
         
-        // Disable body scroll
+        if (this.elements.shelfCardAddBtn) {
+            const labels = {
+                MO: 'Thêm MO',
+                Cushion: 'Thêm Cushion',
+                Fiber: 'Thêm Fiber',
+                Decking: 'Thêm Decking'
+            };
+            this.elements.shelfCardAddBtn.textContent = labels[productType] || 'Thêm hàng';
+        }
+        
+        this.elements.shelfDetailModal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
         
-        console.log(`Opened shelf detail card for: ${shelfCode}`);
+        console.log(`Opened shelf detail card for: ${shelfCode} (${productType})`);
     },
-
     /**
      * Close shelf detail card
      */
@@ -1326,7 +1281,7 @@ const UIController = {
             this.elements.shelfCardMOList.innerHTML = `
                 <div class="shelf-card-empty">
                     <iconify-icon icon="solar:box-linear" width="48"></iconify-icon>
-                    <p>Vị trí này đang trống<br>Nhấn "Thêm MO" để thêm</p>
+                    <p>Vị trí này đang trống<br>Nhấn nút bên dưới để thêm</p>
                 </div>
             `;
             return;
@@ -1394,29 +1349,28 @@ const UIController = {
     async addMOToShelf() {
         if (!this.currentShelfCode) return;
         
-        const moNumber = prompt('Nhập mã MO:');
+        const productType = this.getProductTypeFromShelf(this.currentShelfCode);
+        const label = productType === 'MO' ? 'MO' : productType;
+        
+        const moNumber = prompt(`Nhập mã ${label}:`);
         if (!moNumber || moNumber.trim() === '') return;
         
         const trimmedMO = moNumber.trim();
         
-        // Create or add to card
-        const card = await WIPManager.createCard(this.currentShelfCode, trimmedMO);
+        // ✅ Truyền đúng productType theo vị trí kệ
+        const card = await WIPManager.createCard(this.currentShelfCode, trimmedMO, productType);
         
         if (card) {
             BarcodeScanner.playSuccess();
-            BarcodeScanner.showScanFeedback(`✓ Đã thêm MO "${trimmedMO}" vào ${this.currentShelfCode}`, 'success');
+            BarcodeScanner.showScanFeedback(`✓ Đã thêm ${label} "${trimmedMO}" vào ${this.currentShelfCode}`, 'success');
             
-            // Refresh card display
             const cards = WIPManager.getByShelf(this.currentShelfCode);
             this.renderShelfCardMOList(cards);
-            
-
         } else {
             BarcodeScanner.playError();
-            BarcodeScanner.showScanFeedback('Không thể thêm MO (đã đầy hoặc lỗi)', 'error');
+            BarcodeScanner.showScanFeedback(`Không thể thêm ${label} (đã đầy hoặc lỗi)`, 'error');
         }
     },
-
     /**
      * Remove MO from shelf card
      * Truyền thêm currentShelfCode để tìm chắc chắn hơn

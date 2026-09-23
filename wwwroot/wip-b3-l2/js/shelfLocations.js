@@ -37,6 +37,29 @@ const ShelfLocations = {
         this.locations = {};
 
         Object.keys(this.lineCapacities).forEach(line => {
+            if (line === 'I') {
+                // Hàng 1 tầng: I1-1 → I1-16
+                for (let n = 1; n <= 16; n++) {
+                    this.locations[`I1-${n}`] = `I1 - Position ${n}`;
+                }
+                // Kệ 3 tầng
+                for (let pos = 1; pos <= 25; pos++) {
+                    this.locations[`I2-1.${pos}`] = `I2 Tier1 - Position ${pos}`;
+                    this.locations[`I2-2.${pos}`] = `I2 Tier2 - Position ${pos}`;
+                    this.locations[`I2-3.${pos}`] = `I2 Tier3 - Position ${pos}`;
+                }
+                return;
+            }
+
+            if (line === 'K') {
+                for (let tier = 1; tier <= 3; tier++) {
+                    for (let pos = 1; pos <= 30; pos++) {
+                        this.locations[`K-${tier}.${pos}`] = `K Tier${tier} - Position ${pos}`;
+                    }
+                }
+                return;
+            }
+
             const maxPos = this.lineCapacities[line];
             for (let pos = 1; pos <= maxPos; pos++) {
                 const code = `${line}-${pos.toString().padStart(2, '0')}`;
@@ -52,19 +75,12 @@ const ShelfLocations = {
      * Validate if a shelf code exists
      */
     isValid(code) {
-        if (!code || typeof code !== 'string') return false;
-        
-        const pattern = /^[A-P]-\d{2}$/;
-        if (!pattern.test(code)) return false;
-        
-        const parts = code.split('-');
-        const line = parts[0];
-        const position = parseInt(parts[1], 10);
-        
-        const maxPos = this.lineCapacities[line];
-        if (!maxPos) return false;
-        
-        return position >= 1 && position <= maxPos;
+        if (!code) return false;
+        const key = String(code).trim();
+        if (this.locations[key]) return true;
+        // chấp nhận cả viết hoa
+        const upper = key.toUpperCase();
+        return Object.keys(this.locations).some(k => k.toUpperCase() === upper);
     },
 
     /**
@@ -84,32 +100,38 @@ const ShelfLocations = {
      * Get color based on line (A-P) - 16 distinct colors
      */
     getAreaColor(code) {
-        if (!code || code.length < 1) return '#6B7280';
-        
-        const line = code.charAt(0).toUpperCase();
-        
+        if (!code || String(code).length < 1) return '#6B7280';
+
+        let line = String(code).trim().toUpperCase();
+        if (line.startsWith('I1') || line.startsWith('I2') || line.startsWith('I-')) {
+            line = 'I';
+        } else if (line.startsWith('K')) {
+            line = 'K';
+        } else {
+            line = line.charAt(0);
+        }
+
         const colorMap = {
-            'A': '#EF4444', // Red
-            'B': '#F97316', // Orange
-            'C': '#F59E0B', // Amber
-            'D': '#EAB308', // Yellow
-            'E': '#84CC16', // Lime
-            'F': '#22C55E', // Green
-            'G': '#10B981', // Emerald
-            'H': '#14B8A6', // Teal
-            'I': '#06B6D4', // Cyan
-            'J': '#0EA5E9', // Sky
-            'K': '#3B82F6', // Blue
-            'L': '#6366F1', // Indigo
-            'M': '#8B5CF6', // Violet
-            'N': '#A855F7', // Purple
-            'O': '#D946EF', // Fuchsia
-            'P': '#EC4899'  // Pink
+            'A': '#EF4444',
+            'B': '#F97316',
+            'C': '#F59E0B',
+            'D': '#EAB308',
+            'E': '#84CC16',
+            'F': '#22C55E',
+            'G': '#10B981',
+            'H': '#14B8A6',
+            'I': '#06B6D4',
+            'J': '#0EA5E9',
+            'K': '#3B82F6',
+            'L': '#6366F1',
+            'M': '#8B5CF6',
+            'N': '#A855F7',
+            'O': '#D946EF',
+            'P': '#EC4899'
         };
-        
+
         return colorMap[line] || '#6B7280';
     },
-
     getAreaColorRGB(code) {
         const hex = this.getAreaColor(code);
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -134,27 +156,71 @@ const ShelfLocations = {
     },
 
     getLine(code) {
-        if (!code || code.length < 1) return '';
-        return code.charAt(0).toUpperCase();
+        if (!code) return '';
+        const s = String(code).trim().toUpperCase();
+        if (s.startsWith('I1') || s.startsWith('I2') || s.startsWith('I-')) return 'I';
+        if (s.startsWith('K')) return 'K';
+        return s.charAt(0);
     },
 
     /**
      * Get all locations for a specific line (with correct capacity)
      */
     getLineLocations(line) {
-        if (!line || line.length !== 1) return [];
-        
-        const lineLetter = line.toUpperCase();
+        if (!line) return [];
+        const lineLetter = String(line).toUpperCase();
         if (!/^[A-P]$/.test(lineLetter)) return [];
-        
-        const maxPos = this.lineCapacities[lineLetter] || 70;
-        
+
         const locations = [];
+
+        if (lineLetter === 'I') {
+            for (let n = 1; n <= 16; n++) {
+                const code = `I1-${n}`;
+                locations.push({
+                    code,
+                    name: this.locations[code] || code,
+                    color: this.getAreaColor(code),
+                    line: 'I',
+                    position: n
+                });
+            }
+            for (const tierCode of ['I2-1', 'I2-2', 'I2-3']) {
+                for (let pos = 1; pos <= 25; pos++) {
+                    const code = `${tierCode}.${pos}`;
+                    locations.push({
+                        code,
+                        name: this.locations[code] || code,
+                        color: this.getAreaColor(code),
+                        line: 'I',
+                        position: pos
+                    });
+                }
+            }
+            return locations;
+        }
+
+        if (lineLetter === 'K') {
+            for (let tier = 1; tier <= 3; tier++) {
+                for (let pos = 1; pos <= 30; pos++) {
+                    const code = `K-${tier}.${pos}`;
+                    locations.push({
+                        code,
+                        name: this.locations[code] || code,
+                        color: this.getAreaColor(code),
+                        line: 'K',
+                        position: pos
+                    });
+                }
+            }
+            return locations;
+        }
+
+        const maxPos = this.lineCapacities[lineLetter] || 70;
         for (let pos = 1; pos <= maxPos; pos++) {
             const code = `${lineLetter}-${pos.toString().padStart(2, '0')}`;
             locations.push({
                 code,
-                name: this.getName(code),
+                name: this.locations[code] || code,
                 color: this.getAreaColor(code),
                 line: lineLetter,
                 position: pos
@@ -195,36 +261,22 @@ const ShelfLocations = {
      */
     search(searchTerm) {
         if (!searchTerm) return [];
-        
-        const term = searchTerm.toUpperCase().trim();
+        const term = String(searchTerm).trim().toUpperCase();
         const results = [];
-        
-        const lines = this.getAllLines();
-        
-        lines.forEach(line => {
-            if (term === line) {
-                results.push(...this.getLineLocations(line));
-                return;
-            }
-            
-            const maxPos = this.lineCapacities[line] || 70;
-            
-            for (let pos = 1; pos <= maxPos; pos++) {
-                const code = `${line}-${pos.toString().padStart(2, '0')}`;
-                const name = this.getName(code);
-                
-                if (code.includes(term) || name.toUpperCase().includes(term)) {
-                    results.push({
-                        code,
-                        name,
-                        color: this.getAreaColor(code),
-                        line: line,
-                        position: pos
-                    });
-                }
+
+        Object.keys(this.locations).forEach(code => {
+            const name = (this.locations[code] || '').toUpperCase();
+            if (code.toUpperCase().includes(term) || name.includes(term) || this.getLine(code) === term) {
+                results.push({
+                    code,
+                    name: this.locations[code],
+                    color: this.getAreaColor(code),
+                    line: this.getLine(code),
+                    position: code
+                });
             }
         });
-        
+
         return results;
     },
 
