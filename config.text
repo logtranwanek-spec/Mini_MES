@@ -10,6 +10,7 @@ dotnet build -c Release
 dotnet bin\Release\net8.0\BlowFillClient.dll
 
 Publish:
+dotnet build -c Release
 dotnet publish -c Release
 
 thư viện odbc cho .NET
@@ -28,3 +29,10 @@ git status
 git add .
 git commit -m "..."
 git push origin master
+
+
+WIP B3 L2
+C-G: kit
+P,H: Cushion
+A,B: Fiber
+M,L,K: Decking

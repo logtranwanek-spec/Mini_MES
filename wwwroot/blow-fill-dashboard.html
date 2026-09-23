@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -66,18 +66,57 @@
         
         /* ✅ Sắp xếp lại các card */
         #hourlyTrendCard { grid-column: span 2; }
+        .view-controls { display:flex; align-items:center; gap:10px; }
+        .controls select { padding:8px 12px; font-size:14px; border:1px solid #ccc; border-radius:4px; background:#fff; }
+        .mode-btn { cursor:pointer; background:#e9ecef; color:#333; font-weight:600; }
+        .mode-btn.active { background:#007bff; color:#fff; border-color:#007bff; }
+        .daily-view { flex:1; min-height:0; overflow-y:auto; padding-right:4px; }
+        .daily-chart-card { min-height:480px; }
+        .daily-machines-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:15px; margin-top:15px; }
+        .daily-machine-card { min-height:350px; }
+        .daily-machine-card h2 { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+        .machine-chart-totals { font-size:12px; font-weight:normal; color:#666; }
+        .daily-summary { display:grid; grid-template-columns:repeat(3, minmax(130px, 1fr)); gap:12px; margin-bottom:12px; }
+        .daily-summary div { padding:10px 14px; border-radius:8px; background:#f7f9fc; border:1px solid #e2e6ea; display:flex; justify-content:space-between; align-items:center; }
+        .daily-summary span { color:#666; font-size:13px; }
+        .daily-summary strong { color:#007bff; font-size:22px; }
+        @media (max-width: 1100px) {
+            html, body { overflow:auto; }
+            .controls { flex-wrap:wrap; }
+            .controls h1 { width:100%; }
+            .view-controls { flex-wrap:wrap; }
+            .daily-machines-grid { grid-template-columns:1fr; }
+        }
     </style>
+    <link rel="stylesheet" href="/css/page-scale-75.css">
 </head>
 <body>
     <div class="main-container">
         <div class="controls">
             <h1>Blow Fill - Dashboard</h1>
-            <label>Chọn ngày:</label>
-            <input type="date" id="dateInput">
-            <button onclick="fetchData()">Xem</button>
+            <button id="overviewModeBtn" class="mode-btn active" onclick="setDashboardMode('overview')">Tổng quan</button>
+            <button id="dailyModeBtn" class="mode-btn" onclick="setDashboardMode('daily')">Theo ngày từng máy</button>
+            <div id="overviewControls" class="view-controls">
+                <label>Chọn ngày:</label>
+                <input type="date" id="dateInput">
+                <button onclick="fetchData()">Xem</button>
+            </div>
+            <div id="dailyControls" class="view-controls" style="display:none;">
+                <label>Ca:</label>
+                <select id="dailyShiftFilter" onchange="applyDailyShiftFilter()">
+                    <option value="all">Tất cả</option>
+                    <option value="day">Ca ngày (07:00–19:45)</option>
+                    <option value="night">Ca đêm (19:45–06:45)</option>
+                </select>
+                <label>Từ ngày:</label>
+                <input type="date" id="dailyFromInput">
+                <label>Đến ngày:</label>
+                <input type="date" id="dailyToInput">
+                <button onclick="fetchDailyData()">Xem</button>
+            </div>
         </div>
 
-        <div class="dashboard-container" style="grid-template-columns: 1fr; grid-template-rows: auto auto;">
+        <div id="overviewView" class="dashboard-container" style="grid-template-columns: 1fr; grid-template-rows: auto auto;">
             <!-- Hàng 1: 8 máy + tổng -->
             <div style="display:flex;flex-direction:column;gap:10px;">
                 <!-- Dòng tổng (bên phải) -->
@@ -125,10 +164,49 @@
                 </div>
             </div>
         </div>
+
+        <div id="dailyView" class="daily-view" style="display:none;">
+            <div class="card daily-chart-card">
+                <h2>Tổng số kit theo ngày - 8 máy</h2>
+                <div class="daily-summary">
+                    <div><span>Ca ngày</span><strong id="dailyDayTotal">0</strong></div>
+                    <div><span>Ca đêm</span><strong id="dailyNightTotal">0</strong></div>
+                    <div><span>Tổng cộng</span><strong id="dailyGrandTotal">0</strong></div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="dailyTotalChart"></canvas>
+                </div>
+            </div>
+            <div id="dailyMachinesGrid" class="daily-machines-grid"></div>
+        </div>
     </div>
 
     <script>
         let machinesChart = null;
+        let dailyTotalChart = null;
+        const dailyMachineCharts = new Map();
+        let cachedDailyMachineData = [];
+        let dashboardMode = 'overview';
+
+        // Quy đổi chính xác tọa độ chuột trong viewport sang tọa độ canvas.
+        // Trang dùng CSS zoom nên chia cứng cho 0.75 sẽ làm tooltip lệch index.
+        const cssZoomPointerPlugin = {
+            id: 'cssZoomPointer',
+            beforeEvent(chart, args) {
+                const event = args.event;
+                const nativeEvent = event?.native;
+                if (!nativeEvent || !Number.isFinite(nativeEvent.clientX) || !Number.isFinite(nativeEvent.clientY)) {
+                    return;
+                }
+
+                const rect = chart.canvas.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    event.x = (nativeEvent.clientX - rect.left) * (chart.width / rect.width);
+                    event.y = (nativeEvent.clientY - rect.top) * (chart.height / rect.height);
+                }
+            }
+        };
+        Chart.register(cssZoomPointerPlugin);
 
         async function fetchData() {
             const date = document.getElementById('dateInput').value;
@@ -275,16 +353,182 @@
             });
         }
 
+        function setDashboardMode(mode) {
+            dashboardMode = mode;
+            const isDaily = mode === 'daily';
+            document.getElementById('overviewView').style.display = isDaily ? 'none' : 'grid';
+            document.getElementById('dailyView').style.display = isDaily ? 'block' : 'none';
+            document.getElementById('overviewControls').style.display = isDaily ? 'none' : 'flex';
+            document.getElementById('dailyControls').style.display = isDaily ? 'flex' : 'none';
+            document.getElementById('overviewModeBtn').classList.toggle('active', !isDaily);
+            document.getElementById('dailyModeBtn').classList.toggle('active', isDaily);
+
+            if (isDaily) fetchDailyData();
+            else fetchData();
+        }
+
+        async function fetchDailyData() {
+            const from = document.getElementById('dailyFromInput').value;
+            const to = document.getElementById('dailyToInput').value;
+
+            if (!from || !to) return;
+            if (from > to) {
+                alert('Từ ngày phải nhỏ hơn hoặc bằng Đến ngày.');
+                return;
+            }
+
+            try {
+                const machineIds = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7', 'M8'];
+                const machineData = await Promise.all(machineIds.map(async machineId => {
+                    const response = await fetch(`/api/blow-fill/daily-machine-kits?machineId=${machineId}&from=${from}&to=${to}`);
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(`${machineId}: ${data.error || `HTTP ${response.status}`}`);
+                    return data;
+                }));
+
+                cachedDailyMachineData = machineData;
+                renderAllDailyCharts(machineData, document.getElementById('dailyShiftFilter').value);
+            } catch (error) {
+                console.error('Failed to fetch daily machine data:', error);
+                alert(`Không tải được dữ liệu theo ngày: ${error.message}`);
+                resetDailyDashboard();
+            }
+        }
+
+        function resetDailyDashboard() {
+            document.getElementById('dailyDayTotal').innerText = '0';
+            document.getElementById('dailyNightTotal').innerText = '0';
+            document.getElementById('dailyGrandTotal').innerText = '0';
+            if (dailyTotalChart) {
+                dailyTotalChart.destroy();
+                dailyTotalChart = null;
+            }
+            dailyMachineCharts.forEach(chart => chart.destroy());
+            dailyMachineCharts.clear();
+            document.getElementById('dailyMachinesGrid').innerHTML = '';
+        }
+
+        function createDailyChart(canvas, daily, showLegend = true, shiftFilter = 'all') {
+            const datasets = [];
+            if (shiftFilter === 'all' || shiftFilter === 'day') {
+                datasets.push({
+                    label: 'Kit ca ngày',
+                    data: daily.map(item => item.dayShiftKits),
+                    backgroundColor: '#f6b93b',
+                    borderColor: '#e58e26',
+                    borderWidth: 1,
+                    order: 2
+                });
+            }
+            if (shiftFilter === 'all' || shiftFilter === 'night') {
+                datasets.push({
+                    label: 'Kit ca đêm',
+                    data: daily.map(item => item.nightShiftKits),
+                    backgroundColor: '#4a69bd',
+                    borderColor: '#1e3799',
+                    borderWidth: 1,
+                    order: 2
+                });
+            }
+            datasets.push({
+                type: 'line',
+                label: shiftFilter === 'day' ? 'Tổng ca ngày' : shiftFilter === 'night' ? 'Tổng ca đêm' : 'Tổng số kit',
+                data: daily.map(item => shiftFilter === 'day' ? item.dayShiftKits : shiftFilter === 'night' ? item.nightShiftKits : item.totalKits),
+                borderColor: '#e55039',
+                backgroundColor: '#e55039',
+                borderWidth: 3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                tension: 0.25,
+                fill: false,
+                order: 1
+            });
+
+            return new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: daily.map(item => new Date(`${item.date}T00:00:00`).toLocaleDateString('vi-VN')),
+                    datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { precision: 0 },
+                            title: { display: true, text: 'Số kit hoàn thành' }
+                        },
+                        x: { title: { display: true, text: 'Ngày' } }
+                    },
+                    plugins: { legend: { display: showLegend, position: 'top' } }
+                }
+            });
+        }
+
+        function applyDailyShiftFilter() {
+            if (cachedDailyMachineData.length > 0) {
+                renderAllDailyCharts(cachedDailyMachineData, document.getElementById('dailyShiftFilter').value);
+            }
+        }
+
+        function renderAllDailyCharts(machineData, shiftFilter = 'all') {
+            resetDailyDashboard();
+
+            const dates = machineData[0]?.daily?.map(item => item.date) || [];
+            const totalDaily = dates.map((date, index) => {
+                const rows = machineData.map(machine => machine.daily?.[index] || {});
+                const dayShiftKits = rows.reduce((sum, row) => sum + (row.dayShiftKits || 0), 0);
+                const nightShiftKits = rows.reduce((sum, row) => sum + (row.nightShiftKits || 0), 0);
+                return { date, dayShiftKits, nightShiftKits, totalKits: dayShiftKits + nightShiftKits };
+            });
+
+            const dayTotal = totalDaily.reduce((sum, item) => sum + item.dayShiftKits, 0);
+            const nightTotal = totalDaily.reduce((sum, item) => sum + item.nightShiftKits, 0);
+            document.getElementById('dailyDayTotal').innerText = shiftFilter === 'night' ? 0 : dayTotal;
+            document.getElementById('dailyNightTotal').innerText = shiftFilter === 'day' ? 0 : nightTotal;
+            document.getElementById('dailyGrandTotal').innerText = shiftFilter === 'day' ? dayTotal : shiftFilter === 'night' ? nightTotal : dayTotal + nightTotal;
+            dailyTotalChart = createDailyChart(document.getElementById('dailyTotalChart'), totalDaily, true, shiftFilter);
+
+            const grid = document.getElementById('dailyMachinesGrid');
+            machineData.forEach(machine => {
+                const daily = machine.daily || [];
+                const machineDayTotal = daily.reduce((sum, item) => sum + item.dayShiftKits, 0);
+                const machineNightTotal = daily.reduce((sum, item) => sum + item.nightShiftKits, 0);
+                const card = document.createElement('div');
+                card.className = 'card daily-machine-card';
+                const filteredTotal = shiftFilter === 'day' ? machineDayTotal : shiftFilter === 'night' ? machineNightTotal : machineDayTotal + machineNightTotal;
+                const shiftLabel = shiftFilter === 'day' ? `Ca ngày: ${machineDayTotal}` : shiftFilter === 'night' ? `Ca đêm: ${machineNightTotal}` : `Ca ngày: ${machineDayTotal} &nbsp;|&nbsp; Ca đêm: ${machineNightTotal}`;
+                card.innerHTML = `
+                    <h2>
+                        <span>Số kit theo ngày - ${machine.machineId}</span>
+                        <span class="machine-chart-totals">${shiftLabel} &nbsp;|&nbsp; Tổng: ${filteredTotal}</span>
+                    </h2>
+                    <div class="chart-container"><canvas></canvas></div>`;
+                grid.appendChild(card);
+                dailyMachineCharts.set(machine.machineId, createDailyChart(card.querySelector('canvas'), daily, false, shiftFilter));
+            });
+        }
         function openBlowFillForMachine(machineId) {
             // Điều hướng sang blow-fill, kèm query machineId
             window.location.href = `/blow-fill?machine=${encodeURIComponent(machineId)}&role=viewer`;
         }
         
         window.onload = () => {
-            const today = new Date().toISOString().slice(0, 10);
+            const todayDate = new Date();
+            const today = todayDate.toISOString().slice(0, 10);
+            const fromDate = new Date(todayDate);
+            fromDate.setDate(fromDate.getDate() - 6);
+
             document.getElementById('dateInput').value = today;
+            document.getElementById('dailyToInput').value = today;
+            document.getElementById('dailyFromInput').value = fromDate.toISOString().slice(0, 10);
             fetchData();
-            setInterval(fetchData, 60000);
+            setInterval(() => {
+                if (dashboardMode === 'daily') fetchDailyData();
+                else fetchData();
+            }, 60000);
         };
     </script>
 </body>

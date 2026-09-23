@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blow Fill Motion - Định mức sản phẩm</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; font-family: "Segoe UI", Arial, sans-serif; color: #172033; background: #eef3f8; }
+        button, input { font: inherit; }
+        .page { min-height: 100vh; padding: 18px; }
+        .header { display: flex; align-items: center; gap: 16px; padding: 16px 22px; border-radius: 14px; color: #fff; background: linear-gradient(135deg,#123c69,#1f73b7); box-shadow: 0 8px 24px rgba(18,60,105,.18); }
+        .header h1 { margin: 0; font-size: 29px; }
+        .header p { margin: 4px 0 0; color: #d8ecff; }
+        .header-actions { margin-left: auto; display: flex; gap: 10px; }
+        .btn { border: 0; border-radius: 9px; padding: 11px 17px; font-weight: 700; cursor: pointer; text-decoration: none; }
+        .btn-light { color: #123c69; background: #fff; }
+        .btn-blue { color: #fff; background: #1678c8; }
+        .btn-green { color: #fff; background: #15955f; }
+        .btn:disabled { opacity: .5; cursor: not-allowed; }
+        .scan-panel { display: grid; grid-template-columns: minmax(420px,1fr) auto; gap: 14px; margin: 16px 0; padding: 16px; border: 1px solid #cdd9e5; border-radius: 13px; background: #fff; }
+        .scan-input { width: 100%; height: 64px; padding: 0 20px; border: 3px solid #1b82d1; border-radius: 10px; outline: none; text-align: center; text-transform: uppercase; font-size: 30px; font-weight: 800; letter-spacing: 3px; }
+        .scan-input:focus { box-shadow: 0 0 0 5px rgba(27,130,209,.15); }
+        .status { grid-column: 1/-1; min-height: 24px; font-weight: 650; color: #526173; }
+        .status.error { color: #c62828; } .status.success { color: #087744; }
+        .content { display: grid; grid-template-columns: minmax(360px, 38%) 1fr; gap: 16px; align-items: stretch; }
+        .card { border: 1px solid #cdd9e5; border-radius: 14px; background: #fff; box-shadow: 0 5px 18px rgba(20,48,78,.07); overflow: hidden; }
+        .card-title { margin: 0; padding: 13px 18px; color: #fff; background: #284f75; font-size: 20px; }
+        .image-area { position: relative; display: flex; align-items: center; justify-content: center; height: 430px; margin: 14px; border: 2px dashed #a9bacb; border-radius: 12px; overflow: hidden; background: #f6f9fc; }
+        .image-area img { width: 100%; height: 100%; object-fit: contain; display: none; }
+        .image-placeholder { text-align: center; color: #708296; font-size: 18px; }
+        .image-placeholder strong { display: block; margin-bottom: 8px; font-size: 54px; }
+        .image-actions { display: flex; justify-content: center; gap: 10px; padding: 0 14px 14px; }
+        .info-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; padding: 0 14px 14px; }
+        .info-box { padding: 12px; border-radius: 9px; background: #eaf3fb; }
+        .info-box span { display: block; margin-bottom: 4px; color: #587086; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+        .info-box strong { display: block; min-height: 24px; color: #123c69; font-size: 20px; overflow-wrap: anywhere; }
+        .empty { display: flex; min-height: 525px; align-items: center; justify-content: center; padding: 30px; color: #6b7d90; text-align: center; font-size: 20px; }
+        .parts { padding: 14px; }
+        .part { margin-bottom: 14px; border: 2px solid #9fb5c9; border-radius: 12px; overflow: hidden; }
+        .part:last-child { margin-bottom: 0; }
+        .part-name { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; color: #fff; background: linear-gradient(90deg,#3478ad,#4898c9); font-size: 21px; font-weight: 800; }
+        .step-count { flex: 0 0 auto; padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,.2); font-size: 13px; }
+        .step-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .step-table th { padding: 10px 12px; color: #34495e; background: #e8f0f7; text-align: left; }
+        .step-table td { padding: 11px 12px; border-top: 1px solid #d8e2eb; font-size: 17px; }
+        .step-table th:first-child,.step-table td:first-child { width: 78px; text-align: center; }
+        .step-table th:last-child,.step-table td:last-child { width: 190px; text-align: center; }
+        .target { display: inline-block; min-width: 135px; padding: 6px 12px; border: 2px solid #49a65b; border-radius: 8px; color: #176f2d; background: #dff4e3; font-size: 25px; font-weight: 900; }
+        @media(max-width:1000px){ .content{grid-template-columns:1fr}.image-area{height:340px}.scan-panel{grid-template-columns:1fr}.scan-panel .btn{height:54px} }
+    </style>
+    <link rel="stylesheet" href="/css/page-scale-75.css">
+</head>
+<body>
+<div class="page">
+    <header class="header">
+        <div>
+            <h1>🎯 BLOW FILL MOTION</h1>
+            <p>Scan MO để xem hình sản phẩm và toàn bộ định mức gòn</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-light" id="reloadButton">🔄 Reload định mức</button>
+            <a class="btn btn-light" href="/">🏠 Trang chủ</a>
+        </div>
+    </header>
+
+    <section class="scan-panel">
+        <input id="moInput" class="scan-input" maxlength="7" autocomplete="off" placeholder="SCAN HOẶC NHẬP MO (7 KÝ TỰ)">
+        <button id="searchButton" class="btn btn-blue">🔍 Tìm định mức</button>
+        <div id="status" class="status">Đang tải dữ liệu định mức...</div>
+    </section>
+
+    <main class="content">
+        <section class="card">
+            <h2 class="card-title">🖼️ Hình ảnh & thông tin sản phẩm</h2>
+            <div class="image-area">
+                <img id="productImage" alt="Hình sản phẩm">
+                <div id="imagePlaceholder" class="image-placeholder"><strong>🛋️</strong>Scan MO để hiển thị hình sản phẩm</div>
+            </div>
+            <div class="image-actions">
+                <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                <button id="uploadButton" class="btn btn-green" disabled>📷 Chọn ảnh sản phẩm</button>
+            </div>
+            <div class="info-grid">
+                <div class="info-box"><span>MO</span><strong id="moValue">---</strong></div>
+                <div class="info-box"><span>Fiber Kit</span><strong id="fiberValue">---</strong></div>
+                <div class="info-box"><span>Work Center</span><strong id="wcValue">---</strong></div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2 class="card-title">📋 Định mức gòn theo file Excel</h2>
+            <div id="result"><div class="empty">Scan barcode MO để xem định mức.</div></div>
+        </section>
+    </main>
+</div>
+<script>
+    let products = {};
+    let currentFiberKit = '';
+    let scanTimer = null;
+    const moInput = document.getElementById('moInput');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const productImage = document.getElementById('productImage');
+    const imagePlaceholder = document.getElementById('imagePlaceholder');
+    const uploadButton = document.getElementById('uploadButton');
+    const imageInput = document.getElementById('imageInput');
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+    }
+
+    function setStatus(message, type = '') {
+        statusEl.textContent = message;
+        statusEl.className = `status ${type}`;
+    }
+
+    async function loadStandards() {
+        setStatus('Đang tải dữ liệu định mức...');
+        try {
+            const response = await fetch('/api/blow-fill/load-excel');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            products = data.products || {};
+            setStatus(`Đã tải ${Object.keys(products).length.toLocaleString('vi-VN')} Fiber Kit. Sẵn sàng scan MO.`, 'success');
+            moInput.focus();
+        } catch (error) {
+            setStatus(`Không thể tải định mức: ${error.message}`, 'error');
+        }
+    }
+
+    function uniqueParts(parts) {
+        const seen = new Set();
+        return (parts || []).filter(part => {
+            const key = String(part.description || '').trim().toUpperCase();
+            if (!key || seen.has(key)) return false;
+            seen.add(key); return true;
+        });
+    }
+
+    function renderStandards(parts) {
+        const cleanParts = uniqueParts(parts);
+        if (!cleanParts.length) {
+            resultEl.innerHTML = '<div class="empty">Không tìm thấy định mức cho Fiber Kit này trong Excel.</div>';
+            return;
+        }
+        resultEl.innerHTML = `<div class="parts">${cleanParts.map((part, partIndex) => {
+            const steps = part.steps || [];
+            return `<article class="part">
+                <div class="part-name"><span>${partIndex + 1}. ${escapeHtml(part.description)}</span><span class="step-count">${steps.length} bước</span></div>
+                <table class="step-table"><thead><tr><th>Bước</th><th>Mô tả</th><th>Target Weight</th></tr></thead>
+                <tbody>${steps.map((step, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(step.name)}</td><td><span class="target">${Number(step.target_weight || 0).toFixed(2)} kg</span></td></tr>`).join('')}</tbody></table>
+            </article>`;
+        }).join('')}</div>`;
+    }
+
+    function showProductImage(fiberKit) {
+        productImage.style.display = 'none';
+        imagePlaceholder.style.display = 'block';
+        imagePlaceholder.innerHTML = '<strong>🛋️</strong>Chưa có ảnh cho Fiber Kit này';
+        productImage.onload = () => { productImage.style.display = 'block'; imagePlaceholder.style.display = 'none'; };
+        productImage.onerror = () => { productImage.style.display = 'none'; imagePlaceholder.style.display = 'block'; };
+        productImage.src = `/api/blow-fill-motion/image/${encodeURIComponent(fiberKit)}?v=${Date.now()}`;
+    }
+
+    async function searchMo() {
+        const mo = moInput.value.trim().toUpperCase();
+        if (!/^[A-Z0-9]{7}$/.test(mo)) { setStatus('Mã MO phải có đúng 7 ký tự chữ hoặc số.', 'error'); moInput.select(); return; }
+        setStatus(`Đang tìm MO ${mo}...`);
+        try {
+            const response = await fetch(`/api/blow-fill/plan?mo=${encodeURIComponent(mo)}`);
+            const data = await response.json();
+            if (!response.ok || !data.found) throw new Error(data.message || 'Không tìm thấy MO trong kế hoạch Blow Fill.');
+            currentFiberKit = String(data.fiberKit || '').trim().toUpperCase();
+            document.getElementById('moValue').textContent = mo;
+            document.getElementById('fiberValue').textContent = currentFiberKit || '---';
+            document.getElementById('wcValue').textContent = data.workCenter || '---';
+            uploadButton.disabled = !currentFiberKit;
+            renderStandards(products[currentFiberKit] || []);
+            if (currentFiberKit) showProductImage(currentFiberKit);
+            setStatus(`Đã tìm thấy MO ${mo} - ${currentFiberKit}`, 'success');
+        } catch (error) {
+            currentFiberKit = ''; uploadButton.disabled = true;
+            resultEl.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+            setStatus(error.message, 'error');
+        } finally { moInput.focus(); moInput.select(); }
+    }
+
+    moInput.addEventListener('input', () => {
+        moInput.value = moInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+        clearTimeout(scanTimer);
+        if (moInput.value.length === 7) scanTimer = setTimeout(searchMo, 250);
+    });
+    moInput.addEventListener('keydown', event => { if (event.key === 'Enter') { clearTimeout(scanTimer); searchMo(); } });
+    document.getElementById('searchButton').addEventListener('click', searchMo);
+    document.getElementById('reloadButton').addEventListener('click', loadStandards);
+    uploadButton.addEventListener('click', () => imageInput.click());
+    imageInput.addEventListener('change', async () => {
+        const file = imageInput.files[0]; if (!file || !currentFiberKit) return;
+        const form = new FormData(); form.append('image', file);
+        uploadButton.disabled = true; setStatus('Đang tải ảnh lên...');
+        try {
+            const response = await fetch(`/api/blow-fill-motion/image/${encodeURIComponent(currentFiberKit)}`, { method: 'POST', body: form });
+            const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Không thể tải ảnh.');
+            productImage.src = data.imageUrl; setStatus(`Đã lưu ảnh cho ${currentFiberKit}.`, 'success');
+        } catch (error) { setStatus(error.message, 'error'); }
+        finally { uploadButton.disabled = false; imageInput.value = ''; moInput.focus(); }
+    });
+
+    loadStandards();
+</script>
+</body>
+</html>

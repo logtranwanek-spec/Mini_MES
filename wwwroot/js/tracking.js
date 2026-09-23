@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+﻿document.addEventListener('DOMContentLoaded', () => {
     const dateInput = document.getElementById('trackDate');
     const searchInput = document.getElementById('trackSearch');
     const viewToggleBtn = document.getElementById('viewToggleBtn');
@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             console.log("🔄 Đang tải tiến độ quét Kit...");
-            const response = await fetch(`/api/tracking/kit-progress?date=${selectedDate}`); // ← ĐÃ SỬA
+            const response = await fetch(`/api/tracking/kit-progress?date=${selectedDate}`); // ? �� S?A
             if (!response.ok) throw new Error("Không thể tải tiến độ");
             const data = await response.json();
 
@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
             });
 
-            console.log("✅ Đã tải tiến độ:", progressData);
+            console.log("? �� t?i ti?n d?:", progressData);
             renderTrackingData();
         } catch (error) {
             console.error("❌ Lỗi tải tiến độ:", error);
@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     });
 
-        // Nếu đã chọn filter WC, chỉ hiển thị những WC được chọn
+        // N?u d� ch?n filter WC, ch? hi?n th? nh?ng WC du?c ch?n
         if (selectedWorkCenters.size > 0) {
             sortedWcNames = sortedWcNames.filter(wc => selectedWorkCenters.has(wc));
         }
@@ -294,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.querySelectorAll('.highlight-search').forEach(el => el.classList.remove('highlight-search'));
             }, 3000);
         } else {
-            showTempMessage('Không tìm thấy mã nào khớp!', 'error');
+            showTempMessage('Kh�ng t�m th?y m� n�o kh?p!', 'error');
         }
     }
 
@@ -357,11 +357,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Chuyển sang chế độ Xem theo MX
                 isWcView = false;
                 viewToggleBtn.textContent = 'Xem theo Work Center';
-                searchInput.placeholder = '🔍 Tìm mã MX hoặc MO...';
+                searchInput.placeholder = '?? T�m m� MX ho?c MO...';
                 updateTopButtonsVisibility();
                 renderTrackingData();
 
-                // Cuộn đến MX tương ứng sau khi đã render
+                // Cu?n d?n MX tuong ?ng sau khi d� render
                 setTimeout(() => {
                     const mxCard = document.querySelector(
                         `.mx-card[data-mx="${foundMx.toLowerCase()}"]`
@@ -691,10 +691,10 @@ document.addEventListener('DOMContentLoaded', () => {
         searchInput.disabled = false;
         if (isWcView) {
             viewToggleBtn.textContent = 'Xem theo MX';
-            searchInput.placeholder = '🔍 Tìm mã MO...';
+            searchInput.placeholder = '?? T�m m� MO...';
         } else {
             viewToggleBtn.textContent = 'Xem theo Work Center';
-            searchInput.placeholder = '🔍 Tìm mã MX hoặc MO...';
+            searchInput.placeholder = '?? T�m m� MX ho?c MO...';
         }
         updateTopButtonsVisibility();
         renderTrackingData();
@@ -702,7 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ==================== THIẾT LẬP KẾT NỐI SIGNALR REAL-TIME ====================
     const connection = new signalR.HubConnectionBuilder()
-        .withUrl("/orderHub") // Kết nối đến OrderHub đã có
+        .withUrl("/orderHub") // K?t n?i d?n OrderHub d� c�
         .withAutomaticReconnect()
         .build();
 
@@ -733,7 +733,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("✅ SignalR Connected.");
         } catch (err) {
             console.error("❌ SignalR Connection Failed: ", err);
-            setTimeout(startSignalR, 5000); // Thử lại sau 5 giây
+            setTimeout(startSignalR, 5000); // Th? l?i sau 5 gi�y
         }
     }
 
@@ -828,7 +828,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Điền vào ô tìm kiếm
             searchInput.value = searchTermFromUrl;
             // Cập nhật trạng thái và áp dụng bộ lọc
-            // (Chờ một chút để đảm bảo dữ liệu đã tải xong)
+            // (Ch? m?t ch�t d? d?m b?o d? li?u d� t?i xong)
             setTimeout(() => {
                 findAndHighlight();
             }, 500);
@@ -838,7 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Khởi động
     startSignalR();
     Promise.all([loadTrackingData(), loadKitProgress()]).then(() => {
-        autoSearchFromUrl(); // Gọi hàm tự động tìm kiếm sau khi dữ liệu đã tải xong
+        autoSearchFromUrl(); // G?i h�m t? d?ng t�m ki?m sau khi d? li?u d� t?i xong
     });
     loadTrackingData();
     loadKitProgress();

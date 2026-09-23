@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    1. RESET & BASE STYLES
    ========================================================================== */
 * {
@@ -1474,7 +1474,7 @@ html.simple-view .tracking-controls {
 }
 .tracking-row:last-child { border-bottom: none; }
 
-/* Cột Mã MX bên trái */
+/* C?t M� MX b�n tr�i */
 .mx-identifier {
     width: 200px;
     flex-shrink: 0;
@@ -1485,7 +1485,7 @@ html.simple-view .tracking-controls {
     border-right: 1px solid #444;
 }
 
-/* Thẻ Mã MX */
+/* Th? M� MX */
 .mx-card {
     background: #2c3e50;
     border: 1px solid #4a6fa5;
@@ -1498,7 +1498,7 @@ html.simple-view .tracking-controls {
     box-shadow: 0 2px 5px rgba(0,0,0,0.3);
 }
 
-/* Vạch nối các mã MX (nếu có) */
+/* V?ch n?i c�c m� MX (n?u c�) */
 .mx-card + .mx-card { position: relative; }
 .mx-card + .mx-card::before {
     content: '';
@@ -1700,10 +1700,10 @@ html.simple-view .mo-item.highlight-search {
     display: flex; 
     justify-content: flex-start; 
     align-items: center; 
-    padding: 15px 0px 15px 20px; /* ← ĐÃ SỬA: Phải: 20px → 5px */
+    padding: 15px 0px 15px 20px; /* ? �� S?A: Ph?i: 20px ? 5px */
     border-bottom: 1px solid #2c3e50; 
     transition: 0.2s;
-    gap: 15px; /* ← ĐÃ SỬA: 15px → 8px */
+    gap: 15px; /* ? �� S?A: 15px ? 8px */
 }
 .mo-item:hover { background: rgba(102, 126, 234, 0.1); }
 .mo-item:last-child { border-bottom: none; }
@@ -2182,7 +2182,7 @@ html.simple-view .btn-select-wc:hover {
     border-color: #3498db;
 }
 
-/* Ô đã chọn */
+/* � d� ch?n */
 .wc-grid-item.selected {
     background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
     border-color: #3498db;
@@ -2426,7 +2426,7 @@ html.simple-view .wc-grid-item.selected .wc-grid-info {
     z-index: 10;
 }
 
-/* ✅ ĐOẠN SỬA CHÍNH NẰM Ở ĐÂY */
+/* ? �O?N S?A CH�NH N?M ? ��Y */
 .timeline-mo-container {
     display: grid;
     grid-auto-flow: column; 
@@ -2507,7 +2507,7 @@ html.simple-view .wc-grid-item.selected .wc-grid-info {
 
 /* Căn chỉnh lại các item cho đều */
 .scan-history-item {
-    justify-content: space-around; /* hoặc space-between nếu muốn giãn ra */
+    justify-content: space-around; /* ho?c space-between n?u mu?n gi�n ra */
 }
 
 /* Style cho thẻ MX trong trang Tracking */
@@ -2809,7 +2809,7 @@ body.toolbar-is-floating .floating-filter-toolbar {
     display: none; /* Ẩn checkbox thật */
 }
 
-/* Chấm tròn giả - đây là nút bấm chính */
+/* Ch?m tr�n gi? - d�y l� n�t b?m ch�nh */
 .checkbox-label .status-dot {
     width: 16px;
     height: 16px;
@@ -3384,7 +3384,7 @@ html.simple-view .form-group select:focus {
     border-color: #95a5a6; /* Đổi từ background-color: #5a7fb5 */
 }
 
-/* Style khi đã được tick */
+/* Style khi d� du?c tick */
 .custom-checkbox input:checked ~ .checkmark {
     background-color: #667eea;
 }

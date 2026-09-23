@@ -1,4 +1,4 @@
-using ClosedXML.Excel;
+﻿using ClosedXML.Excel;
 using ExcelDataReader;
 using System.Text.Json;
 using System.Text;
@@ -10,6 +10,9 @@ using System.Data.Odbc;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using Serilog;
+using OrderTrackingWeb.WipB3L2;
+using OrderTrackingWeb.CncGo;
+using Microsoft.AspNetCore.ResponseCompression;
 System.IO.Ports.SerialPort? _scaleSerialPort = null;
 
 // ==================== SERILOG SETUP ====================
@@ -33,6 +36,14 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.UseSerilog(); 
+    builder.Services.AddB3L2Wip(builder.Environment.ContentRootPath);
+    builder.Services.AddSingleton<CncAccess>();
+    builder.Services.AddResponseCompression(options =>
+    {
+        options.EnableForHttps = true;
+        options.Providers.Add<BrotliCompressionProvider>();
+        options.Providers.Add<GzipCompressionProvider>();
+    });
 
     // DB chính
     builder.Services.AddDbContext<AppDbContext>(options =>
@@ -58,6 +69,40 @@ try
     builder.Services.AddHostedService<As400ScanPollingService>();
     // builder.Services.AddHostedService<ScaleReaderService>();
     var app = builder.Build();
+    app.UseResponseCompression();
+    app.MapB3L2Wip();
+
+    // Supplier view: receipt status comes directly from the receiving Orders records.
+    app.MapGet("/api/wip-b3-l2/delivery/orders", async (string date, string? fileType, AppDbContext db, HttpContext context) =>
+    {
+        context.Response.Headers.CacheControl = "no-store";
+        if (!DateTime.TryParseExact(date, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var selectedDate)) return Results.BadRequest("Ngày không hợp lệ.");
+        var dateKey = selectedDate.ToString("dd.MM");
+        var query = db.Orders.AsNoTracking().Where(o => o.DateKey == dateKey);
+        if (!string.IsNullOrWhiteSpace(fileType)) query = query.Where(o => o.FileType == fileType);
+        return Results.Ok(await query.OrderBy(o => o.DeliveryTime).ThenBy(o => o.OdrNo)
+            .Select(o => new { o.Id, odrno = o.OdrNo, o.Mw, o.FItem, o.Qty, o.DeliveryDate,
+                o.DeliveryTime, o.FileType, o.Status, o.Note, o.Time }).ToListAsync());
+    });
+    app.MapGet("/api/wip-b3-l2/delivery/locations", async (int orderId, string date, AppDbContext db,
+        WipStore store, IConfiguration configuration, HttpContext context) =>
+    {
+        context.Response.Headers.CacheControl = "no-store";
+        if (!DateTime.TryParseExact(date, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var selectedDate)) return Results.BadRequest("Ngày không hợp lệ.");
+        var dateKey = selectedDate.ToString("dd.MM");
+        var order = await db.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orderId && o.DateKey == dateKey);
+        if (order == null) return Results.NotFound("Phiếu không còn trong danh sách ngày đã chọn. Hãy tải lại.");
+        var areas = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            { ["C"] = "Kit", ["D"] = "Kit", ["E"] = "Kit", ["F"] = "Kit", ["G"] = "Kit",
+              ["I"] = "Cushion", ["K"] = "Cushion", ["A"] = "Fiber", ["B"] = "Fiber", ["M"] = "Decking", ["N"] = "Decking" };
+        foreach (var area in configuration.GetSection("WipB3L2:Areas").GetChildren())
+            if (area.Value != null) areas[area.Key] = area.Value;
+        var locations = DeliveryLookup.Find(store.GetState(), order.Mw, areas);
+        return Results.Ok(new { orderId, mw = order.Mw, odrno = order.OdrNo, locations,
+            status = order.Status, note = order.Note, time = order.Time });
+    });
 
 
     // ===== REGISTER ENCODING PROVIDER =====
@@ -79,7 +124,6 @@ try
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var hub = scope.ServiceProvider.GetRequiredService<IHubContext<OrderHub>>();
 
         // Tạo database nếu chưa có
         db.Database.EnsureCreated();
@@ -94,6 +138,7 @@ try
         {
             var blowDb = scope.ServiceProvider.GetRequiredService<BlowFillDbContext>();
             blowDb.Database.EnsureCreated();
+            BlowFillSchema.EnsureContextStepColumns(blowDb);
             Log.Information("✅ BlowFill DB is ready at Data/BlowFillWeigh.db");
         }
         catch (Exception ex)
@@ -104,18 +149,21 @@ try
         // ✅ DB Tool Management
         var toolDb = scope.ServiceProvider.GetRequiredService<ToolManagementDbContext>();
         toolDb.Database.EnsureCreated();
+        ToolManagementSchema.MakeActualHoursNullable(toolDb);
+        toolDb.Database.ExecuteSqlRaw(@"CREATE TABLE IF NOT EXISTS CncAuditLogs (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT, TimestampUtc TEXT NOT NULL, Action TEXT NOT NULL,
+            ToolChangeId INTEGER NULL, ActorRole TEXT NOT NULL, Details TEXT NOT NULL);");
+        toolDb.Database.ExecuteSqlRaw(@"CREATE TABLE IF NOT EXISTS CncChangeVoids (
+            ToolChangeId INTEGER PRIMARY KEY, VoidedAtUtc TEXT NOT NULL, VoidedBy TEXT NOT NULL, Reason TEXT NOT NULL);");
         toolDb.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
         toolDb.Database.ExecuteSqlRaw("PRAGMA busy_timeout=5000;");
+        toolDb.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_ToolChanges_Date_Id ON ToolChanges (Date, Id);");
+        toolDb.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_ToolChanges_ReplaceDate_Id ON ToolChanges (ReplaceDate, Id);");
+        toolDb.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_ToolChanges_InstallDate_Id ON ToolChanges (InstallDate, Id);");
+        toolDb.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_CncChangeVoids_ToolChangeId ON CncChangeVoids (ToolChangeId);");
         Console.WriteLine("✅ Tool Management DB is ready at Data/ToolManagement.db");
 
-        // 🔁 INITIAL LOAD: chạy sync + load kế hoạch một lần
-        Console.WriteLine("🔁 Initial load: Sync RUN KIT + MX details + Schedule plan hôm nay...");
-
-        // Gọi 2 hàm local (đã định nghĩa ở trên): SyncRunKitAndMxDetails & LoadSchedulePlan
-        SyncRunKitAndMxDetails(db, hub, CancellationToken.None).GetAwaiter().GetResult();
-        LoadSchedulePlan(DateTime.Today, db, CancellationToken.None).GetAwaiter().GetResult();
-
-        Console.WriteLine("✅ Initial load hoàn tất.");
+        Console.WriteLine("✅ Database initialization completed. Initial data sync will run in background after the web server starts.");
     }
 
     static string NormalizeWcForAs400(string wcFromExcel)
@@ -174,10 +222,18 @@ try
     }
 
     // ==================== API ENDPOINTS ====================
-    async Task SyncRunKitAndMxDetails(AppDbContext db, IHubContext<OrderHub> hubContext, CancellationToken token)
+    var deliveryPlanGate = new SemaphoreSlim(1, 1);
+    var lastDeliveryPlanSync = DateTime.MinValue;
+    async Task<List<Order>> ReadAndSaveDeliveryPlan(AppDbContext db, CancellationToken token)
+    {
+        await deliveryPlanGate.WaitAsync(token);
+        try { return await ReadAndSaveDeliveryPlanCore(db, token); }
+        finally { deliveryPlanGate.Release(); }
+    }
+    async Task<List<Order>> ReadAndSaveDeliveryPlanCore(AppDbContext db, CancellationToken token)
     {
         // 1. ĐỌC VÀ GOM FILE RUN KIT
-        Console.WriteLine("🔄 Starting sync to Database...");
+        Console.WriteLine("ðŸ”„ Starting sync to Database...");
 
         var files = Directory.GetFiles(vDrivePath)
             .Where(f => f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
@@ -275,8 +331,38 @@ try
 
         Console.WriteLine($"✅ Synced Orders to Database!");
 
+        lastDeliveryPlanSync = DateTime.UtcNow;
+        return allNewOrders;
+    }
+
+    app.MapPost("/api/wip-b3-l2/delivery/sync", async (AppDbContext db, IHubContext<OrderHub> hub) =>
+    {
+        try
+        {
+            await deliveryPlanGate.WaitAsync(app.Lifetime.ApplicationStopping);
+            try
+            {
+                if (DateTime.UtcNow - lastDeliveryPlanSync < TimeSpan.FromSeconds(60))
+                    return Results.Ok(new { message = "Plan is up to date" });
+                await ReadAndSaveDeliveryPlanCore(db, app.Lifetime.ApplicationStopping);
+            }
+            finally { deliveryPlanGate.Release(); }
+            await hub.Clients.All.SendAsync("MasterFileSynced", new { message = "Delivery plan updated" });
+            return Results.Ok(new { message = "Plan updated from source" });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "B3-L2 delivery plan import failed");
+            return Results.Problem("Cannot update source plan. Previously saved orders remain available.");
+        }
+    });
+
+    async Task SyncRunKitAndMxDetails(AppDbContext db, IHubContext<OrderHub> hubContext, CancellationToken token)
+    {
+        var allNewOrders = await ReadAndSaveDeliveryPlan(db, token);
+
         // 🚀 Tra cứu chi tiết MX dựa trên NGÀY CỦA FILE DANH SÁCH (DateKey)
-        Console.WriteLine("📊 Parsing MX details based on List File Date (DateKey)...");
+        Console.WriteLine("ðŸ“Š Parsing MX details based on List File Date (DateKey)...");
 
         var ordersByFileDate = allNewOrders.GroupBy(o => o.DateKey);
         foreach (var group in ordersByFileDate)
@@ -386,7 +472,7 @@ try
             time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
         });
 
-        Console.WriteLine("📡 Broadcasted sync completion to all clients");
+        Console.WriteLine("ðŸ“¡ Broadcasted sync completion to all clients");
 
         // =====================================================================
         // TỰ ĐỘNG DỌN DẸP DỮ LIỆU CŨ (LƯU 21 NGÀY)
@@ -558,7 +644,7 @@ try
             var file = form.Files.GetFile("file");
             if (file == null || file.Length == 0) return Results.BadRequest("No file uploaded");
 
-            Console.WriteLine($"📥 Received upload: {file.FileName} ({file.Length / 1024}KB)");
+            Console.WriteLine($"ðŸ“¥ Received upload: {file.FileName} ({file.Length / 1024}KB)");
 
             using var processStream = file.OpenReadStream();
 
@@ -1376,7 +1462,7 @@ try
 
     async Task<List<(string MX, string FgItem, string MO, string FiberKit, string WC, string Ex, string PlannedQty, string Leadtime)>> LoadSchedulePlan(DateTime targetDate, AppDbContext db, CancellationToken token)
     {
-        Console.WriteLine($"🔄 Loading schedule plan for {targetDate:yyyy-MM-dd}...");
+        Console.WriteLine($"ðŸ”„ Loading schedule plan for {targetDate:yyyy-MM-dd}...");
 
         string? filePath = FileHelpers.FindLatestScheduleFile(targetDate, schedulePath);
         if (filePath == null)
@@ -1502,7 +1588,7 @@ try
                 .ToDictionary(
                     g => g.Key,
                     g => new {
-                        PlannedQty = g.Sum(x => int.TryParse(x.PlannedQty, out int q) ? q : 0),
+                        PlannedQty = g.Max(x => int.TryParse(x.PlannedQty, out int q) ? q : 0),
                         Leadtime = g.Last().Leadtime,
                         Mx = g.Last().MX
                     });
@@ -2231,7 +2317,7 @@ try
             string moUpper = mo.Trim().ToUpper();
             string baseWc = NormalizeWcForAs400(workCenter);
 
-            Console.WriteLine($"\n🔄 BACKFILL MO={moUpper}, WC={workCenter} (base={baseWc})");
+            Console.WriteLine($"\nðŸ”„ BACKFILL MO={moUpper}, WC={workCenter} (base={baseWc})");
 
             // 1. Lấy dữ liệu thô từ AS400 cho đúng MO + WC gốc
             var as400Rows = new List<(string MO, string MX, string Item, string Wc, int Qty, DateTime ScanTime)>();
@@ -2401,16 +2487,43 @@ try
     });
 
     // POST /api/blow-fill/log-step
-    app.MapPost("/api/blow-fill/log-step", async (WeighLogRequest req, BlowFillDbContext blowDb) =>
+    app.MapPost("/api/blow-fill/log-step", async (WeighLogRequest req, BlowFillDbContext blowDb, AppDbContext appDb) =>
     {
         try
         {
+            string normalizedMo = (req.MO ?? "").Trim().ToUpperInvariant();
+            if (!System.Text.RegularExpressions.Regex.IsMatch(normalizedMo, "^[A-Z0-9]{7}$"))
+                return Results.BadRequest(new { error = "MO must contain exactly 7 letters or digits" });
+
+            string normalizedWorkCenter = (req.WorkCenter ?? "").Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(normalizedWorkCenter))
+            {
+                string[] blowFillWorkCenters = { "UBF03", "UBF04", "UBF05", "UBF06", "UBF08", "UBF12", "UBF13" };
+                DateTime today = DateTime.Today;
+                DateTime yesterday = today.AddDays(-1);
+                DateTime tomorrow = today.AddDays(1);
+                var candidates = await appDb.MoPlans
+                    .Where(p => p.MO == normalizedMo &&
+                                p.PlanDate.Date >= yesterday && p.PlanDate.Date <= tomorrow &&
+                                blowFillWorkCenters.Contains(p.WorkCenter))
+                    .OrderBy(p => p.PlanDate)
+                    .Select(p => p.WorkCenter)
+                    .Distinct()
+                    .ToListAsync();
+
+                if (candidates.Count == 1)
+                    normalizedWorkCenter = candidates[0];
+            }
+
+            if (string.IsNullOrWhiteSpace(normalizedWorkCenter))
+                return Results.BadRequest(new { error = $"Cannot determine Blow Fill WorkCenter for MO {normalizedMo}" });
+
             var log = new WeighLog
             {
                 MachineId    = req.MachineId ?? "",
                 Timestamp    = DateTime.Now,
-                WorkCenter   = req.WorkCenter ?? "",
-                MO           = req.MO ?? "",
+                WorkCenter   = normalizedWorkCenter,
+                MO           = normalizedMo,
                 FiberKit     = req.FiberKit ?? "",
                 StepNumber   = req.StepNumber,
                 TargetWeight = req.TargetWeight,
@@ -2470,7 +2583,7 @@ try
             
             var planLookup = plansForDate
                 .GroupBy(p => (p.MO, p.WorkCenter))
-                .ToDictionary(g => g.Key, g => g.Sum(p => p.PlannedQty));
+                .ToDictionary(g => g.Key, g => g.Max(p => p.PlannedQty));
 
             // 2. Lấy dữ liệu log cân từ DB BlowFill, lọc theo máy nếu có
             var logsQuery = blowDb.WeighLogs
@@ -2485,6 +2598,28 @@ try
             var logs = await logsQuery
                 .OrderBy(w => w.Timestamp)
                 .ToListAsync();
+
+            // Repair historical rows written without WorkCenter. Only update when
+            // the MO maps to exactly one Blow Fill WorkCenter for the selected day.
+            string[] blowFillWorkCenters = { "UBF03", "UBF04", "UBF05", "UBF06", "UBF08", "UBF12", "UBF13" };
+            var workCentersByMo = plansForDate
+                .Where(p => blowFillWorkCenters.Contains(p.WorkCenter))
+                .GroupBy(p => p.MO)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(p => p.WorkCenter).Distinct().ToList());
+
+            int repairedCount = 0;
+            foreach (var log in logs.Where(w => string.IsNullOrWhiteSpace(w.WorkCenter)))
+            {
+                if (workCentersByMo.TryGetValue(log.MO, out var candidates) && candidates.Count == 1)
+                {
+                    log.WorkCenter = candidates[0];
+                    repairedCount++;
+                }
+            }
+            if (repairedCount > 0)
+                await blowDb.SaveChangesAsync();
 
             // 3. Tính toán summary, kết hợp dữ liệu từ 2 nguồn
             var summary = logs
@@ -2899,6 +3034,12 @@ try
     });
 
     // ==================== TOOL MANAGEMENT API ENDPOINTS ====================
+    app.MapPost("/api/cnc/auth/login", (CncLoginRequest request, CncAccess access) =>
+    {
+        var token = access.Login(request.Role, request.Password);
+        return token == null ? Results.Unauthorized() : Results.Ok(new { token, role = request.Role.Trim().ToLowerInvariant() });
+    });
+
     // GET: Lấy danh sách lịch sử thay dao (có filter)
     app.MapGet("/api/tools/history", async (
     string? machine, 
@@ -2911,7 +3052,7 @@ try
     {
         try
         {
-            var query = db.ToolChanges.AsQueryable();
+            var query = db.ToolChanges.Where(t => !db.CncChangeVoids.Any(v => v.ToolChangeId == t.Id));
             
             if (!string.IsNullOrEmpty(machine))
                 query = query.Where(t => t.MachineName == machine);
@@ -2931,13 +3072,14 @@ try
             if (!string.IsNullOrEmpty(toolType))
                 query = query.Where(t => t.ToolType == toolType);
             
-            // ⭐ Lấy dữ liệu trước (chưa sắp xếp)
             var results = await query.ToListAsync();
-            
-            // ⭐ Sắp xếp trên bộ nhớ (LINQ to Objects)
+
+            // Gi? th? t? c? ??n m?i nh? s? l?ch s?; giao di?n t? cu?n xu?ng b?n ghi m?i nh?t.
             results = results
-                .OrderByDescending(t => t.Date)
-                .ThenByDescending(t => t.ReplaceTime ?? TimeSpan.Zero)  // xử lý null nếu cần
+                .OrderBy(t => t.ReplaceDate ?? t.InstallDate ?? t.Date)
+                .ThenBy(t => t.ReplaceTime ?? t.InstallTime ?? TimeSpan.Zero)
+                .ThenBy(t => t.UpdatedAt)
+                .ThenBy(t => t.Id)
                 .ToList();
             
             return Results.Ok(results);
@@ -2946,6 +3088,145 @@ try
         {
             return Results.Problem(ex.Message);
         }
+    });
+
+    // Paged history for the interactive CNC screen. Export and legacy callers keep using /api/tools/history.
+    app.MapGet("/api/tools/history-page", async (
+        string? machine,
+        string? shift,
+        DateTime? fromDate,
+        DateTime? toDate,
+        string? search,
+        int page,
+        int pageSize,
+        ToolManagementDbContext db) =>
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 25, 2000);
+        var query = db.ToolChanges.AsNoTracking()
+            .Where(t => !db.CncChangeVoids.Any(v => v.ToolChangeId == t.Id));
+
+        if (!string.IsNullOrWhiteSpace(machine)) query = query.Where(t => t.MachineName == machine);
+        if (!string.IsNullOrWhiteSpace(shift)) query = query.Where(t => t.Shift == shift);
+        if (fromDate.HasValue) query = query.Where(t => (t.ReplaceDate ?? t.InstallDate ?? t.Date) >= fromDate.Value);
+        if (toDate.HasValue) query = query.Where(t => (t.ReplaceDate ?? t.InstallDate ?? t.Date) < toDate.Value.Date.AddDays(1));
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(t =>
+                t.Supervisor.Contains(term) || t.MSS.Contains(term) || t.MachineName.Contains(term) ||
+                (t.Reason != null && t.Reason.Contains(term)) || t.Material.Contains(term) ||
+                (t.ToolType != null && t.ToolType.Contains(term)) || t.ToolVersion.ToString().Contains(term));
+        }
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(t => t.ReplaceDate ?? t.InstallDate ?? t.Date)
+            .ThenByDescending(t => t.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return Results.Ok(new
+        {
+            items,
+            total,
+            page,
+            pageSize,
+            totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize))
+        });
+    });
+
+    app.MapGet("/api/tools/history-months", async (string machine, string shift, ToolManagementDbContext db) =>
+    {
+        var dates = await db.ToolChanges.AsNoTracking()
+            .Where(t => t.MachineName == machine && t.Shift == shift &&
+                        !db.CncChangeVoids.Any(v => v.ToolChangeId == t.Id))
+            .Select(t => t.ReplaceDate ?? t.InstallDate ?? t.Date)
+            .Distinct()
+            .ToListAsync();
+        return Results.Ok(dates.Select(date => date.ToString("yyyy-MM")).Distinct().OrderBy(month => month).ToList());
+    });
+
+    app.MapPut("/api/tools/history/batch-update", async (CncHistoryBatchUpdateRequest request, HttpRequest httpRequest,
+        CncAccess access, ToolManagementDbContext db) =>
+    {
+        if (!access.HasRole(httpRequest, "lead")) return Results.Unauthorized();
+        if (request.Rows == null || request.Rows.Count == 0) return Results.BadRequest("Chưa có dòng nào được chỉnh sửa.");
+        if (request.Rows.Count > 200) return Results.BadRequest("Mỗi lần chỉ được chỉnh sửa tối đa 200 dòng.");
+
+        var updated = 0;
+        var created = 0;
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        foreach (var row in request.Rows)
+        {
+            if (string.IsNullOrWhiteSpace(row.MachineName) || string.IsNullOrWhiteSpace(row.Shift) ||
+                !DateTime.TryParse(row.Date, out var workDate) || row.ToolNumber is < 1 or > 8 ||
+                row.ToolPosition is < 1 or > 4)
+                return Results.BadRequest($"Bản ghi ID {row.Id}: dữ liệu máy, ca, ngày hoặc đầu dao không hợp lệ.");
+
+            DateTime? installDate = DateTime.TryParse(row.InstallDate, out var install) ? install : null;
+            DateTime? replaceDate = DateTime.TryParse(row.ReplaceDate, out var replace) ? replace : null;
+            TimeSpan? installTime = TimeSpan.TryParse(row.InstallTime, out var installAt) ? installAt : null;
+            TimeSpan? replaceTime = TimeSpan.TryParse(row.ReplaceTime, out var replaceAt) ? replaceAt : null;
+            var normalizedToolNumber = row.Shift.Trim() == "Night Shift"
+                ? row.ToolPosition + 4
+                : row.ToolPosition;
+
+            if (installDate == null && replaceDate == null)
+                return Results.BadRequest($"Bản ghi ID {row.Id}: cần nhập ít nhất Ngày lắp hoặc Ngày thay.");
+
+            ToolChange record;
+            string? before = null;
+            if (row.Id > 0)
+            {
+                record = await db.ToolChanges.FindAsync(row.Id) ?? new ToolChange();
+                if (record.Id == 0 || await db.CncChangeVoids.AnyAsync(v => v.ToolChangeId == row.Id))
+                    return Results.NotFound($"Không tìm thấy bản ghi ID {row.Id}.");
+                before = JsonSerializer.Serialize(record);
+            }
+            else
+            {
+                record = new ToolChange { CreatedAt = DateTime.Now };
+                db.ToolChanges.Add(record);
+            }
+
+            record.Shift = row.Shift.Trim();
+            record.Supervisor = row.Supervisor?.Trim() ?? "";
+            record.MSS = row.MSS?.Trim() ?? "";
+            record.Date = workDate;
+            record.MachineName = row.MachineName.Trim();
+            record.ToolAddress = $"{record.MachineName.Replace(" ", "")}-Dao{normalizedToolNumber}";
+            record.ToolPosition = row.ToolPosition;
+            record.ToolVersion = Math.Max(0, row.ToolVersion);
+            record.InstallDate = installDate;
+            record.InstallTime = installTime;
+            record.ReplaceDate = replaceDate;
+            record.ReplaceTime = replaceTime;
+            record.ActualHours = row.ActualHours;
+            record.Reason = row.Reason?.Trim();
+            record.Material = row.Material?.Trim() ?? "";
+            record.ToolType = row.ToolType?.Trim();
+            record.IsVersionIncrement = record.Reason != "Cuối ca thay";
+            record.UpdatedAt = DateTime.Now;
+            if (row.Id > 0)
+            {
+                db.CncAuditLogs.Add(new CncAuditLog { TimestampUtc = DateTime.UtcNow, Action = "HISTORY_INLINE_UPDATE",
+                    ToolChangeId = record.Id, ActorRole = "lead",
+                    Details = JsonSerializer.Serialize(new { Before = before, After = row }) });
+                updated++;
+            }
+            else
+            {
+                await db.SaveChangesAsync();
+                db.CncAuditLogs.Add(new CncAuditLog { TimestampUtc = DateTime.UtcNow, Action = "HISTORY_INLINE_CREATE",
+                    ToolChangeId = record.Id, ActorRole = "lead", Details = JsonSerializer.Serialize(new { After = row }) });
+                created++;
+            }
+        }
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return Results.Ok(new { message = $"Đã thêm {created} dòng và cập nhật {updated} dòng lịch sử.", created, updated });
     });
 
     // GET: Lấy trạng thái dao hiện tại của tất cả máy
@@ -2989,236 +3270,293 @@ try
     });
 
     // ==================== TOOL MANAGEMENT API ENDPOINTS ====================
-    // POST: Thêm bản ghi thay dao mới (BATCH - Lưu 2 bản ghi trong 1 lần)
+    // POST: Lưu 1 lần thay dao (1 bản ghi cho mỗi thao tác THÁO / LẮP)
     app.MapPost("/api/tools/change", async (ToolChangeBatchRequest req, ToolManagementDbContext db, IHubContext<OrderHub> hubContext) =>
     {
         try
         {
-            // Validate
             if (string.IsNullOrEmpty(req.MachineName) || string.IsNullOrEmpty(req.Shift))
                 return Results.BadRequest("Thiếu thông tin máy hoặc ca làm việc");
 
-            // Parse date
             DateTime workDate = DateTime.TryParse(req.Date, out var d) ? d : DateTime.Today;
 
-            // Xác định ca đối tác (Day ↔ Night)
-            string partnerShift = req.Shift == "Day Shift" ? "Night Shift" : "Day Shift";
-
             var savedRecords = new List<int>();
-            var updatedRecords = new List<int>();
-
-            using var transaction = await db.Database.BeginTransactionAsync();
 
             foreach (var tool in req.Tools)
             {
-                // ========== BƯỚC 1: LƯU BẢN GHI CA HIỆN TẠI (Thông tin DAO THÁO) ==========
-                var currentShiftRecord = new ToolChange
+                // CHỈ BỎ QUA NẾU KHÔNG CÓ THÔNG TIN GÌ
+                if (string.IsNullOrEmpty(tool.Reason) &&
+                    string.IsNullOrEmpty(tool.InstallDate) &&
+                    string.IsNullOrEmpty(tool.InstallTime))
+                    continue;
+
+                // Địa chỉ dao phải cố định theo ca: Day Shift = Dao1..4,
+                // Night Shift = Dao5..8. Không tin toolNumber từ cache frontend cũ.
+                string toolAddress = ToolHelpers.GetToolAddress(req.MachineName, req.Shift, tool.ToolPosition);
+
+                // Parse Replace (THÁO)
+                DateTime? replaceDate = DateTime.TryParse(tool.ReplaceDate, out var repDateVal) ? repDateVal : (DateTime?)null;
+                TimeSpan? replaceTime = TimeSpan.TryParse(tool.ReplaceTime, out var repTimeVal) ? repTimeVal : (TimeSpan?)null;
+
+                // Parse Install (LẮP)
+                DateTime? installDate = DateTime.TryParse(tool.InstallDate, out var insDateVal) ? insDateVal : (DateTime?)null;
+                TimeSpan? installTime = TimeSpan.TryParse(tool.InstallTime, out var insTimeVal) ? insTimeVal : (TimeSpan?)null;
+
+                // ==================== 1. THÁO DAO ====================
+                if (replaceDate != null && !string.IsNullOrEmpty(tool.Reason) && tool.ActualHours > 0)
                 {
-                    Shift = req.Shift,
-                    Supervisor = req.Supervisor ?? "",
-                    MSS = req.MSS ?? "",
-                    Date = workDate,
-                    MachineName = req.MachineName,
-                    ToolPosition = tool.ToolPosition,
-                    ToolType = "", 
-                    Material = tool.Material ?? "PLYWOOD",
-                    
-                    // DAO THÁO (Ca này biết)
-                    ReplaceDate = DateTime.TryParse(tool.ReplaceDate, out var rd) ? rd : (DateTime?)null,
-                    ReplaceTime = TimeSpan.TryParse(tool.ReplaceTime, out var rt) ? rt : (TimeSpan?)null,
-                    ActualHours = tool.ActualHours,
-                    Reason = tool.Reason ?? "",
-                    
-                    // DAO LẮP (Chờ ca kia điền)
-                    InstallDate = null,
-                    InstallTime = null,
-                    Supplier = "",
-                    
-                    ToolVersion = 0,  // Sẽ tính sau
-                    IsVersionIncrement = false,
-                    CreatedAt = DateTime.Now,
-                    UpdatedAt = DateTime.Now
-                };
+                    // Tìm bản ghi đang lắp (InstallDate != null, ReplaceDate == null)
+                    var openRecords = await db.ToolChanges
+                        .Where(t =>
+                            t.ToolAddress == toolAddress &&
+                            t.ReplaceDate == null)
+                        .ToListAsync();
 
-                // Tính Version cho ca hiện tại
-                var currentStatus = await db.ToolStatuses
-                    .FirstOrDefaultAsync(t => 
-                        t.MachineName == req.MachineName && 
-                        t.Shift == req.Shift && 
-                        t.ToolPosition == tool.ToolPosition);
+                    var existingOpenRecord = openRecords
+                        .OrderByDescending(t => t.InstallDate)
+                        .ThenByDescending(t => t.InstallTime ?? TimeSpan.Zero)
+                        .FirstOrDefault();
 
-                bool shouldIncrementVersion = !string.IsNullOrEmpty(tool.Reason) && tool.Reason != "Cuối ca thay";
-
-                if (shouldIncrementVersion)
-                {
-                    currentShiftRecord.ToolVersion = (currentStatus?.CurrentVersion ?? 0) + 1;
-                    currentShiftRecord.IsVersionIncrement = true;
-                }
-                else
-                {
-                    currentShiftRecord.ToolVersion = (currentStatus?.CurrentVersion ?? 0) == 0 ? 1 : currentStatus.CurrentVersion;
-                    currentShiftRecord.IsVersionIncrement = false;
-                }
-
-                db.ToolChanges.Add(currentShiftRecord);
-                await db.SaveChangesAsync();
-                savedRecords.Add(currentShiftRecord.Id);
-
-                // ========== BƯỚC 2: TẠO/CẬP NHẬT BẢN GHI CA ĐỐI TÁC (Thông tin DAO LẮP) ==========
-                
-                // Tìm bản ghi ca đối tác gần nhất chưa có thông tin DAO THÁO
-                var partnerCandidates = await db.ToolChanges
-                    .Where(t =>
-                        t.MachineName == req.MachineName &&
-                        t.ToolPosition == tool.ToolPosition &&
-                        t.Shift == partnerShift &&
-                        t.ReplaceDate == null
-                    )
-                    .ToListAsync();
-
-                var partnerRecordToUpdate = partnerCandidates
-                    .OrderByDescending(t => t.ReplaceDate)
-                    .ThenByDescending(t => t.ReplaceTime ?? TimeSpan.Zero)
-                    .FirstOrDefault();
-
-                if (partnerRecordToUpdate != null)
-                {
-                    // ✅ CẬP NHẬT bản ghi đã tồn tại (thêm thông tin DAO THÁO)
-                    partnerRecordToUpdate.ReplaceDate = currentShiftRecord.ReplaceDate;
-                    partnerRecordToUpdate.ReplaceTime = currentShiftRecord.ReplaceTime;
-                    partnerRecordToUpdate.ActualHours = tool.ActualHours;
-                    partnerRecordToUpdate.Reason = tool.Reason ?? "";
-                    partnerRecordToUpdate.Material = tool.Material ?? "PLYWOOD";
-                    partnerRecordToUpdate.UpdatedAt = DateTime.Now;
-                    
-                    updatedRecords.Add(partnerRecordToUpdate.Id);
-                    Console.WriteLine($"✅ Đã cập nhật bản ghi {partnerShift} (ID={partnerRecordToUpdate.Id})");
-                }
-
-                // Tạo bản ghi mới cho ca đối tác (chứa thông tin DAO LẮP)
-                var newPartnerRecord = new ToolChange
-                {
-                    Shift = partnerShift,
-                    Supervisor = req.Supervisor ?? "",
-                    MSS = req.MSS ?? "",
-                    Date = workDate,
-                    MachineName = req.MachineName,
-                    ToolPosition = tool.ToolPosition,
-                    ToolType = tool.ToolType ?? "MỚI",
-                    Material = tool.Material ?? "PLYWOOD",
-                    Supplier = tool.Supplier ?? "",
-                    
-                    // DAO THÁO (Chờ ca kia điền)
-                    ReplaceDate = null,
-                    ReplaceTime = null,
-                    ActualHours = 0,
-                    Reason = "",
-                    
-                    // DAO LẮP (Ca này vừa lắp cho ca kia)
-                    InstallDate = DateTime.TryParse(tool.InstallDate, out var id) ? id : (DateTime?)null,
-                    InstallTime = TimeSpan.TryParse(tool.InstallTime, out var it) ? it : (TimeSpan?)null,
-                    
-                    ToolVersion = 0,  // Sẽ tính khi ca kia nhập
-                    IsVersionIncrement = false,
-                    CreatedAt = DateTime.Now,
-                    UpdatedAt = DateTime.Now
-                };
-
-                db.ToolChanges.Add(newPartnerRecord);
-                await db.SaveChangesAsync();
-                savedRecords.Add(newPartnerRecord.Id);
-
-                // ========== BƯỚC 3: CẬP NHẬT BẢN GHI CA HIỆN TẠI CŨ (Thêm thông tin DAO LẮP) ==========
-                // Lấy candidate trên DB trước
-                var currentRecordCandidates = await db.ToolChanges
-                    .Where(t =>
-                        t.MachineName == req.MachineName &&
-                        t.ToolPosition == tool.ToolPosition &&
-                        t.Shift == req.Shift &&
-                        t.InstallDate == null &&
-                        t.ReplaceDate < workDate
-                    )
-                    .ToListAsync();   // ⚠️ Chuyển sang list (LINQ to Objects)
-
-                // Sắp xếp trên bộ nhớ (cho phép dùng TimeSpan?)
-                var currentRecordToUpdate = currentRecordCandidates
-                    .OrderByDescending(t => t.ReplaceDate)
-                    .ThenByDescending(t => t.ReplaceTime ?? TimeSpan.Zero)
-                    .FirstOrDefault();
-
-                if (currentRecordToUpdate != null)
-                {
-                    currentRecordToUpdate.InstallDate = newPartnerRecord.InstallDate;
-                    currentRecordToUpdate.InstallTime = newPartnerRecord.InstallTime;
-                    currentRecordToUpdate.ToolType = tool.ToolType ?? "MỚI";
-                    currentRecordToUpdate.Supplier = tool.Supplier ?? "";
-                    currentRecordToUpdate.UpdatedAt = DateTime.Now;
-                    
-                    updatedRecords.Add(currentRecordToUpdate.Id);
-                    Console.WriteLine($"✅ Đã hoàn thiện bản ghi {req.Shift} cũ (ID={currentRecordToUpdate.Id})");
-                }
-
-                // ========== BƯỚC 4: CẬP NHẬT ToolStatus ==========
-                if (currentStatus != null)
-                {
-                    if (shouldIncrementVersion)
+                    if (existingOpenRecord != null)
                     {
-                        currentStatus.CurrentVersion++;
-                        currentStatus.CurrentVersionHours = 0;
-                        currentStatus.TotalHours += tool.ActualHours;
+                        // 1a. Cập nhật ToolChange (lịch sử)
+                        existingOpenRecord.ReplaceDate = replaceDate;
+                        existingOpenRecord.ReplaceTime = replaceTime;
+                        existingOpenRecord.ActualHours = tool.ActualHours;
+                        existingOpenRecord.Reason      = tool.Reason ?? "";
+
+                        // GIỮ Shift/Supervisor/MSS/Date của lần lắp (ca lắp)
+                        // KHÔNG đổi ca khi tháo
+
+                        existingOpenRecord.UpdatedAt  = DateTime.Now;
+
+                        // 1b. Cập nhật ToolStatus theo Machine + ToolAddress
+                        var status = await db.ToolStatuses.FirstOrDefaultAsync(t =>
+                            t.MachineName == existingOpenRecord.MachineName &&
+                            t.ToolAddress == existingOpenRecord.ToolAddress);
+
+                        if (status == null)
+                        {
+                            status = new ToolStatus
+                            {
+                                MachineName         = existingOpenRecord.MachineName,
+                                ToolAddress         = existingOpenRecord.ToolAddress,
+                                Shift               = existingOpenRecord.Shift,
+                                ToolPosition        = existingOpenRecord.ToolPosition,
+                                CurrentVersion      = existingOpenRecord.ToolVersion,
+                                CurrentVersionHours = 0,
+                                TotalHours          = 0,
+                                LastUpdated         = DateTime.Now
+                            };
+                            db.ToolStatuses.Add(status);
+                        }
+
+                        status.CurrentVersionHours += tool.ActualHours;
+                        status.TotalHours          += tool.ActualHours;
+                        status.LastUpdated          = DateTime.Now;
+
+                        savedRecords.Add(existingOpenRecord.Id);
+                        await db.SaveChangesAsync();
                     }
                     else
                     {
-                        currentStatus.CurrentVersionHours += tool.ActualHours;
-                        currentStatus.TotalHours += tool.ActualHours;
+                        // 1c. Không có record lắp trước đó → tạo record chỉ có Replace
+                        var replaceOnlyRecord = new ToolChange
+                        {
+                            Shift       = req.Shift,
+                            Supervisor  = req.Supervisor ?? "",
+                            MSS         = req.MSS ?? "",
+                            Date        = workDate,
+                            MachineName = req.MachineName,
+                            ToolPosition= tool.ToolPosition,
+                            ToolAddress = toolAddress,
+                            ToolVersion = 0,
+                            ToolType    = tool.ToolType ?? "MỚI",
+                            Material    = tool.Material ?? "PLYWOOD",
+                            Supplier    = tool.Supplier ?? "",
+
+                            InstallDate = null,
+                            InstallTime = null,
+                            ReplaceDate = replaceDate,
+                            ReplaceTime = replaceTime,
+                            ActualHours = tool.ActualHours,
+                            Reason      = tool.Reason ?? "",
+                            IsVersionIncrement = tool.Reason != "Cuối ca thay",
+                            CreatedAt   = DateTime.Now,
+                            UpdatedAt   = DateTime.Now
+                        };
+
+                        db.ToolChanges.Add(replaceOnlyRecord);
+                        await db.SaveChangesAsync();
+                        savedRecords.Add(replaceOnlyRecord.Id);
+
+                        // 1d. Cập nhật ToolStatus tương ứng
+                        var status = await db.ToolStatuses.FirstOrDefaultAsync(t =>
+                            t.MachineName == req.MachineName &&
+                            t.ToolAddress == toolAddress);
+
+                        if (status == null)
+                        {
+                            status = new ToolStatus
+                            {
+                                MachineName         = req.MachineName,
+                                ToolAddress         = toolAddress,
+                                Shift               = req.Shift,
+                                ToolPosition        = tool.ToolPosition,
+                                CurrentVersion      = 1,
+                                CurrentVersionHours = 0,
+                                TotalHours          = 0,
+                                LastUpdated         = DateTime.Now
+                            };
+                            db.ToolStatuses.Add(status);
+                        }
+
+                        status.CurrentVersionHours += tool.ActualHours;
+                        status.TotalHours          += tool.ActualHours;
+                        status.LastUpdated          = DateTime.Now;
+
+                        await db.SaveChangesAsync();
                     }
-                    currentStatus.LastUpdated = DateTime.Now;
                 }
-                else
+
+                // ==================== 2. LẮP DAO ====================
+                if (installDate != null || installTime != null)
                 {
-                    db.ToolStatuses.Add(new ToolStatus
+                    // 2a. Tìm lần THÁO gần nhất của dao này để biết lý do
+                    var lastChangesQuery = db.ToolChanges
+                        .Where(t => t.ToolAddress == toolAddress && t.ReplaceDate != null);
+
+                    var lastChanges = await lastChangesQuery.ToListAsync(); // SQLite không ORDER BY TimeSpan trực tiếp
+                    var lastChange = lastChanges
+                        .OrderByDescending(t => t.ReplaceDate)
+                        .ThenByDescending(t => t.ReplaceTime ?? TimeSpan.Zero)
+                        .FirstOrDefault();
+
+                    bool isDamaged = false;
+                    if (lastChange != null && !string.IsNullOrEmpty(lastChange.Reason))
                     {
+                        var reason = lastChange.Reason.Trim();
+                        isDamaged = reason == "Gãy" || reason == "Cháy" || reason == "Cùn" || reason == "Mẻ";
+                    }
+
+                    // 2b. Lấy ToolStatus hiện tại
+                    var currentStatus = await db.ToolStatuses
+                        .FirstOrDefaultAsync(t =>
+                            t.MachineName == req.MachineName &&
+                            t.ToolAddress == toolAddress);
+
+                    int previousVersion = currentStatus?.CurrentVersion ?? 0;
+                    int newVersion;
+
+                    if (isDamaged)
+                    {
+                        // Dao hư → dao mới (version mới)
+                        newVersion = previousVersion + 1;
+                    }
+                    else
+                    {
+                        // Cuối ca thay → cùng version
+                        newVersion = previousVersion == 0 ? 1 : previousVersion;
+                    }
+
+                    // 2c. Tạo ToolChange mới cho lần lắp này
+                    var newRecord = new ToolChange
+                    {
+                        Shift       = req.Shift,
+                        Supervisor  = req.Supervisor ?? "",
+                        MSS         = req.MSS ?? "",
+                        Date        = workDate,
                         MachineName = req.MachineName,
-                        Shift = req.Shift,
-                        ToolPosition = tool.ToolPosition,
-                        CurrentVersion = currentShiftRecord.ToolVersion,
-                        CurrentVersionHours = tool.ActualHours,
-                        TotalHours = tool.ActualHours,
-                        LastUpdated = DateTime.Now
-                    });
+                        ToolPosition= tool.ToolPosition,
+                        ToolAddress = toolAddress,
+                        ToolVersion = newVersion,
+                        ToolType    = tool.ToolType ?? "MỚI",
+                        Material    = tool.Material ?? "PLYWOOD",
+                        Supplier    = tool.Supplier ?? "",
+
+                        InstallDate = installDate,
+                        InstallTime = installTime,
+                        ReplaceDate = null,
+                        ReplaceTime = null,
+                        ActualHours = null,
+                        Reason      = "",
+                        IsVersionIncrement = isDamaged,
+                        CreatedAt   = DateTime.Now,
+                        UpdatedAt   = DateTime.Now
+                    };
+
+                    db.ToolChanges.Add(newRecord);
+                    await db.SaveChangesAsync();
+                    savedRecords.Add(newRecord.Id);
+
+                    // 2d. Cập nhật / tạo ToolStatus
+                    if (currentStatus != null)
+                    {
+                        currentStatus.CurrentVersion = newVersion;
+
+                        if (isDamaged)
+                        {
+                            // Dao mới sau khi hư → version mới, giờ version mới = 0
+                            currentStatus.CurrentVersionHours = 0;
+                        }
+                        // Nếu chỉ Cuối ca thay → giữ nguyên CurrentVersionHours
+
+                        // Cập nhật ca + vị trí dao hiện đang gắn
+                        currentStatus.Shift        = req.Shift;
+                        currentStatus.ToolPosition = tool.ToolPosition;
+
+                        currentStatus.LastUpdated  = DateTime.Now;
+                    }
+                    else
+                    {
+                        db.ToolStatuses.Add(new ToolStatus
+                        {
+                            MachineName         = req.MachineName,
+                            ToolAddress         = toolAddress,
+                            Shift               = req.Shift,
+                            ToolPosition        = tool.ToolPosition,
+                            CurrentVersion      = newVersion,
+                            CurrentVersionHours = 0,
+                            TotalHours          = 0,
+                            LastUpdated         = DateTime.Now
+                        });
+                    }
+
+                    await db.SaveChangesAsync();
                 }
             }
 
+            foreach (var recordId in savedRecords.Distinct())
+                db.CncAuditLogs.Add(new CncAuditLog { TimestampUtc = DateTime.UtcNow, Action = "CREATE", ToolChangeId = recordId, ActorRole = "operator", Details = JsonSerializer.Serialize(new { req.MachineName, req.Shift, req.Supervisor, req.MSS }) });
             await db.SaveChangesAsync();
-            await transaction.CommitAsync();
 
-            // Broadcast SignalR
+            // Broadcast SignalR cho trang Quản lý
             await hubContext.Clients.All.SendAsync("ToolStatusUpdated", new
             {
                 machine = req.MachineName,
-                shift = req.Shift,
-                message = $"Đã lưu {savedRecords.Count} bản ghi mới, cập nhật {updatedRecords.Count} bản ghi cũ"
+                shift   = req.Shift,
+                saved   = savedRecords.Count
             });
 
-            return Results.Ok(new { 
-                success = true, 
+            return Results.Ok(new
+            {
+                success = true,
                 savedRecords = savedRecords.Count,
-                updatedRecords = updatedRecords.Count,
-                message = $"✅ Đã lưu {savedRecords.Count} bản ghi, hoàn thiện {updatedRecords.Count} bản ghi" 
+                message = $"✅ Đã lưu {savedRecords.Count} bản ghi thay dao"
             });
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error: {ex.Message}");
             return Results.Problem(ex.Message);
         }
     });
 
     // PUT: Cập nhật bản ghi thay dao
-    app.MapPut("/api/tools/change/{id}", async (int id, [FromBody] ToolChangeUpdateRequest req, ToolManagementDbContext db) =>
+    app.MapPut("/api/tools/change/{id}", async (int id, [FromBody] ToolChangeUpdateRequest req, HttpRequest httpRequest, CncAccess access, ToolManagementDbContext db) =>
     {
         try
         {
+            if (!access.HasRole(httpRequest, "manager")) return Results.Unauthorized();
             var toolChange = await db.ToolChanges.FindAsync(id);
             if (toolChange == null)
                 return Results.NotFound("Không tìm thấy bản ghi");
@@ -3244,7 +3582,7 @@ try
 
             if (req.ActualHours.HasValue && req.ActualHours.Value != toolChange.ActualHours)
             {
-                int diff = req.ActualHours.Value - toolChange.ActualHours;
+                int diff = req.ActualHours.Value - (toolChange.ActualHours ?? 0);
                 toolChange.ActualHours = req.ActualHours.Value;
 
                 // Cập nhật ToolStatus
@@ -3261,6 +3599,7 @@ try
             }
 
             toolChange.UpdatedAt = DateTime.Now;
+            db.CncAuditLogs.Add(new CncAuditLog { TimestampUtc = DateTime.UtcNow, Action = "UPDATE", ToolChangeId = id, ActorRole = "manager", Details = JsonSerializer.Serialize(req) });
             await db.SaveChangesAsync();
 
             return Results.Ok(new { success = true, message = "✅ Đã cập nhật thành công" });
@@ -3272,155 +3611,173 @@ try
     });
 
     // DELETE: Xóa bản ghi thay dao
-    app.MapDelete("/api/tools/change/{id}", async (int id, ToolManagementDbContext db) =>
+    // History is never deleted. A manager can only undo it, and the original record remains auditable.
+    app.MapPost("/api/tools/change/{id}/undo", async (int id, CncUndoRequest request, HttpRequest httpRequest, CncAccess access, ToolManagementDbContext db) =>
+    {
+        if (!access.HasRole(httpRequest, "manager")) return Results.Unauthorized();
+        var toolChange = await db.ToolChanges.FindAsync(id);
+        if (toolChange == null) return Results.NotFound("Record not found");
+        if (await db.CncChangeVoids.AnyAsync(v => v.ToolChangeId == id)) return Results.Conflict("Record was already undone");
+        db.CncChangeVoids.Add(new CncChangeVoid { ToolChangeId = id, VoidedAtUtc = DateTime.UtcNow, VoidedBy = "manager", Reason = request.Reason?.Trim() ?? "Undo" });
+        var status = await db.ToolStatuses.FirstOrDefaultAsync(s => s.MachineName == toolChange.MachineName && s.ToolAddress == toolChange.ToolAddress);
+        if (status != null)
+        {
+            status.TotalHours = Math.Max(0, status.TotalHours - (toolChange.ActualHours ?? 0));
+            if (status.CurrentVersion == toolChange.ToolVersion)
+                status.CurrentVersionHours = Math.Max(0, status.CurrentVersionHours - (toolChange.ActualHours ?? 0));
+            status.LastUpdated = DateTime.Now;
+        }
+        db.CncAuditLogs.Add(new CncAuditLog { TimestampUtc = DateTime.UtcNow, Action = "UNDO", ToolChangeId = id, ActorRole = "manager", Details = JsonSerializer.Serialize(new { request.Reason, toolChange.MachineName, toolChange.ToolAddress, toolChange.ActualHours }) });
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, message = "Undo completed; the original history is retained in audit log." });
+    });
+    // ==================== API DEBUG: XEM LỊCH SỬ DAO THEO MÁY ====================
+    app.MapGet("/api/tools/debug-machine", async (
+        string machine,
+        DateTime? fromDate,
+        DateTime? toDate,
+        string? shift,
+        ToolManagementDbContext db) =>
     {
         try
         {
-            var toolChange = await db.ToolChanges.FindAsync(id);
-            if (toolChange == null)
-                return Results.NotFound("Không tìm thấy bản ghi");
-            
-            // Cập nhật lại TotalHours
-            var status = await db.ToolStatuses.FirstOrDefaultAsync(t =>
-                t.MachineName == toolChange.MachineName &&
-                t.Shift == toolChange.Shift &&
-                t.ToolPosition == toolChange.ToolPosition);
-            
-            if (status != null)
+            if (string.IsNullOrWhiteSpace(machine))
+                return Results.BadRequest("Thiếu tên máy (vd: Heian 4)");
+
+            var q = db.ToolChanges
+                .Where(t => t.MachineName == machine);
+
+            if (fromDate.HasValue)
+                q = q.Where(t => t.Date >= fromDate.Value.Date);
+
+            if (toDate.HasValue)
+                q = q.Where(t => t.Date <= toDate.Value.Date);
+
+            if (!string.IsNullOrEmpty(shift))
+                q = q.Where(t => t.Shift == shift);
+
+            var list = await q
+                .OrderBy(t => t.Date)
+                .ThenBy(t => t.Shift)
+                .ThenBy(t => t.ToolPosition)
+                .ThenBy(t => t.ReplaceDate)
+                .ToListAsync();
+
+            // Trả về dữ liệu thô + dạng nhóm theo (ToolPosition, Shift)
+            var grouped = list
+                .GroupBy(t => new { t.ToolPosition, t.Shift })
+                .Select(g => new
+                {
+                    position = g.Key.ToolPosition,
+                    shift = g.Key.Shift,
+                    records = g.Select(r => new
+                    {
+                        id = r.Id,
+                        date = r.Date.ToString("yyyy-MM-dd"),
+                        replaceDate = r.ReplaceDate?.ToString("yyyy-MM-dd"),
+                        replaceTime = r.ReplaceTime?.ToString(@"hh\:mm"),
+                        installDate = r.InstallDate?.ToString("yyyy-MM-dd"),
+                        installTime = r.InstallTime?.ToString(@"hh\:mm"),
+                        hours = r.ActualHours,
+                        reason = r.Reason,
+                        toolType = r.ToolType,
+                        supplier = r.Supplier,
+                        createdAt = r.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")
+                    }).ToList()
+                })
+                .OrderBy(g => g.position)
+                .ThenBy(g => g.shift)
+                .ToList();
+
+            return Results.Ok(new
             {
-                status.TotalHours -= toolChange.ActualHours;
-                if (status.TotalHours < 0) status.TotalHours = 0;
-            }
-            
-            db.ToolChanges.Remove(toolChange);
-            await db.SaveChangesAsync();
-            
-            return Results.Ok(new { success = true, message = "✅ Đã xóa thành công" });
+                machine = machine,
+                fromDate = fromDate?.ToString("yyyy-MM-dd"),
+                toDate = toDate?.ToString("yyyy-MM-dd"),
+                totalRows = list.Count,
+                grouped = grouped
+            });
         }
         catch (Exception ex)
         {
-            return Results.Problem(ex.Message);
+            return Results.Problem(ex.ToString());
         }
     });
 
-    // GET: Export Excel lịch sử thay dao
+    // GET: Export Excel lịch sử thay dao (DS/NS theo ca hiện tại)
+    // GET: Export Excel lịch sử thay dao (DS/NS, Ngày lắp = lúc dao ca này được lắp lên)
+    // GET: Export Excel lịch sử thay dao theo ĐỊA CHỈ DAO (ToolAddress)
     app.MapGet("/api/tools/export", async (
-    string? machine,
-    string? shift,
-    DateTime? fromDate,
-    DateTime? toDate,
-    ToolManagementDbContext db) =>
+        string? machine,
+        string? shift,
+        DateTime? fromDate,
+        DateTime? toDate,
+        ToolManagementDbContext db) =>
     {
         try
         {
             var query = db.ToolChanges.AsQueryable();
-            // (Filter logic giữ nguyên)
-            if (!string.IsNullOrEmpty(machine)) query = query.Where(t => t.MachineName == machine);
-            if (!string.IsNullOrEmpty(shift)) query = query.Where(t => t.Shift == shift);
-            if (fromDate.HasValue) query = query.Where(t => t.Date >= fromDate.Value);
-            if (toDate.HasValue) query = query.Where(t => t.Date <= toDate.Value);
+
+            if (!string.IsNullOrEmpty(machine))
+                query = query.Where(t => t.MachineName == machine);
+
+            if (fromDate.HasValue)
+                query = query.Where(t => t.Date >= fromDate.Value.Date);
+
+            if (toDate.HasValue)
+                query = query.Where(t => t.Date <= toDate.Value.Date);
 
             var allData = await query.ToListAsync();
-            if (!allData.Any()) return Results.BadRequest("Không có dữ liệu để xuất.");
+            if (!allData.Any())
+                return Results.BadRequest("Không có dữ liệu để xuất.");
 
             using var workbook = new XLWorkbook();
 
-            var dataByMachine = allData.GroupBy(t => t.MachineName).OrderBy(g => g.Key);
-
-            foreach (var machineGroup in dataByMachine)
+            // Đúng thứ tự workbook mẫu: DS-Heian 4→21, sau đó NS-Heian 4→21.
+            int GetMachineNumber(string machineName)
             {
-                var machineName = machineGroup.Key;
-                var dsRows = new List<ToolChange>();
-                var nsRows = new List<ToolChange>();
-
-                // Sắp xếp tất cả các lần thay dao của máy này theo thời gian
-                var sortedChanges = machineGroup
-                    .OrderBy(t => t.ReplaceDate ?? t.Date)
-                    .ThenBy(t => t.ReplaceTime ?? TimeSpan.Zero)
-                    .ToList();
-
-                // Nhóm các lần thay dao thành từng "sự kiện" (các lần thay gần nhau)
-                var events = new List<List<ToolChange>>();
-                if (sortedChanges.Any())
-                {
-                    var currentEvent = new List<ToolChange> { sortedChanges.First() };
-                    for (int i = 1; i < sortedChanges.Count; i++)
-                    {
-                        var lastChangeInEvent = currentEvent.Last();
-                        var currentChange = sortedChanges[i];
-
-                        var lastTime = (lastChangeInEvent.ReplaceDate ?? lastChangeInEvent.Date).Add(lastChangeInEvent.ReplaceTime ?? TimeSpan.Zero);
-                        var currentTime = (currentChange.ReplaceDate ?? currentChange.Date).Add(currentChange.ReplaceTime ?? TimeSpan.Zero);
-
-                        // Nếu thời gian thay cách nhau dưới 5 phút, coi là cùng một sự kiện
-                        if ((currentTime - lastTime).TotalMinutes < 5)
-                        {
-                            currentEvent.Add(currentChange);
-                        }
-                        else
-                        {
-                            events.Add(currentEvent);
-                            currentEvent = new List<ToolChange> { currentChange };
-                        }
-                    }
-                    events.Add(currentEvent);
-                }
-
-                // Ghép các sự kiện theo cặp (Day, Night)
-                for (int i = 0; i < events.Count - 1; i++)
-                {
-                    var dayEvent = events[i].Where(t => t.Shift == "Day Shift").ToList();
-                    var nightEvent = events[i + 1].Where(t => t.Shift == "Night Shift").ToList();
-
-                    if (dayEvent.Any() && nightEvent.Any())
-                    {
-                        // Ghép thông tin cho từng vị trí dao
-                        for (int pos = 1; pos <= 4; pos++)
-                        {
-                            var dayChange = dayEvent.FirstOrDefault(t => t.ToolPosition == pos);
-                            var nightChange = nightEvent.FirstOrDefault(t => t.ToolPosition == pos);
-
-                            // Tạo dòng cho sheet Day Shift
-                            if (dayChange != null)
-                            {
-                                var previousNightEvent = events.LastOrDefault(ev => ev.First().Date < dayChange.Date && ev.First().Shift == "Night Shift");
-                                var previousNightChangeForPos = previousNightEvent?.FirstOrDefault(t => t.ToolPosition == pos);
-
-                                dsRows.Add(new ToolChange
-                                {
-                                    Shift = dayChange.Shift, Supervisor = dayChange.Supervisor, MSS = dayChange.MSS, MachineName = dayChange.MachineName,
-                                    ToolPosition = dayChange.ToolPosition, ToolVersion = dayChange.ToolVersion,
-                                    ReplaceDate = dayChange.ReplaceDate, ReplaceTime = dayChange.ReplaceTime,
-                                    ActualHours = dayChange.ActualHours, Reason = dayChange.Reason, Material = dayChange.Material,
-                                    InstallDate = previousNightChangeForPos?.InstallDate,
-                                    InstallTime = previousNightChangeForPos?.InstallTime,
-                                    ToolType = previousNightChangeForPos?.ToolType ?? "N/A"
-                                });
-                            }
-
-                            // Tạo dòng cho sheet Night Shift
-                            if (nightChange != null)
-                            {
-                                nsRows.Add(new ToolChange
-                                {
-                                    Shift = nightChange.Shift, Supervisor = nightChange.Supervisor, MSS = nightChange.MSS, MachineName = nightChange.MachineName,
-                                    ToolPosition = nightChange.ToolPosition, ToolVersion = nightChange.ToolVersion,
-                                    ReplaceDate = nightChange.ReplaceDate, ReplaceTime = nightChange.ReplaceTime,
-                                    ActualHours = nightChange.ActualHours, Reason = nightChange.Reason, Material = nightChange.Material,
-                                    InstallDate = dayChange?.InstallDate,
-                                    InstallTime = dayChange?.InstallTime,
-                                    ToolType = dayChange?.ToolType ?? "N/A"
-                                });
-                            }
-                        }
-                        i++; // Bỏ qua nightEvent vì đã xử lý
-                    }
-                }
-                
-                if (dsRows.Any()) WriteSheet(workbook, $"DS-{machineName}", dsRows.OrderBy(r => r.ReplaceDate).ThenBy(r => r.ReplaceTime).ThenBy(r => r.ToolPosition).ToList());
-                if (nsRows.Any()) WriteSheet(workbook, $"NS-{machineName}", nsRows.OrderBy(r => r.ReplaceDate).ThenBy(r => r.ReplaceTime).ThenBy(r => r.ToolPosition).ToList());
+                var match = System.Text.RegularExpressions.Regex.Match(machineName ?? "", @"\d+");
+                return match.Success && int.TryParse(match.Value, out int number) ? number : int.MaxValue;
             }
 
+            var dataByMachine = allData
+                .GroupBy(t => t.MachineName)
+                .OrderBy(g => GetMachineNumber(g.Key))
+                .ToList();
+
+            // Toàn bộ sheet ca ngày trước.
+            foreach (var machineGroup in dataByMachine)
+            {
+                var dsRows = machineGroup
+                    .Where(t => !string.IsNullOrEmpty(t.ToolAddress) &&
+                        (t.ToolAddress.EndsWith("-Dao1", StringComparison.OrdinalIgnoreCase) ||
+                         t.ToolAddress.EndsWith("-Dao2", StringComparison.OrdinalIgnoreCase) ||
+                         t.ToolAddress.EndsWith("-Dao3", StringComparison.OrdinalIgnoreCase) ||
+                         t.ToolAddress.EndsWith("-Dao4", StringComparison.OrdinalIgnoreCase)))
+                    .OrderBy(t => t.InstallDate ?? t.ReplaceDate)
+                    .ThenBy(t => t.InstallTime ?? t.ReplaceTime ?? TimeSpan.Zero)
+                    .ThenBy(t => t.ToolAddress)
+                    .ToList();
+
+                if (dsRows.Any()) WriteSheet(workbook, $"DS-{machineGroup.Key}", dsRows);
+            }
+
+            // Sau đó đến toàn bộ sheet ca đêm.
+            foreach (var machineGroup in dataByMachine)
+            {
+                var nsRows = machineGroup
+                    .Where(t => !string.IsNullOrEmpty(t.ToolAddress) &&
+                        (t.ToolAddress.EndsWith("-Dao5", StringComparison.OrdinalIgnoreCase) ||
+                         t.ToolAddress.EndsWith("-Dao6", StringComparison.OrdinalIgnoreCase) ||
+                         t.ToolAddress.EndsWith("-Dao7", StringComparison.OrdinalIgnoreCase) ||
+                         t.ToolAddress.EndsWith("-Dao8", StringComparison.OrdinalIgnoreCase)))
+                    .OrderBy(t => t.InstallDate ?? t.ReplaceDate)
+                    .ThenBy(t => t.InstallTime ?? t.ReplaceTime ?? TimeSpan.Zero)
+                    .ThenBy(t => t.ToolAddress)
+                    .ToList();
+
+                if (nsRows.Any()) WriteSheet(workbook, $"NS-{machineGroup.Key}", nsRows);
+            }
             using var stream = new MemoryStream();
             workbook.SaveAs(stream);
             var content = stream.ToArray();
@@ -3428,7 +3785,7 @@ try
             return Results.File(
                 content,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                $"CNC_Tool_Changes_Paired_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx"
+                $"CNC_Tool_Changes_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx"
             );
         }
         catch (Exception ex)
@@ -3449,6 +3806,14 @@ try
         ws.Cell(4, 1).Value = "Cuối ca thay";
         ws.Cell(5, 1).Value = "Gãy";
         ws.Range("A1:A5").Style.Font.Bold = true;
+        ws.Range("A1:A5").Style.Font.FontColor = XLColor.Black;
+        ws.Cell(1, 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#00B0F0"); // Mẻ
+        ws.Cell(2, 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FF0000"); // Cháy
+        ws.Cell(3, 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#92D050"); // Cùn
+        ws.Cell(4, 1).Style.Fill.BackgroundColor = XLColor.NoColor; // Cuối ca thay: không tô màu
+        ws.Cell(5, 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFC000"); // Gãy
+        ws.Range("A1:A5").Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        ws.Range("A1:A5").Style.Border.InsideBorder = XLBorderStyleValues.Thin;
 
         // ========== HEADER BẢNG CHÍNH (bắt đầu từ hàng 7) ==========
         int headerRow = 7;
@@ -3474,12 +3839,24 @@ try
 
         // ========== GHI DỮ LIỆU ==========
         int row = headerRow + 1;
+
+        // Ca làm việc theo sheet: DS-... -> Day Shift; NS-... -> Night Shift
+        string shiftForSheet = sheetName.StartsWith("NS-", StringComparison.OrdinalIgnoreCase)
+            ? "Night Shift"
+            : "Day Shift";
+
         foreach (var item in data)
         {
-            ws.Cell(row, 1).Value = item.Shift;
+            // Cột 1: Ca làm việc (theo sheet, không theo item.Shift)
+            ws.Cell(row, 1).Value = shiftForSheet;
+
+            // Cột 2: Supervisor
             ws.Cell(row, 2).Value = item.Supervisor;
+
+            // Cột 3: MSS
             ws.Cell(row, 3).Value = item.MSS;
 
+            // Cột 4: Máy (Heian 4 -> 4)
             int machineNumber = 0;
             if (!string.IsNullOrEmpty(item.MachineName))
             {
@@ -3488,28 +3865,56 @@ try
             }
             ws.Cell(row, 4).Value = machineNumber > 0 ? machineNumber : item.MachineName;
 
+            // Cột 5: Ngày lắp
             ws.Cell(row, 5).Value = item.InstallDate?.ToString("dd-MMM-yyyy") ?? "";
+
+            // Cột 6: Giờ lắp
             ws.Cell(row, 6).Value = item.InstallTime?.ToString(@"hh\:mm") ?? "";
 
             // Cột 7: Đầu dao (vị trí vật lý 1-4)
             ws.Cell(row, 7).Value = item.ToolPosition;
 
-            // Cột 8: Số thứ tự dao (mã dao 1-4 DS, 5-8 NS)
-            int baseHead = item.Shift == "Night Shift" ? 4 : 0;
+            // Cột 8: Số thứ tự dao (1-4 cho DS, 5-8 cho NS)
+            int baseHead = sheetName.StartsWith("NS-", StringComparison.OrdinalIgnoreCase) ? 4 : 0;
             int headNumber = baseHead + item.ToolPosition;
             ws.Cell(row, 8).Value = headNumber;
 
+            // Cột 9: Đợt cấp (Version)
             ws.Cell(row, 9).Value = item.ToolVersion;
 
+            // Cột 10: Ngày thay
             ws.Cell(row,10).Value = item.ReplaceDate?.ToString("dd-MMM-yyyy") ?? "";
+
+            // Cột 11: Giờ thay
             ws.Cell(row,11).Value = item.ReplaceTime?.ToString(@"hh\:mm") ?? "";
 
             // Cột 12: Đầu dao (lặp lại vị trí vật lý 1-4)
             ws.Cell(row,12).Value = item.ToolPosition;
 
-            ws.Cell(row,13).Value = item.ActualHours;
-            ws.Cell(row,14).Value = item.Reason;
+            // Cột 13: Giờ thực tế
+            ws.Cell(row,13).Value = item.ActualHours?.ToString() ?? "";
+
+            // Cột 14: Lý do thay
+            ws.Cell(row, 14).Value = item.Reason;
+
+            // Tô toàn bộ hàng từ "Ca làm việc" đến "Loại dao" theo lý do thay
+            var reasonColor = (item.Reason ?? "").Trim() switch
+            {
+                "Mẻ" => XLColor.FromHtml("#00B0F0"),
+                "Cháy" => XLColor.FromHtml("#FF0000"),
+                "Cùn" => XLColor.FromHtml("#92D050"),
+                "Gãy" => XLColor.FromHtml("#FFC000"),
+                _ => XLColor.NoColor // Cuối ca thay và lý do trống: không tô màu
+            };
+            var dataRowRange = ws.Range(row, 1, row, 16);
+            dataRowRange.Style.Fill.BackgroundColor = reasonColor;
+            if (reasonColor != XLColor.NoColor)
+                dataRowRange.Style.Font.FontColor = XLColor.Black;
+
+            // Cột 15: Loại nguyên liệu
             ws.Cell(row,15).Value = item.Material;
+
+            // Cột 16: Loại dao
             ws.Cell(row,16).Value = item.ToolType;
 
             row++;
@@ -3525,17 +3930,18 @@ try
         try
         {
             var performanceData = await db.ToolChanges
-                // Chỉ lấy các bản ghi có thông tin Supplier và là dao đã mài
-                .Where(t => t.Supplier != "" && (t.ToolType == "MÀI LẦN 1" || t.ToolType == "MÀI LẦN 2"))
-                .GroupBy(t => new { t.Supplier, t.ToolType }) // Gom nhóm theo Supplier và Loại dao
+                .Where(t => t.ActualHours != null &&
+                    (t.Supplier == "An Bình" || t.Supplier == "Trang Tuyển") &&
+                    (t.ToolType == "MÀI LẦN 1" || t.ToolType == "MÀI LẦN 2" || t.ToolType == "MÀI LẦN 3"))
+                .GroupBy(t => new { t.Supplier, t.MachineName, t.ToolAddress, t.ToolPosition })
                 .Select(g => new
                 {
                     Supplier = g.Key.Supplier,
-                    ToolType = g.Key.ToolType,
-                    AverageHours = g.Average(x => x.ActualHours), // Tính giờ chạy trung bình
-                    TotalChanges = g.Count() // Đếm số lần thay để biết độ tin cậy
+                    MachineName = g.Key.MachineName,
+                    ToolNumber = g.Key.ToolAddress != "" ? g.Key.ToolAddress : "Dao" + g.Key.ToolPosition,
+                    TotalHours = g.Sum(x => x.ActualHours!.Value)
                 })
-                .OrderBy(r => r.Supplier).ThenBy(r => r.ToolType)
+                .OrderBy(r => r.Supplier).ThenBy(r => r.MachineName).ThenBy(r => r.ToolNumber)
                 .ToListAsync();
                 
             return Results.Ok(performanceData);
@@ -3558,12 +3964,81 @@ try
         await ctx.Response.SendFileAsync("wwwroot/blow-fill.html");
     });
 
+    app.MapGet("/blow-fill-motion", async ctx =>
+    {
+        ctx.Response.ContentType = "text/html";
+        await ctx.Response.SendFileAsync("wwwroot/blow-fill-motion.html");
+    });
+
+    // Ảnh sản phẩm Blow Fill Motion được lưu theo Fiber Kit.
+    app.MapGet("/api/blow-fill-motion/image/{fiberKit}", (string fiberKit) =>
+    {
+        string safeFiberKit = System.Text.RegularExpressions.Regex.Replace(
+            (fiberKit ?? "").Trim().ToUpperInvariant(), "[^A-Z0-9_-]", "");
+        if (string.IsNullOrWhiteSpace(safeFiberKit)) return Results.BadRequest();
+
+        string imageFolder = Path.Combine(builder.Environment.ContentRootPath, "Data", "BlowFillMotionImages");
+        foreach (var item in new[]
+        {
+            (Extension: ".jpg", ContentType: "image/jpeg"),
+            (Extension: ".png", ContentType: "image/png"),
+            (Extension: ".webp", ContentType: "image/webp")
+        })
+        {
+            string imagePath = Path.Combine(imageFolder, safeFiberKit + item.Extension);
+            if (File.Exists(imagePath))
+                return Results.File(imagePath, item.ContentType, enableRangeProcessing: true);
+        }
+
+        return Results.NotFound();
+    });
+
+    app.MapPost("/api/blow-fill-motion/image/{fiberKit}", async (string fiberKit, HttpRequest request) =>
+    {
+        string safeFiberKit = System.Text.RegularExpressions.Regex.Replace(
+            (fiberKit ?? "").Trim().ToUpperInvariant(), "[^A-Z0-9_-]", "");
+        if (string.IsNullOrWhiteSpace(safeFiberKit))
+            return Results.BadRequest(new { error = "Fiber Kit không hợp lệ." });
+
+        if (!request.HasFormContentType)
+            return Results.BadRequest(new { error = "Yêu cầu phải chứa file ảnh." });
+
+        var form = await request.ReadFormAsync();
+        var image = form.Files.GetFile("image");
+        if (image == null || image.Length == 0)
+            return Results.BadRequest(new { error = "Chưa chọn ảnh." });
+        if (image.Length > 10 * 1024 * 1024)
+            return Results.BadRequest(new { error = "Ảnh không được lớn hơn 10 MB." });
+
+        string extension = image.ContentType.ToLowerInvariant() switch
+        {
+            "image/jpeg" => ".jpg",
+            "image/png" => ".png",
+            "image/webp" => ".webp",
+            _ => ""
+        };
+        if (string.IsNullOrEmpty(extension))
+            return Results.BadRequest(new { error = "Chỉ hỗ trợ ảnh JPG, PNG hoặc WEBP." });
+
+        string imageFolder = Path.Combine(builder.Environment.ContentRootPath, "Data", "BlowFillMotionImages");
+        Directory.CreateDirectory(imageFolder);
+        foreach (string oldExtension in new[] { ".jpg", ".png", ".webp" })
+        {
+            string oldPath = Path.Combine(imageFolder, safeFiberKit + oldExtension);
+            if (File.Exists(oldPath)) File.Delete(oldPath);
+        }
+
+        string imagePath = Path.Combine(imageFolder, safeFiberKit + extension);
+        await using var output = File.Create(imagePath);
+        await image.CopyToAsync(output);
+        return Results.Ok(new { success = true, imageUrl = $"/api/blow-fill-motion/image/{safeFiberKit}?v={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}" });
+    }).DisableAntiforgery();
     // API: Load Excel data
     app.MapGet("/api/blow-fill/load-excel", async () =>
     {
         try
         {
-            var excelPath = @"Data\Định mức gòn.xlsb";
+            var excelPath = @"V:\UPH R&D, PE\Public\AA_BLOWFILL _FIBER_WANEK\FORMAT\MASTER FILE BROWN FIBER WEIGHT New - Nov.xlsb";
             
             if (!File.Exists(excelPath))
             {
@@ -3726,27 +4201,49 @@ try
             if (string.IsNullOrWhiteSpace(mo))
                 return Results.BadRequest("Missing mo");
 
-            string moUpper = mo.Trim().ToUpper();
+            string moUpper = mo.Trim().ToUpperInvariant();
+            if (!System.Text.RegularExpressions.Regex.IsMatch(moUpper, "^[A-Z0-9]{7}$"))
+                return Results.BadRequest(new { found = false, message = "Mã MO phải có đúng 7 ký tự chữ hoặc số." });
 
             // ✅ Danh sách WC Blow Fill (chuẩn hóa)
             var blowFillWCs = new List<string> 
             { 
-                "UBF03", "UBF05", "UBF06", "UBF12", "UBF13" 
+                "UBF03", "UBF04", "UBF05", "UBF06", "UBF08", "UBF12", "UBF13" 
             };
+            // Ưu tiên hôm nay, sau đó hôm qua và ngày mai.
+            DateTime today = DateTime.Today;
+            DateTime yesterday = today.AddDays(-1);
+            DateTime tomorrow = today.AddDays(1);
 
-            // ✅ Tìm kế hoạch trong TẤT CẢ các WC Blow Fill
-            var plan = await db.MoPlans
-                .Where(p => blowFillWCs.Contains(p.WorkCenter) && p.MO == moUpper)
-                .OrderByDescending(p => p.PlanDate)
-                .FirstOrDefaultAsync();
+            MoPlan? plan = null;
+            foreach (var planDate in new[] { today, yesterday, tomorrow })
+            {
+                bool planLoaded = await db.MoPlans.AnyAsync(p => p.PlanDate.Date == planDate);
+                if (!planLoaded)
+                    await LoadSchedulePlan(planDate, db, CancellationToken.None);
+
+                plan = await db.MoPlans
+                    .Where(p => p.PlanDate.Date == planDate &&
+                                blowFillWCs.Contains(p.WorkCenter) &&
+                                p.MO == moUpper)
+                    .FirstOrDefaultAsync();
+
+                if (plan != null)
+                    break;
+            }
 
             if (plan == null)
             {
-                return Results.Ok(new { 
-                    found = false, 
-                    message = "MO này không có trong kế hoạch Blow Fill hôm nay." 
+                return Results.Ok(new {
+                    found = false,
+                    message = "MO này không có trong kế hoạch Blow Fill hôm qua, hôm nay hoặc ngày mai."
                 });
             }
+
+            int plannedQty = await db.MoPlans
+                .Where(p => p.PlanDate.Date == plan.PlanDate.Date &&
+                            p.MO == plan.MO && p.WorkCenter == plan.WorkCenter)
+                .MaxAsync(p => p.PlannedQty);
 
             return Results.Ok(new
             {
@@ -3754,7 +4251,7 @@ try
                 mo = plan.MO,
                 workCenter = plan.WorkCenter, // ✅ Trả về WC tìm được
                 fiberKit = plan.FiberKit,
-                plannedQty = plan.PlannedQty,
+                plannedQty,
                 planDate = plan.PlanDate.ToString("yyyy-MM-dd")
             });
         }
@@ -3779,7 +4276,7 @@ try
                 {
                     new { name = "Step 1", target_weight = 2.5, is_single_step = true }
                 },
-                tolerance = 0.05
+                tolerance = 0.03
             });
         }
         catch (Exception ex)
@@ -3804,13 +4301,13 @@ try
                 .Where(p => p.PlanDate.Date == targetDate.Date)
                 .ToListAsync();
 
-            // Map MO -> PlannedQty (ở Blow Fill). 
-            // Nếu một MO có nhiều dòng WC, bạn có thể cộng lại hoặc chỉ lấy WC Blow Fill tùy nhu cầu.
+            // Map MO -> PlannedQty: một MO có thể lặp nhiều dòng nhưng số lượng chỉ nằm ở một dòng.
+            // Lấy giá trị lớn nhất để tránh cộng trùng số lượng kế hoạch.
             var plannedByMo = plansForDate
                 .GroupBy(p => p.MO)
                 .ToDictionary(
                     g => g.Key,
-                    g => g.Sum(x => x.PlannedQty)  // tổng số kit kế hoạch cho MO
+                    g => g.Max(x => x.PlannedQty)  // không cộng các dòng MO bị lặp
                 );
 
             // 2. Lấy log cân trong ngày
@@ -3886,7 +4383,8 @@ try
                             {
                                 plannedQtyForThisMachineMo = plansForDate
                                     .Where(p => p.MO == mo && wcSet.Contains(p.WorkCenter.Trim().ToUpper()))
-                                    .Sum(p => p.PlannedQty);
+                                    .Select(p => (int?)p.PlannedQty)
+                                    .Max() ?? 0;
                             }
 
                             return new
@@ -3938,8 +4436,93 @@ try
         }
     });
 
+    // GET /api/blow-fill/daily-machine-kits?machineId=M1&from=2026-08-01&to=2026-08-07
+    app.MapGet("/api/blow-fill/daily-machine-kits", async (string machineId, string? from, string? to, BlowFillDbContext blowDb) =>
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(machineId))
+                return Results.BadRequest(new { error = "MachineId is required" });
+
+            DateTime toDate = DateTime.Today;
+            DateTime fromDate = toDate.AddDays(-6);
+            if (!string.IsNullOrWhiteSpace(from) && DateTime.TryParse(from, out var parsedFrom))
+                fromDate = parsedFrom.Date;
+            if (!string.IsNullOrWhiteSpace(to) && DateTime.TryParse(to, out var parsedTo))
+                toDate = parsedTo.Date;
+
+            if (fromDate > toDate)
+                return Results.BadRequest(new { error = "From date must be before or equal to To date" });
+            if ((toDate - fromDate).TotalDays > 366)
+                return Results.BadRequest(new { error = "Date range cannot exceed 366 days" });
+
+            string normalizedMachineId = machineId.Trim().ToUpperInvariant();
+            // Ca ngày: 07:00-19:45; ca đêm: 19:45-06:45 sáng hôm sau.
+            // Khoảng giao ca 06:45-07:00 không thuộc ca nào.
+            DateTime rangeStart = fromDate.AddHours(7);
+            DateTime endExclusive = toDate.AddDays(1).AddHours(6).AddMinutes(45);
+            var logs = await blowDb.WeighLogs
+                .Where(w => w.MachineId.ToUpper() == normalizedMachineId &&
+                            w.Timestamp >= rangeStart && w.Timestamp < endExclusive)
+                .OrderBy(w => w.Timestamp)
+                .ToListAsync();
+
+            int CountCompletedKits(List<WeighLog> allDateLogs, List<WeighLog> shiftLogs)
+            {
+                if (allDateLogs.Count == 0 || shiftLogs.Count == 0) return 0;
+
+                var maxStepByFiberKit = allDateLogs
+                    .GroupBy(x => new { x.MO, x.FiberKit })
+                    .ToDictionary(g => (g.Key.MO, g.Key.FiberKit), g => g.Max(x => x.StepNumber));
+
+                var completedByFiberKit = shiftLogs
+                    .GroupBy(x => new { x.MO, x.FiberKit })
+                    .ToDictionary(
+                        g => (g.Key.MO, g.Key.FiberKit),
+                        g => g.Count(x => x.Status == "OK" &&
+                                         x.StepNumber == maxStepByFiberKit[(g.Key.MO, g.Key.FiberKit)]));
+
+                return allDateLogs
+                    .GroupBy(x => x.MO)
+                    .Sum(moGroup => moGroup
+                        .Select(x => x.FiberKit)
+                        .Distinct()
+                        .Select(fiberKit => completedByFiberKit.TryGetValue((moGroup.Key, fiberKit), out var count) ? count : 0)
+                        .DefaultIfEmpty(0)
+                        .Min());
+            }
+
+            var daily = new List<object>();
+            for (DateTime currentDate = fromDate; currentDate <= toDate; currentDate = currentDate.AddDays(1))
+            {
+                DateTime dayShiftStart = currentDate.AddHours(7);
+                DateTime nightShiftStart = currentDate.AddHours(19).AddMinutes(45);
+                DateTime productionDayEnd = currentDate.AddDays(1).AddHours(6).AddMinutes(45);
+                var dateLogs = logs.Where(x => x.Timestamp >= dayShiftStart && x.Timestamp < productionDayEnd).ToList();
+                var dayShiftLogs = dateLogs.Where(x => x.Timestamp >= dayShiftStart && x.Timestamp < nightShiftStart).ToList();
+                var nightShiftLogs = dateLogs.Where(x => x.Timestamp >= nightShiftStart && x.Timestamp < productionDayEnd).ToList();
+
+                int dayShiftKits = CountCompletedKits(dateLogs, dayShiftLogs);
+                int nightShiftKits = CountCompletedKits(dateLogs, nightShiftLogs);
+
+                daily.Add(new
+                {
+                    date = currentDate.ToString("yyyy-MM-dd"),
+                    dayShiftKits,
+                    nightShiftKits,
+                    totalKits = dayShiftKits + nightShiftKits
+                });
+            }
+
+            return Results.Ok(new { machineId = normalizedMachineId, from = fromDate.ToString("yyyy-MM-dd"), to = toDate.ToString("yyyy-MM-dd"), daily });
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(ex.Message);
+        }
+    });
     // GET /api/blow-fill/context?machineId=M1
-    app.MapGet("/api/blow-fill/context", async (string machineId, BlowFillDbContext blowDb) =>
+    app.MapGet("/api/blow-fill/context", async (string machineId, BlowFillDbContext blowDb, AppDbContext appDb) =>
     {
         try
         {
@@ -3956,14 +4539,31 @@ try
                 return Results.Ok(new { found = false });
             }
 
+            string[] blowFillWorkCenters = { "UBF03", "UBF04", "UBF05", "UBF06", "UBF08", "UBF12", "UBF13" };
+            DateTime today = DateTime.Today;
+            DateTime yesterday = today.AddDays(-1);
+            DateTime tomorrow = today.AddDays(1);
+            var contextWorkCenters = await appDb.MoPlans
+                .Where(p => p.MO == ctx.MO &&
+                            p.PlanDate.Date >= yesterday && p.PlanDate.Date <= tomorrow &&
+                            blowFillWorkCenters.Contains(p.WorkCenter))
+                .OrderBy(p => p.PlanDate)
+                .Select(p => p.WorkCenter)
+                .Distinct()
+                .ToListAsync();
+            string workCenter = contextWorkCenters.Count == 1 ? contextWorkCenters[0] : "";
+
             return Results.Ok(new
             {
                 found = true,
                 machineId = ctx.MachineId,
                 mo = ctx.MO,
                 fiberKit = ctx.FiberKit,
+                workCenter,
                 targetWeight = ctx.TargetWeight,
                 totalSteps = ctx.TotalSteps,
+                currentStep = ctx.CurrentStep,
+                currentPartIndex = ctx.CurrentPartIndex,
                 lastUpdate = ctx.LastUpdate.ToString("yyyy-MM-dd HH:mm:ss")
             });
         }
@@ -4139,6 +4739,39 @@ try
         }
     });
 
+    // Start the initial Excel/database synchronization only after Kestrel is
+    // listening. A slow or unavailable network file must not block the website.
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                Console.WriteLine("ðŸ” Background initial load: Sync RUN KIT + MX details + yesterday/today/tomorrow schedule plans...");
+
+                using var syncScope = app.Services.CreateScope();
+                var syncDb = syncScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var syncHub = syncScope.ServiceProvider.GetRequiredService<IHubContext<OrderHub>>();
+                var stoppingToken = app.Lifetime.ApplicationStopping;
+
+                await SyncRunKitAndMxDetails(syncDb, syncHub, stoppingToken);
+                foreach (var planDate in new[] { DateTime.Today.AddDays(-1), DateTime.Today, DateTime.Today.AddDays(1) })
+                    await LoadSchedulePlan(planDate, syncDb, stoppingToken);
+
+                Console.WriteLine("✅ Background initial load completed.");
+            }
+            catch (OperationCanceledException) when (app.Lifetime.ApplicationStopping.IsCancellationRequested)
+            {
+                Console.WriteLine("ℹ️ Background initial load stopped because the application is shutting down.");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Background initial load failed; the web server will continue running");
+                Console.WriteLine($"❌ Background initial load failed: {ex.Message}");
+            }
+        });
+    });
+
     app.Run("http://0.0.0.0:5050");
 }
 catch (Exception ex)
@@ -4226,19 +4859,71 @@ public class ToolManagementDbContext : DbContext
 
     public DbSet<ToolChange> ToolChanges { get; set; }
     public DbSet<ToolStatus> ToolStatuses { get; set; }
+    public DbSet<CncAuditLog> CncAuditLogs { get; set; }
+    public DbSet<CncChangeVoid> CncChangeVoids { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        // Index cho ToolChange
         modelBuilder.Entity<ToolChange>()
             .HasIndex(t => new { t.MachineName, t.Shift, t.ToolPosition, t.Date });
 
-        // Index unique cho ToolStatus
+        // ✅ Index mới: mỗi Machine + ToolAddress (Heian4-Dao7) là duy nhất
         modelBuilder.Entity<ToolStatus>()
-            .HasIndex(t => new { t.MachineName, t.Shift, t.ToolPosition })
+            .HasIndex(t => new { t.MachineName, t.ToolAddress })
             .IsUnique();
+    }
+}
+
+public static class ToolManagementSchema
+{
+    public static void MakeActualHoursNullable(ToolManagementDbContext db)
+    {
+        using var connection = db.Database.GetDbConnection();
+        connection.Open();
+        using var check = connection.CreateCommand();
+        check.CommandText = "SELECT \"notnull\" FROM pragma_table_info('ToolChanges') WHERE name = 'ActualHours'";
+        var required = Convert.ToInt32(check.ExecuteScalar()) == 1;
+        if (required)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = @"BEGIN;
+CREATE TABLE ToolChanges_new (
+ Id INTEGER NOT NULL CONSTRAINT PK_ToolChanges PRIMARY KEY AUTOINCREMENT,
+ Shift TEXT NOT NULL, Supervisor TEXT NOT NULL, MSS TEXT NOT NULL, Date TEXT NOT NULL,
+ MachineName TEXT NOT NULL, ToolAddress TEXT NOT NULL, ToolPosition INTEGER NOT NULL,
+ ToolVersion INTEGER NOT NULL, ToolType TEXT NULL, InstallDate TEXT NULL, InstallTime TEXT NULL,
+ ReplaceDate TEXT NULL, ReplaceTime TEXT NULL, ActualHours INTEGER NULL, Reason TEXT NULL,
+ Material TEXT NOT NULL, Supplier TEXT NULL, IsVersionIncrement INTEGER NOT NULL,
+ CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL);
+INSERT INTO ToolChanges_new (Id,Shift,Supervisor,MSS,Date,MachineName,ToolAddress,ToolPosition,ToolVersion,ToolType,InstallDate,InstallTime,ReplaceDate,ReplaceTime,ActualHours,Reason,Material,Supplier,IsVersionIncrement,CreatedAt,UpdatedAt)
+SELECT Id,Shift,Supervisor,MSS,Date,MachineName,ToolAddress,ToolPosition,ToolVersion,ToolType,InstallDate,InstallTime,ReplaceDate,ReplaceTime,ActualHours,Reason,Material,Supplier,IsVersionIncrement,CreatedAt,UpdatedAt FROM ToolChanges;
+DROP TABLE ToolChanges;
+ALTER TABLE ToolChanges_new RENAME TO ToolChanges;
+CREATE INDEX IF NOT EXISTS IX_ToolChanges_MachineName_Shift_ToolPosition_Date ON ToolChanges (MachineName, Shift, ToolPosition, Date);
+COMMIT;";
+            command.ExecuteNonQuery();
+        }
+        using var clearBlankExcelHours = connection.CreateCommand();
+        clearBlankExcelHours.CommandText = @"UPDATE ToolChanges SET ActualHours = NULL
+WHERE ActualHours = 0 AND (
+  ReplaceDate IS NULL
+  OR Id IN (
+    SELECT imported.ToolChangeId
+    FROM CncExcelImportedRecords imported
+    JOIN CncExcelSourceRows source ON source.FileHash = imported.FileHash AND source.Sheet = imported.Sheet AND source.RowNumber = imported.RowNumber
+    WHERE json_extract(source.RawJson, '$[12]') IS NULL OR trim(json_extract(source.RawJson, '$[12]')) = ''
+  )
+);";
+        try { clearBlankExcelHours.ExecuteNonQuery(); } catch { /* legacy databases without import audit tables */ }
+
+        using var clearPendingReplacement = connection.CreateCommand();
+        clearPendingReplacement.CommandText = @"UPDATE ToolChanges
+SET ReplaceDate = NULL, ReplaceTime = NULL, Reason = ''
+WHERE ActualHours IS NULL
+  AND (ReplaceDate IS NOT NULL OR ReplaceTime IS NOT NULL OR COALESCE(Reason, '') <> '');";
+        clearPendingReplacement.ExecuteNonQuery();
     }
 }
 
@@ -4305,7 +4990,33 @@ public class BlowFillContext
     public string FiberKit { get; set; } = "";
     public double TargetWeight { get; set; }
     public int TotalSteps { get; set; }
+    public int CurrentStep { get; set; } = 1;
+    public int CurrentPartIndex { get; set; }
     public DateTime LastUpdate { get; set; }
+}
+
+public static class BlowFillSchema
+{
+    public static void EnsureContextStepColumns(BlowFillDbContext db)
+    {
+        var connection = db.Database.GetDbConnection();
+        var closeWhenDone = connection.State != System.Data.ConnectionState.Open;
+        if (closeWhenDone) connection.Open();
+        try
+        {
+            using var columnsCommand = connection.CreateCommand();
+            columnsCommand.CommandText = "PRAGMA table_info(BlowFillContexts);";
+            using var reader = columnsCommand.ExecuteReader();
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (reader.Read()) columns.Add(reader.GetString(1));
+            reader.Close();
+            if (!columns.Contains("CurrentStep"))
+                db.Database.ExecuteSqlRaw("ALTER TABLE BlowFillContexts ADD COLUMN CurrentStep INTEGER NOT NULL DEFAULT 1;");
+            if (!columns.Contains("CurrentPartIndex"))
+                db.Database.ExecuteSqlRaw("ALTER TABLE BlowFillContexts ADD COLUMN CurrentPartIndex INTEGER NOT NULL DEFAULT 0;");
+        }
+        finally { if (closeWhenDone) connection.Close(); }
+    }
 }
 
 
@@ -4371,17 +5082,18 @@ public class ToolChange
     public string MSS { get; set; } = "";             
     public DateTime Date { get; set; }                
     public string MachineName { get; set; } = "";     // Heian 4 - Heian 21
+    public string ToolAddress { get; set; } = "";
     
     public int ToolPosition { get; set; }             // 1-4 (DS: 1-4, NS: 5-8)
     public int ToolVersion { get; set; }              
-    public string? ToolType { get; set; } = "MỚI";     // MỚI / MÀI LẦN 1 / MÀI LẦN 2
+    public string? ToolType { get; set; } = "MỚI";     // MỚI / MÀI LẦN 1 / MÀI LẦN 2 / MÀI LẦN 3
     
     public DateTime? InstallDate { get; set; }        
     public TimeSpan? InstallTime { get; set; }        
     public DateTime? ReplaceDate { get; set; }        
     public TimeSpan? ReplaceTime { get; set; }        
     
-    public int ActualHours { get; set; }              // 0-11
+    public int? ActualHours { get; set; }              // null = chưa nhập giờ chạy
     public string? Reason { get; set; } = "";          // Cháy / Cùn / Cuối ca thay / Mẻ / Gãy
     public string Material { get; set; } = "PLYWOOD"; 
     public string? Supplier { get; set; } = "";
@@ -4396,12 +5108,31 @@ public class ToolStatus
 {
     public int Id { get; set; }
     public string MachineName { get; set; } = "";
-    public string Shift { get; set; } = "";           // Day Shift / Night Shift
-    public int ToolPosition { get; set; }             // 1-4 (DS: 1-4, NS: 5-8)
-    public int CurrentVersion { get; set; }           
-    public int TotalHours { get; set; } = 0;          
+    public string ToolAddress { get; set; } = "";   // Heian4-Dao7
+    public string Shift { get; set; } = "";         // Ca hiện tại dao đang gắn
+    public int ToolPosition { get; set; }           // 1-4
+    public int CurrentVersion { get; set; }
+    public int TotalHours { get; set; } = 0;
     public int CurrentVersionHours { get; set; } = 0;
     public DateTime LastUpdated { get; set; } = DateTime.Now;
+}
+
+public class CncAuditLog
+{
+    public int Id { get; set; }
+    public DateTime TimestampUtc { get; set; }
+    public string Action { get; set; } = "";
+    public int? ToolChangeId { get; set; }
+    public string ActorRole { get; set; } = "";
+    public string Details { get; set; } = "";
+}
+
+public class CncChangeVoid
+{
+    [Key] public int ToolChangeId { get; set; }
+    public DateTime VoidedAtUtc { get; set; }
+    public string VoidedBy { get; set; } = "";
+    public string Reason { get; set; } = "";
 }
 
 // ==================== BACKGROUND SERVICE POLLING AS400 ====================
@@ -4449,21 +5180,35 @@ public class As400ScanPollingService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("AS400 Scan Polling Service started");
-        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
-
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
-            {
-                using var scope = _services.CreateScope();
-                await PollOnceAsync(scope, stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error while polling AS400 scan data");
-            }
             await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
+                {
+                    using var scope = _services.CreateScope();
+                    await PollOnceAsync(scope, stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error while polling AS400 scan data");
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+            }
         }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Normal shutdown: cancellation must not be reported as a service failure.
+        }
+
+        _logger.LogInformation("AS400 Scan Polling Service stopped");
     }
 
     private async Task PollOnceAsync(IServiceScope scope, CancellationToken token)
@@ -4631,6 +5376,10 @@ public class As400ScanPollingService : BackgroundService
                     if (scanTime > latestScanTimeInBatch) latestScanTimeInBatch = scanTime;
                 }
             }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                break;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, $"[AS400 Polling] Exception for WC {baseWc}.");
@@ -4760,6 +5509,7 @@ record ToolChangeBatchRequest(
 
 record ToolChangeItem(
     int ToolPosition,
+    int? ToolNumber,
     string? ReplaceDate,
     string? ReplaceTime,
     int ActualHours,
@@ -4779,6 +5529,12 @@ record ToolChangeUpdateRequest(
     string? Material,
     string? Supplier
 );
+record CncLoginRequest(string Role, string Password);
+record CncHistoryBatchUpdateRequest(List<CncHistoryBatchUpdateRow> Rows);
+record CncHistoryBatchUpdateRow(int Id, string Shift, string? Supervisor, string? MSS, string Date, string MachineName,
+    int ToolPosition, int ToolNumber, int ToolVersion, string? InstallDate, string? InstallTime,
+    string? ReplaceDate, string? ReplaceTime, int? ActualHours, string? Reason, string? Material, string? ToolType);
+record CncUndoRequest(string? Reason);
 record ChangePortRequest(string PortName);
 // record BlowFillPushRequest(string MachineId, double Weight);
 
@@ -4973,6 +5729,30 @@ public static class DbRetryHelper
             await operation();
             return true;
         }, maxRetries);
+    }
+}
+
+public static class ToolHelpers
+{
+    // Map máy + ca + vị trí -> địa chỉ dao logic
+    public static string GetToolAddress(string machineName, string shift, int toolPosition)
+    {
+        // Ví dụ "Heian 4" -> "Heian4"
+        var machineKey = machineName.Replace(" ", "").Trim();
+
+        int logicalIndex;
+        if (shift == "Day Shift")
+        {
+            // Ca ngày: Dao 1-4
+            logicalIndex = toolPosition;           // 1..4
+        }
+        else // Night Shift
+        {
+            // Ca đêm: Dao 5-8
+            logicalIndex = 4 + toolPosition;       // 5..8
+        }
+
+        return $"{machineKey}-Dao{logicalIndex}";
     }
 }
 

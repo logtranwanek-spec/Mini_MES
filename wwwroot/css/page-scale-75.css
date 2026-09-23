@@ -1,0 +1,40 @@
+/* Hiển thị trang tương đương zoom trình duyệt 75% nhưng vẫn phủ kín viewport. */
+body {
+    zoom: 0.75;
+    width: 133.3333vw !important;
+    min-height: 133.3333vh !important;
+}
+
+/* CNC Go hiển thị lớn hơn các trang còn lại: tương đương zoom 85%. */
+body.cnc-go-page {
+    zoom: 0.85;
+    width: 117.6471vw !important;
+    min-height: 117.6471vh !important;
+}
+
+/* WIP WNK3 dùng khung cố định theo 100vh, cần bù chiều cao bị thu nhỏ. */
+body > header.header ~ .container {
+    height: calc(133.3333vh - 90px) !important;
+}
+
+/* Các trang bản đồ/toàn màn hình dùng viewport cố định. */
+.map-viewport {
+    width: 133.3333vw !important;
+    height: calc(133.3333vh - 70px) !important;
+}
+
+@supports not (zoom: 1) {
+    body {
+        zoom: 1;
+        width: 133.3333% !important;
+        min-height: 133.3333% !important;
+        transform: scale(0.75);
+        transform-origin: top left;
+    }
+
+    body.cnc-go-page {
+        width: 117.6471% !important;
+        min-height: 117.6471% !important;
+        transform: scale(0.85);
+    }
+}

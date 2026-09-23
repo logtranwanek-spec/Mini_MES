@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -59,6 +59,8 @@
         /* Tọa độ và Kích thước của từng khu vực trong B3 */
         #b3-cnc-go { top: 5%; left: 15%; width: 70%; height: 40%; }
         #b3-ban-khung { top: 55%; left: 15%; width: 70%; height: 40%; }
+        #b3-cut-sew { top: 5%; left: 15%; width: 70%; height: 34%; }
+        #b3-wip-b3l2 { top: 48%; left: 15%; width: 70%; height: 42%; border-color: #2ecc71; color: #2ecc71; background: rgba(46, 204, 113, 0.08); }
 
         /* Tọa độ và Kích thước của từng khu vực trong B2 */
         #b2-test-area { top: 5%; left: 0%; width: 10%; height: 12%; }
@@ -118,6 +120,7 @@
         html.simple-view .btn-zoom { background: #fff; border-color: #bdc3c7; color: #2c3e50; }
         html.simple-view .btn-zoom:hover { background: #f1f5f9; border-color: #3498db; }
     </style>
+    <link rel="stylesheet" href="/css/page-scale-75.css">
 </head>
 <body>
     <div class="top-nav">
@@ -146,7 +149,8 @@
                         </div>
                         
                         <div id="b3-l2" class="floor-content hidden">
-                            <div class="zone" style="background: rgba(243, 156, 18, 0.1); border-color: #f39c12; color: #f39c12; position: static;">C&S (CẮT MAY)</div>
+                            <div id="b3-cut-sew" class="zone" style="background: rgba(243, 156, 18, 0.1); border-color: #f39c12; color: #f39c12;">C&S (CẮT MAY)</div>
+                            <a href="/wip-b3-l2/index.html" id="b3-wip-b3l2" class="zone interactive">KHO WIP B3 - L2</a>
                         </div>
                     </div>
 
@@ -160,7 +164,7 @@
                         <div class="b-header">B2</div>
                         <button class="floor-toggle" onclick="toggleFloor('b2')">L1</button>
                         
-                        <!-- B2 - Tầng 1: ĐÃ VẼ LẠI CHI TIẾT -->
+                        <!-- B2 - T?ng 1: �� V? L?I CHI TI?T -->
                         <div id="b2-l1" class="floor-content">
                             <a href="#" id="b2-test-area" class="zone interactive">TEST AREA</a>
                             <div id="b2-inv3-top" class="zone">INV 3</div>

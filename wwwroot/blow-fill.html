@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -25,18 +25,18 @@
         }
 
         .container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
+            height: calc(133.3333vh - 20px);
+            display: grid;
+            grid-template-rows: auto auto auto auto minmax(0, 1fr);
             padding: 10px;
             gap: 8px;
-            overflow-y: auto;
+            overflow: hidden;
         }
 
         /* Header */
         .header {
             display: flex;
-            height: 55px;
+            height: 42px;
             flex-shrink: 0;
         }
 
@@ -253,12 +253,14 @@
         .weights-container {
             display: flex;
             gap: 15px;
-            flex: 1;
             min-height: 0;
+            overflow: hidden;
         }
 
         .weight-display {
             flex: 1;
+            min-width: 0;
+            min-height: 0;
             border: 5px solid;
             border-radius: 10px;
             padding: 15px;
@@ -296,12 +298,14 @@
 
         /* WEIGHT VALUES */
         .weight-value {
-            font-size: clamp(100px, 15vw, 300px);
+            font-size: clamp(140px, 22vw, 450px);
             font-weight: 900;
             text-align: center;
             padding: 15px;
             border-radius: 5px;
             flex: 1;
+            min-height: 0;
+            overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -342,77 +346,34 @@
             font-weight: bold;
         }
 
-        /* Control Panel */
-        .control-panel {
-            border: 2px solid #999;
-            padding: 10px;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            flex-shrink: 0;
-        }
 
-        .control-panel label {
-            font-size: 13px;
-            font-weight: bold;
-        }
-
-        .control-panel input {
-            padding: 6px;
-            font-size: 14px;
-            width: 120px;
-        }
-
-        .control-panel button {
-            padding: 8px 12px;
-            font-size: 12px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            color: white;
-            font-weight: bold;
-        }
-
-        .btn-reload {
-            background-color: #4CAF50;
-        }
-
-        .btn-reload:hover {
-            background-color: #45a049;
-        }
-
-        .btn-reset {
-            background-color: #FF9800;
-        }
-
-        .btn-reset:hover {
-            background-color: #F57C00;
-        }
-
+        /* Compact supporting information so the weight readouts retain their original size. */
+        .header-title, .header-station { padding: 7px 10px; font-size: 16px; }
+        .wc-selector, .wc-selector select { font-size: 14px; }
+        .wc-selector select { padding: 2px 5px; }
+        .product-section { gap: 8px; }
+        .input-group { margin-bottom: 6px; }
+        .input-group label { width: 95px; font-size: 20px; }
+        .input-group input, .input-group input.mo-input { padding: 5px 8px; font-size: 28px; }
+        .status-legend { width: 155px; padding: 6px; }
+        .status-legend h3 { margin-bottom: 5px; font-size: 15px; }
+        .status-item { gap: 6px; margin-bottom: 3px; }
+        .status-circle { font-size: 18px; }
+        .status-item span:last-child { font-size: 13px; }
+        .tolerance-group { padding-top: 5px; }
+        .info-bar { gap: 12px; }
+        .info-item { gap: 6px; }
+        .info-item label { font-size: 19px; }
+        .info-item .value { padding: 5px 10px; font-size: 22px; }
+        .steps-container { gap: 8px; }
+        .step-indicator { min-width: 55px; }
+        .step-indicator .label { font-size: 16px; margin-bottom: 2px; }
+        .step-indicator .circle { font-size: 26px; }
+        .weight-display { padding: 8px; }
         /* Responsive adjustments */
         @media (max-height: 800px) {
-            .header {
-                height: 50px;
-            }
-            .header-title, .header-station {
-                font-size: 18px;
-                padding: 10px;
-            }
-            .weight-display h3 {
-                font-size: 40px;
-            }
-            .info-item label {
-                font-size: 24px;
-            }
-            .info-item .value {
-                font-size: 28px;
-            }
-            .input-group label {
-                font-size: 24px;
-            }
-            .input-group input {
-                font-size: 35px;
-            }
+            #processContainer { margin-top: 0 !important; }
+            #partTabs { margin-bottom: 5px !important; }
         }
 
         @media (max-width: 1200px) {
@@ -427,6 +388,20 @@
             .status-legend h3 {
                 display: none;
             }
+        }
+
+        @media (max-width: 700px) {
+            .container {
+                height: auto;
+                min-height: calc(133.3333vh - 20px);
+                grid-template-rows: auto auto auto auto auto;
+                overflow-y: auto;
+            }
+            .weights-container {
+                flex-direction: column;
+                overflow: visible;
+            }
+            .weight-value { min-height: 180px; }
         }
 
         .part-tab {
@@ -453,6 +428,7 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
     </style>
+    <link rel="stylesheet" href="/css/page-scale-75.css">
 </head>
 <body>
     <div class="container">
@@ -473,7 +449,7 @@
             <div class="product-inputs">
                 <div class="input-group">
                     <label>MO</label>
-                    <input type="text" id="moInput" class="mo-input" placeholder="Enter MO code...">
+                    <input type="text" id="moInput" class="mo-input" placeholder="Nhập MO gồm 7 ký tự..." maxlength="7" minlength="7" pattern="[A-Za-z0-9]{7}" autocomplete="off">
                 </div>
                 <div class="input-group">
                     <label>Fiber Kit</label>
@@ -487,7 +463,7 @@
                 <div class="status-item"><span class="status-circle over">●</span><span>OVER</span></div>
                 <div class="tolerance-group">
                     <label>Tolerance (g)</label>
-                    <input type="number" id="toleranceInput" value="50" step="1" oninput="updateTolerance()">
+                    <input type="number" id="toleranceInput" value="30" step="1" readonly aria-label="Tolerance" onfocus="unlockTolerance()" oninput="updateTolerance()">
                 </div>
             </div>
         </div>
@@ -524,15 +500,7 @@
                 <div class="weight-value" id="currentWeight">-</div>
             </div>
         </div>
-
-        <!-- Control Panel -->
-        <div class="control-panel">
-            <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
-                <button class="btn-reload" onclick="loadExcelData()">🔄 Reload Định Mức</button>
-                <button class="btn-reset" onclick="resetCounter()">🔄 Reset Counter</button>
-            </div>
-        </div>
-    </div>
+</div>
 
     <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
     <script>
@@ -544,7 +512,7 @@
         let totalSteps = 0;
         let targetWeight = 0;
         let currentWeight = 0;
-        let toleranceKg = 0.05;
+        let toleranceKg = 0.03;
         let productCounter = 0;
         let stepCompleted = false;
         let weightStableTime = 0;
@@ -553,6 +521,7 @@
         let scanTimeout = null;
         let partSelected = false;
         let currentPartIndex = 0;
+        let toleranceUnlocked = false;
         const SCAN_DELAY = 300;
         const WEIGHT_STABLE_TIME = 2.0;
 
@@ -573,9 +542,19 @@
                     currentWeight = weight;
                 });
 
-                connection.on("BlowFillContextUpdated", (ctx) => {
+                connection.on("BlowFillContextUpdated", async (ctx) => {
                     console.log("📡 Context updated from other client:", ctx);
-                    applyContextFromServer(ctx);
+                    await applyContextFromServer(ctx);
+                });
+
+                connection.onreconnected(async () => {
+                    if (!machineId) return;
+                    try {
+                        await connection.invoke("JoinGroup", machineId);
+                        await loadExistingContext();
+                    } catch (err) {
+                        console.error("❌ Unable to restore Blow Fill viewer connection:", err);
+                    }
                 });
 
                 await connection.start();
@@ -600,19 +579,32 @@
                     return;
                 }
                 console.log("🔁 Loaded context from server:", data);
-                applyContextFromServer(data);
+                await applyContextFromServer(data);
             } catch (err) {
                 console.error("❌ Error loading context:", err);
             }
         }
 
-        function applyContextFromServer(ctx) {
+        async function resolveWorkCenterForMo(mo) {
+            if (!mo) return '';
+            try {
+                const response = await fetch(`/api/blow-fill/plan?mo=${encodeURIComponent(mo)}`);
+                const plan = await response.json();
+                return response.ok && plan.found ? (plan.workCenter || '') : '';
+            } catch (error) {
+                console.error('Unable to restore WorkCenter from plan:', error);
+                return '';
+            }
+        }
+
+        async function applyContextFromServer(ctx) {
             if (!ctx || !ctx.mo) return;
 
             // MO, FiberKit, WC
             DOM.moInput.value = ctx.mo;
             DOM.fiberInput.value = ctx.fiberKit || '';
-            DOM.wcDisplay.textContent = ctx.workCenter || '---';
+            currentWc = ctx.workCenter || await resolveWorkCenterForMo(ctx.mo);
+            DOM.wcDisplay.textContent = currentWc || '---';
 
             // Tìm FiberKit trong Excel
             if (ctx.fiberKit) {
@@ -645,7 +637,8 @@
                 createStepIndicators(totalSteps);
                 updateStepIndicators(safeStepIndex);
 
-                DOM.targetWeight.textContent = targetWeight.toFixed(2);
+                DOM.targetWeight.classList.remove('not-found');
+            DOM.targetWeight.textContent = targetWeight.toFixed(2);
                 DOM.stepInfo.textContent = `Step ${safeStepIndex + 1} of ${totalSteps}`;
 
                 currentStep = safeStepIndex;
@@ -658,6 +651,7 @@
                 const safeStepIndex = Math.max(0, Math.min(stepIndex, totalSteps - 1));
                 updateStepIndicators(safeStepIndex);
 
+                DOM.targetWeight.classList.remove('not-found');
                 DOM.targetWeight.textContent = targetWeight > 0 ? targetWeight.toFixed(2) : '-';
                 DOM.stepInfo.textContent = totalSteps > 0
                     ? `Step ${safeStepIndex + 1} of ${totalSteps}`
@@ -709,7 +703,8 @@
                 DOM.moInput.focus();
                 DOM.moInput.addEventListener('input', () => {
                     if (scanTimeout) clearTimeout(scanTimeout);
-                    if (DOM.moInput.value.trim().length === 7) {
+                    DOM.moInput.value = DOM.moInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+                    if (DOM.moInput.value.length === 7) {
                         scanTimeout = setTimeout(() => onMoEntered(), SCAN_DELAY);
                     }
                 });
@@ -723,7 +718,7 @@
                 DOM.moInput.addEventListener('paste', (e) => {
                     e.preventDefault();
                     const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-                    DOM.moInput.value = pastedText.trim().toUpperCase();
+                    DOM.moInput.value = pastedText.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
                     onMoEntered();
                 });
             } else {
@@ -742,6 +737,12 @@
             const mo = DOM.moInput.value.trim().toUpperCase();
             if (!mo) {
                 resetDisplay();
+                return;
+            }
+            if (!/^[A-Z0-9]{7}$/.test(mo)) {
+                alert('Mã MO phải có đúng 7 ký tự chữ hoặc số.');
+                DOM.moInput.focus();
+                DOM.moInput.select();
                 return;
             }
             
@@ -823,6 +824,7 @@
                 DOM.partTabs.style.display = 'flex';
                 
                 partSelected = false;
+                DOM.targetWeight.classList.remove('not-found');
                 DOM.targetWeight.textContent = '0';
                 DOM.stepInfo.textContent = '-';
                 DOM.stepsContainer.innerHTML = '';
@@ -861,6 +863,7 @@
             const step = currentProductData.steps[stepIndex];
             targetWeight = step.target_weight;
             
+            DOM.targetWeight.classList.remove('not-found');
             DOM.targetWeight.textContent = targetWeight.toFixed(2);
             DOM.stepInfo.textContent = `Step ${stepIndex + 1} of ${totalSteps}`;
             updateStepIndicators(stepIndex);
@@ -899,7 +902,7 @@
 
             DOM.currentWeight.className = 'weight-value';
             
-            // ⭐ Nếu số âm → Không xử lý trạng thái
+            // Nếu số âm thì không xử lý trạng thái
             if (currentWeight < 0) {
                 weightStableTime = 0;
                 return;
@@ -960,6 +963,7 @@
             stepCompleted = false;
             partSelected = false;  // ⭐ Reset
             
+            DOM.targetWeight.classList.remove('not-found');
             DOM.targetWeight.textContent = '-';
             DOM.currentWeight.textContent = '-';
             DOM.stepInfo.textContent = '-';
@@ -1029,6 +1033,23 @@
             }
         }
 
+        function unlockTolerance() {
+            if (toleranceUnlocked) return;
+
+            const password = prompt('Nhập mật khẩu để thay đổi tolerance:');
+            const input = document.getElementById('toleranceInput');
+            if (password !== '1122') {
+                alert('Mật khẩu không đúng.');
+                input.blur();
+                return;
+            }
+
+            toleranceUnlocked = true;
+            input.readOnly = false;
+            input.focus();
+            input.select();
+        }
+
         function updateTolerance() {
             const input = document.getElementById('toleranceInput');
             const value = parseFloat(input.value);
@@ -1036,7 +1057,7 @@
                 toleranceKg = value / 1000.0;
                 console.log(`Tolerance updated to: ±${value}g (±${toleranceKg.toFixed(3)} kg)`);
             } else {
-                toleranceKg = 0.05;
+                toleranceKg = 0.03;
             }
         }
 
@@ -1048,6 +1069,18 @@
             try {
                 const mo = DOM.moInput.value.trim().toUpperCase();
                 const fiber = DOM.fiberInput.value.trim().toUpperCase();
+                if (!/^[A-Z0-9]{7}$/.test(mo)) {
+                    console.error('Không ghi log vì mã MO không hợp lệ:', mo);
+                    return;
+                }
+                if (!currentWc) {
+                    currentWc = await resolveWorkCenterForMo(mo);
+                    DOM.wcDisplay.textContent = currentWc || '---';
+                }
+                if (!currentWc) {
+                    console.error('Không ghi log vì không xác định được WorkCenter cho MO:', mo);
+                    return;
+                }
                 const body = {
                     machineId: machineId,
                     workCenter: currentWc,
@@ -1060,11 +1093,15 @@
                     status: status,
                     operatorName: ""
                 };
-                await fetch('/api/blow-fill/log-step', {
+                const response = await fetch('/api/blow-fill/log-step', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
                 });
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(error || `HTTP ${response.status}`);
+                }
             } catch (e) {
                 console.error('Error logging weigh step:', e);
             }
@@ -1086,7 +1123,7 @@
                     seen.add(desc);
                     result.push(part);
                 }
-                // nếu đã thấy description này rồi → bỏ qua (không thêm nữa)
+                // nếu đã thấy description này rồi thì bỏ qua (không thêm nữa)
             }
             return result;
         }

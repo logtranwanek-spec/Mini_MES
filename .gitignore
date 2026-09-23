@@ -7,6 +7,48 @@ obj/
 *.exe
 *.dll
 
-# VS
+# VS / IDE
 .vs/
 .vscode/
+.idea/
+
+# .NET
+.dotnet-cli/
+*.user
+*.suo
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+Data/*.db
+Data/*.db-*
+Data/*.previous-*
+Data/*.before-*
+
+# B3 L2 (giữ của bạn)
+Data/WipB3L2.db*
+Data/WipB3L2.manager.json*
+
+# Logs
+logs/
+*.log
+
+# Backup / temporary
+*.before-*
+*.previous-*
+Program.cs.before-*
+*.bak
+*.tmp
+
+# Data files (Excel, ảnh)
+Data/*.xls
+Data/*.xlsx
+Data/*.HEIC
+Data/BlowFillMotionImages/
+Data/CncImport/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

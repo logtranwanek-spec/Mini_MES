@@ -5,7 +5,7 @@ for (let i = 4; i <= 21; i++) {
     MACHINES.push(`Heian ${i}`);
 }
 
-const SUPPLIERS = ["Supplier A", "Supplier B", "Supplier C"]; // Danh sách mặc định
+const SUPPLIERS = ["An Bình", "Trang Tuyển"];
 
 let tool1OldValue = null; // Dùng để lưu giá trị cũ của ô input của dao 1
 
@@ -48,14 +48,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const modalSupplier = document.getElementById('modalSupplier');
     const btnConfirmSupplier = document.getElementById('btnConfirmSupplier');
-    const btnCancelSupplier = document.getElementById('btnCancelSupplier');
     
     if (btnConfirmSupplier) btnConfirmSupplier.addEventListener('click', confirmSupplier);
-    if (btnCancelSupplier) btnCancelSupplier.addEventListener('click', cancelSupplier);
     if (modalSupplier) {
         modalSupplier.addEventListener('click', (e) => {
             if (e.target === modalSupplier) cancelSupplier();
         });
+    }
+
+    const supplierInput = document.getElementById('supplierInput');
+    if (supplierInput) {
+        supplierInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                confirmSupplier();
+            }
+        });
+    }
+
+    for (let i = 1; i <= 4; i++) {
+        const toolTypeSelect = document.getElementById(`toolType${i}`);
+        if (toolTypeSelect) {
+            toolTypeSelect.addEventListener('change', () => handleToolTypeChange(i));
+        }
     }
 
     for (let i = 1; i <= 4; i++) {
@@ -103,7 +118,8 @@ function initMachineList() {
     // Khi đổi Ca → cập nhật lại text "DS-/NS-" nhưng giữ nguyên máy đang chọn
     shiftSelect.addEventListener('change', () => {
         rebuildMachineOptions();
-        setDefaultDateTime(); 
+        updateSupervisorOptions();
+        setDefaultDateTime();
     });
 }
 
@@ -126,17 +142,20 @@ function initShiftAuto() {
     // nếu không cho chỉnh, có thể thêm: shiftSelect.disabled = true;
 }
 
-// 3. MSS giữ nguyên bằng localStorage
+// 3. MSS = ngày thứ Tư kết thúc tuần sản xuất (Thứ Năm đến Thứ Tư)
+function getMssWeekEndingWednesday(referenceDate = new Date()) {
+    const weekEnding = new Date(referenceDate);
+    const daysUntilWednesday = (3 - weekEnding.getDay() + 7) % 7;
+    weekEnding.setDate(weekEnding.getDate() + daysUntilWednesday);
+    return `${String(weekEnding.getMonth() + 1).padStart(2, '0')}${String(weekEnding.getDate()).padStart(2, '0')}`;
+}
+
 function initMssPersist() {
     const mssInput = document.getElementById('mss');
-    const savedMss = localStorage.getItem('cnc_mss');
-    if (savedMss) {
-        mssInput.value = savedMss;
-    }
-
-    mssInput.addEventListener('change', () => {
-        localStorage.setItem('cnc_mss', mssInput.value || "");
-    });
+    if (!mssInput) return;
+    mssInput.value = getMssWeekEndingWednesday();
+    mssInput.readOnly = true;
+    mssInput.title = 'MSS là ngày thứ Tư kết thúc tuần sản xuất (Thứ Năm đến Thứ Tư).';
 }
 
 // 4. Supervisor auto theo máy + nút +
@@ -255,43 +274,29 @@ function isBetween(currentTime, from, to) {
 
 // Dựa trên máy → fill danh sách Sup phù hợp
 function updateSupervisorOptions() {
-    const machineSel = document.getElementById('machine');
+    const machineSelect = document.getElementById('machine');
+    const shiftSelect = document.getElementById('shift');
     const supervisorSelect = document.getElementById('supervisor');
-    const machineVal = machineSel.value;
+    const machineNumber = parseInt((machineSelect.value.match(/\d+/) || [])[0], 10);
 
-    if (!machineVal) {
-        // Không đổi gì nếu chưa chọn máy
-        return;
-    }
+    if (!machineNumber || !shiftSelect.value || !supervisorSelect) return;
 
-    // Xác định nhóm máy
-    const num = parseInt(machineVal.replace("Heian", "").trim(), 10);
-    let suggestedList = [];
+    const supervisorGroup = machineNumber >= 4 && machineNumber <= 14
+        ? SUPERVISORS.group_4_14
+        : machineNumber >= 15 && machineNumber <= 21
+            ? SUPERVISORS.group_15_21
+            : null;
 
-    if (num >= 4 && num <= 14) {
-        suggestedList = SUPERVISORS.group_4_14;  // Hùng, Kỳ
-    } else if (num >= 15 && num <= 21) {
-        suggestedList = SUPERVISORS.group_15_21; // Đặng, Vấn
-    }
+    if (!supervisorGroup) return;
 
-    if (suggestedList.length === 0) {
-        // Không có gợi ý đặc biệt → giữ nguyên Sup hiện tại
-        return;
-    }
+    // Phần tử đầu là ca ngày, phần tử thứ hai là ca đêm.
+    const defaultSupervisor = shiftSelect.value === 'Night Shift'
+        ? supervisorGroup[1]
+        : supervisorGroup[0];
 
-    // ⭐ Chỉ tự động gợi ý Sup nếu hiện tại vẫn đang ở chế độ auto
-    //   (tức là người dùng chưa tự chọn Sup)
-    if (supervisorSelect.dataset.auto === "true") {
-        // Nếu Sup hiện tại không nằm trong nhóm gợi ý, chọn gợi ý đầu tiên
-        if (!suggestedList.includes(supervisorSelect.value)) {
-            supervisorSelect.value = suggestedList[0];
-        }
-        // Vẫn giữ dataset.auto = "true" để lần sau nếu đổi máy khác,
-        // có thể gợi ý lại (trừ khi người dùng tự đổi Sup).
-    }
-
-    // Nếu dataset.auto === "false" → người dùng đã tự chọn Sup,
-    //   nên KHÔNG tự đổi Sup nữa khi chọn máy.
+    // Áp lại mặc định khi đổi máy/ca; sau đó người dùng vẫn có thể chọn tên khác.
+    supervisorSelect.value = defaultSupervisor;
+    supervisorSelect.dataset.auto = 'true';
 }
 
 // 5. Ngày/giờ thay & lắp mặc định = hiện tại, lý do & loại dao mặc định
@@ -353,13 +358,13 @@ function setDefaultDateTime() {
         const installHeadSpan = document.getElementById(`installHead${i}`);
 
         if (shift === "Day Shift") {
-            // Ca ngày: tháo 1–4, lắp 5–8
+            // Ca ngày luôn quản lý Dao 1–4.
             if (removeHeadSpan)  removeHeadSpan.textContent  = i;       // 1..4
-            if (installHeadSpan) installHeadSpan.textContent = 4 + i;   // 5..8
-        } else {
-            // Ca đêm: tháo 5–8, lắp 1–4
-            if (removeHeadSpan)  removeHeadSpan.textContent  = 4 + i;   // 5..8
             if (installHeadSpan) installHeadSpan.textContent = i;       // 1..4
+        } else {
+            // Ca đêm luôn quản lý Dao 5–8.
+            if (removeHeadSpan)  removeHeadSpan.textContent  = 4 + i;   // 5..8
+            if (installHeadSpan) installHeadSpan.textContent = 4 + i;   // 5..8
         }
         updateInstallHead(i);
     }
@@ -384,13 +389,11 @@ function updateInstallHead(i) {
         // 🔧 Dao hư → lắp lại dao mới vào đúng vị trí vừa tháo (Đầu dao lắp = Đầu dao tháo)
         installHeadSpan.textContent = removeHeadSpan.textContent;
     } else {
-        // Cuối ca thay hoặc giờ chạy = 0 → dùng mapping bộ dao mặc định
+        // Cuối ca thay hoặc giờ chạy = 0 → giữ đúng bộ dao của ca hiện tại.
         if (shift === "Day Shift") {
-            // Ca ngày: tháo 1–4, lắp 5–8
-            installHeadSpan.textContent = (4 + i).toString();
-        } else {
-            // Ca đêm: tháo 5–8, lắp 1–4
             installHeadSpan.textContent = i.toString();
+        } else {
+            installHeadSpan.textContent = (4 + i).toString();
         }
     }
 }
@@ -408,51 +411,73 @@ async function saveAllTools() {
         return;
     }
 
-    // Thu thập dữ liệu 4 dao
     const toolsData = [];
 
     for (let i = 1; i <= 4; i++) {
         const replaceDate = document.getElementById(`replaceDate${i}`).value || null;
         const replaceTime = document.getElementById(`replaceTime${i}`).value || null;
-        const actualHours = parseInt(document.getElementById(`actualHours${i}`).value);
-        const reason = document.getElementById(`reason${i}`).value;
+        const actualHours = parseInt(document.getElementById(`actualHours${i}`).value) || 0;
+        const reason      = document.getElementById(`reason${i}`).value;
         const installDate = document.getElementById(`installDate${i}`).value || null;
         const installTime = document.getElementById(`installTime${i}`).value || null;
-        const toolType = document.getElementById(`toolType${i}`).value;
-        const material = "PLYWOOD";
-        
-        // Lấy Supplier (nếu có)
+        const toolType    = document.getElementById(`toolType${i}`).value;
+        const material    = "PLYWOOD";
+
         const supplierHiddenInput = document.getElementById(`supplier${i}`);
-        const supplier = supplierHiddenInput ? supplierHiddenInput.value : '';
+        const supplier = supplierHiddenInput ? supplierHiddenInput.value.trim() : '';
+        const removeHeadSpan  = document.getElementById(`removeHead${i}`);
+        const installHeadSpan = document.getElementById(`installHead${i}`);
+        const removeToolNumber  = removeHeadSpan ? parseInt(removeHeadSpan.textContent)  : null;
+        const installToolNumber = installHeadSpan ? parseInt(installHeadSpan.textContent) : null;
 
-        // Bỏ qua dao không có lý do thay
-        if (!reason) continue;
+        // ✅ XÁC ĐỊNH CÓ THÁO HAY KHÔNG
+        const hasReplace = !!reason && actualHours > 0 && !!replaceDate;
 
-        toolsData.push({
-            toolPosition: i,
-            replaceDate: replaceDate,
-            replaceTime: replaceTime,
-            actualHours: actualHours,
-            reason: reason,
-            material: material,
-            installDate: installDate,
-            installTime: installTime,
-            toolType: toolType,
-            supplier: supplier
-        });
-
-        // Xóa supplier sau khi lưu
-        if (supplierHiddenInput) {
-            supplierHiddenInput.value = '';
+        // ------ THÁO DAO ------
+        if (hasReplace) {
+            toolsData.push({
+                toolPosition: i,
+                toolNumber: removeToolNumber,
+                replaceDate: replaceDate,
+                replaceTime: replaceTime,
+                actualHours: actualHours,
+                reason: reason,
+                material: material,
+                installDate: null,
+                installTime: null,
+                toolType: null,
+                supplier: null
+            });
         }
+
+        // ------ LẮP DAO ------
+        // Chỉ lắp nếu:
+        //  - Dao này vừa được THÁO (hasReplace = true)
+        //    → Thay dao mới vào đúng vị trí đó
+        if (hasReplace && (installDate || installTime)) {
+            toolsData.push({
+                toolPosition: i,
+                toolNumber: installToolNumber,
+                replaceDate: null,
+                replaceTime: null,
+                actualHours: 0,
+                reason: null,
+                material: material,
+                installDate: installDate,
+                installTime: installTime,
+                toolType: toolType,
+                supplier: supplier
+            });
+        }
+
+
     }
 
     if (toolsData.length === 0) {
-        showToast('❌ Vui lòng chọn ít nhất 1 lý do thay dao', 'error');
+        showToast('❌ Không có dao nào được thay', 'error');
         return;
     }
 
-    // Gửi 1 request duy nhất
     try {
         const response = await fetch('/api/tools/change', {
             method: 'POST',
@@ -501,6 +526,7 @@ function switchTab(tabName) {
 
     if (tabName === 'dashboard') loadDashboard();
     if (tabName === 'history') loadHistory();
+    if (tabName === 'supplier-report') loadSupplierReport();
 }
 
 // ==================== DASHBOARD "QUẢN LÝ" ====================
@@ -514,19 +540,16 @@ async function loadDashboard() {
         const response = await fetch('/api/tools/status');
         const data = await response.json();
 
-        const dayShift = data.filter(t => t.shift === 'Day Shift');
-        const nightShift = data.filter(t => t.shift === 'Night Shift');
-
         let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">';
 
         html += '<div>';
         html += '<h2 style="text-align: center; margin-bottom: 20px; color: #f39c12;">☀️ Quản lý dao - Ca ngày (Dao 1 → 4)</h2>';
-        html += renderMachineGrid(dayShift, 'day');
+        html += renderMachineGrid(data, 'day');    // dùng toàn bộ data
         html += '</div>';
 
         html += '<div>';
         html += '<h2 style="text-align: center; margin-bottom: 20px; color: #9b59b6;">🌙 Quản lý dao - Ca đêm (Dao 5 → 8)</h2>';
-        html += renderMachineGrid(nightShift, 'night');
+        html += renderMachineGrid(data, 'night');  // dùng toàn bộ data
         html += '</div>';
 
         html += '</div>';
@@ -538,30 +561,51 @@ async function loadDashboard() {
 
 function renderMachineGrid(data, shiftType) {
     const machineMap = {};
+
     data.forEach(item => {
-        if (!machineMap[item.machineName]) {
-            machineMap[item.machineName] = {};
+        const machine = item.machineName;
+        const toolAddress = item.toolAddress || '';
+        const parts = toolAddress.split('Dao');
+        const toolNumber = parts.length === 2 ? parseInt(parts[1], 10) : 0; // 1..8
+
+        if (!toolNumber) return;
+
+        // DS: Dao 1-4 ; NS: Dao 5-8
+        const isDs = toolNumber >= 1 && toolNumber <= 4;
+        const isNs = toolNumber >= 5 && toolNumber <= 8;
+
+        if (shiftType === 'day' && !isDs) return;
+        if (shiftType === 'night' && !isNs) return;
+
+        // Vị trí vật lý 1-4
+        const pos = (toolNumber <= 4) ? toolNumber : toolNumber - 4;
+
+        if (!machineMap[machine]) {
+            machineMap[machine] = {};
         }
-        machineMap[item.machineName][item.toolPosition] = item;
+        machineMap[machine][pos] = {
+            ...item,
+            toolNumber
+        };
     });
 
-    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px;">';
+    let html = '<div class="machine-status-grid">';
 
     MACHINES.forEach(machine => {
         const prefix = shiftType === 'night' ? 'NS' : 'DS';
         const displayName = `${prefix}-${machine}`;
 
-        html += '<div style="background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 15px;">';
-        html += `<h3 style="text-align: center; margin-bottom: 15px; color: #a8edea;">${displayName}</h3>`;
+        html += '<div class="machine-status-card">';
+        html += `<h3 class="machine-status-title">${displayName}</h3>`;
 
         for (let pos = 1; pos <= 4; pos++) {
             const tool = machineMap[machine]?.[pos];
             const version = tool?.currentVersion || '-';
-            const hours = tool?.currentVersionHours || 0;
+            const hours   = tool?.currentVersionHours || 0;
 
-            const displayIndex = shiftType === 'night' ? pos + 4 : pos;
+            // DS: Dao 1-4 ; NS: Dao 5-8
+            const displayIndex = (shiftType === 'night') ? pos + 4 : pos;
 
-            // Phân loại màu sắc theo giờ chạy
             let hoursStyle = '';
             let hoursLabel = '';
 
@@ -579,16 +623,13 @@ function renderMachineGrid(data, shiftType) {
                 hoursLabel = `${hours}h 🔴`;
             }
 
-            html += '<div style="display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #2c3e50;">';
-            html += `<span style="color: #bdc3c7;">Dao số ${displayIndex}</span>`;
+            html += '<div class="machine-tool-status-row">';
+            html += `<span class="machine-tool-label">Dao số ${displayIndex}</span>`;
             html += `<span>`;
-            // ✅ THÊM margin-right: 8px; để đẩy số sang trái
-            html += `<strong style="color: #f39c12; margin-right: 8px;">${version}</strong>`;
-            
+            html += `<strong class="machine-tool-version">${version}</strong>`;
             if (version !== '-') {
                 html += `<span style="${hoursStyle} font-size: 12px;">${hoursLabel}</span>`;
             }
-            
             html += `</span>`;
             html += '</div>';
         }
@@ -668,112 +709,431 @@ function buildMissingSummary(data) {
 }
 
 // ==================== LỊCH SỬ (giữ nguyên như trước) ====================
-async function loadHistory() {
+function formatCncHistoryDate(value) {
+    if (!value) return '';
+    const datePart = String(value).split('T')[0];
+    const parts = datePart.split('-');
+    return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : datePart;
+}
+
+function formatCncHistoryTime(value) {
+    if (!value) return '';
+    return String(value).substring(0, 5);
+}
+
+function getCncToolNumber(item) {
+    const match = String(item.toolAddress || '').match(/-Dao(\d+)$/i);
+    if (match) return Number(match[1]);
+    return item.shift === 'Night Shift' ? Number(item.toolPosition || 0) + 4 : Number(item.toolPosition || 0);
+}
+
+function getHistoryReasonClass(reason) {
+    const classes = {
+        'Mẻ': 'reason-me',
+        'Cháy': 'reason-chay',
+        'Cùn': 'reason-cun',
+        'Gãy': 'reason-gay'
+    };
+    return classes[String(reason || '').trim()] || '';
+}
+
+// ==================== LỊCH SỬ CNC - BỐ CỤC GIỐNG FILE EXCEL ====================
+function showCncHistorySheet(sheetId, button) {
+    document.querySelectorAll('.cnc-history-sheet').forEach(sheet => sheet.classList.remove('active'));
+    document.querySelectorAll('.cnc-sheet-tab').forEach(tab => tab.classList.remove('active'));
+
+    const activeSheet = document.getElementById(sheetId);
+    activeSheet?.classList.add('active');
+    button?.classList.add('active');
+
+    // L?ch s? ???c x?p t? c? ??n m?i; khi m? sheet lu?n ??t b?n ghi m?i nh?t ? ??y khung nh?n.
+    requestAnimationFrame(() => {
+        const tableWrap = activeSheet?.querySelector('.cnc-history-table-wrap');
+        if (tableWrap) tableWrap.scrollTop = tableWrap.scrollHeight;
+    });
+}
+
+// ==================== LỊCH SỬ CNC - TẢI DẦN THEO THÁNG ====================
+const cncHistoryState = {
+    initialized: false, machine: MACHINES[0], shift: 'Day Shift', months: [],
+    loadedStart: -1, loadedEnd: -1, recordsByMonth: new Map(), search: '', editMode: false,
+    dirtyIds: new Set(), nextDraftId: -1
+};
+
+function cncMonthBounds(month) {
+    const [year, value] = month.split('-').map(Number);
+    const from = `${year}-${String(value).padStart(2, '0')}-01`;
+    const next = new Date(year, value, 1);
+    const to = new Date(next.getTime() - next.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    return { from, to };
+}
+
+async function fetchCncHistoryMonth(index) {
+    if (index < 0 || index >= cncHistoryState.months.length) return;
+    const month = cncHistoryState.months[index];
+    if (cncHistoryState.recordsByMonth.has(month)) return;
+    const range = cncMonthBounds(month);
+    const params = new URLSearchParams({ machine: cncHistoryState.machine, shift: cncHistoryState.shift,
+        fromDate: range.from, toDate: range.to, search: cncHistoryState.search, page: '1', pageSize: '2000' });
+    const response = await fetch(`/api/tools/history-page?${params}`);
+    if (!response.ok) throw new Error(await response.text() || `HTTP ${response.status}`);
+    const result = await response.json();
+    cncHistoryState.recordsByMonth.set(month, result.items || []);
+}
+
+async function loadCncHistoryMonth(direction) {
+    const target = direction === 'older' ? cncHistoryState.loadedStart - 1 : cncHistoryState.loadedEnd + 1;
+    if (target < 0 || target >= cncHistoryState.months.length) return;
+    cncHistoryState.recordsByMonth = new Map();
+    await fetchCncHistoryMonth(target);
+    cncHistoryState.loadedStart = cncHistoryState.loadedEnd = target;
+    cncHistoryState.editMode = false; cncHistoryState.dirtyIds.clear();
+    renderCncHistory();
+    requestAnimationFrame(() => {
+        const nextWrap = document.querySelector('.cnc-history-table-wrap');
+        if (nextWrap) nextWrap.scrollTop = direction === 'older' ? nextWrap.scrollHeight : 0;
+    });
+}
+
+function applyCncHistoryFilters() {
+    cncHistoryState.search = document.getElementById('searchHistory')?.value.trim() || '';
+    loadHistory(false, true);
+}
+
+function selectCncHistorySheet(machine, shift) {
+    cncHistoryState.machine = machine;
+    cncHistoryState.shift = shift;
+    loadHistory(false, true);
+}
+
+async function loadHistory(resetControls = true, resetMonths = false) {
     const container = document.getElementById('historyContent');
+    if (!container) return;
+    if (resetControls) cncHistoryState.search = '';
+    container.innerHTML = '<p class="loading-text">Đang tải dữ liệu...</p>';
+    try {
+        if (!cncHistoryState.initialized || resetMonths || resetControls) {
+            const response = await fetch(`/api/tools/history-months?machine=${encodeURIComponent(cncHistoryState.machine)}&shift=${encodeURIComponent(cncHistoryState.shift)}`);
+            if (!response.ok) throw new Error(await response.text() || `HTTP ${response.status}`);
+            cncHistoryState.months = await response.json();
+            cncHistoryState.recordsByMonth = new Map();
+            cncHistoryState.loadedStart = cncHistoryState.loadedEnd = cncHistoryState.months.length - 1;
+            if (cncHistoryState.loadedEnd >= 0) await fetchCncHistoryMonth(cncHistoryState.loadedEnd);
+            cncHistoryState.initialized = true;
+        }
+        renderCncHistory();
+        requestAnimationFrame(() => {
+            const wrap = document.querySelector('.cnc-history-table-wrap');
+            if (wrap) wrap.scrollTop = wrap.scrollHeight;
+        });
+    } catch (error) {
+        container.innerHTML = `<p style="color:#e74c3c">❌ Lỗi: ${escapeHtml(error.message)}</p>`;
+    }
+}
+
+function renderCncHistory() {
+    const container = document.getElementById('historyContent');
+    const getHistoryTime = item => `${String(item.replaceDate || item.installDate || item.date || '').split('T')[0]}T${item.replaceTime || item.installTime || '00:00:00'}`;
+    const records = [...cncHistoryState.recordsByMonth.values()].flat()
+        .sort((a, b) => {
+            const aDraft = Number(a.id) < 0;
+            const bDraft = Number(b.id) < 0;
+            if (aDraft !== bDraft) return aDraft ? 1 : -1;
+            if (aDraft && bDraft) return Number(b.id) - Number(a.id);
+            return getHistoryTime(a).localeCompare(getHistoryTime(b)) || Number(a.id) - Number(b.id);
+        });
+    const machineNumber = Number((cncHistoryState.machine.match(/(\d+)/) || [0, 0])[1]);
+    const shiftCode = cncHistoryState.shift === 'Night Shift' ? 'NS' : 'DS';
+    const older = cncHistoryState.loadedStart > 0;
+    const newer = cncHistoryState.loadedEnd < cncHistoryState.months.length - 1;
+    const loadedLabel = cncHistoryState.loadedStart >= 0
+        ? cncHistoryState.months[cncHistoryState.loadedStart] : 'Chưa có dữ liệu';
+    const monthButton = (direction, label) => `<button class="cnc-month-load" onclick="loadCncHistoryMonth('${direction}')"><span>＋</span>${label}</button>`;
+    let html = `
+        <div class="cnc-reason-legend"><span class="reason-me">Mẻ</span><span class="reason-chay">Cháy</span><span class="reason-cun">Cùn</span><span>Cuối ca thay</span><span class="reason-gay">Gãy</span></div>
+        <div class="history-toolbar">
+            <button class="btn btn-export" onclick="exportToExcel()">📊 Xuất Excel</button>
+            <button class="btn btn-primary cnc-history-edit-btn" onclick="toggleCncHistoryEdit()">${cncHistoryState.editMode ? 'Hủy chỉnh sửa' : '✏️ Chỉnh sửa lịch sử'}</button>
+            ${cncHistoryState.editMode ? '<button class="btn btn-primary" onclick="addCncHistoryRow()">＋ Thêm bộ 4 dao</button>' : ''}
+            ${cncHistoryState.editMode ? '<button class="btn btn-export" onclick="saveCncHistoryEdits()">💾 Lưu thay đổi</button>' : ''}
+            <input type="text" id="searchHistory" value="${escapeHtml(cncHistoryState.search)}" placeholder="🔍 MSS, supervisor, lý do..." class="input-field">
+            <button class="btn btn-primary" onclick="applyCncHistoryFilters()">Lọc</button>
+        </div>
+        <div class="cnc-sheet-tabs">${MACHINES.map((machine, index) => `
+            <button class="cnc-sheet-tab ${cncHistoryState.machine === machine && cncHistoryState.shift === 'Day Shift' ? 'active' : ''}" style="grid-column:${index + 1};grid-row:1" onclick="selectCncHistorySheet('${machine}','Day Shift')">DS-${machine}</button>
+            <button class="cnc-sheet-tab ${cncHistoryState.machine === machine && cncHistoryState.shift === 'Night Shift' ? 'active' : ''}" style="grid-column:${index + 1};grid-row:2" onclick="selectCncHistorySheet('${machine}','Night Shift')">NS-${machine}</button>`).join('')}</div>
+        <section class="cnc-history-sheet active"><div class="cnc-history-sheet-title">${shiftCode}-${cncHistoryState.machine} · ${records.length} bản ghi · ${loadedLabel}</div>
+        ${older ? monthButton('older', `Tải tháng ${cncHistoryState.months[cncHistoryState.loadedStart - 1]}`) : ''}
+        <div class="cnc-history-table-wrap"><table class="cnc-history-excel-table"><thead><tr>
+            <th>Ca làm việc</th><th>Supervisor</th><th>MSS</th><th>Máy</th><th>Ngày lắp</th><th>Giờ lắp</th><th>Đầu dao</th><th>Số thứ tự dao</th><th>Đợt cấp</th><th>Ngày thay</th><th>Giờ thay</th><th>Đầu dao</th><th>Giờ thực tế</th><th>Lý do thay</th><th>Loại nguyên liệu</th><th>Loại dao</th><th>Hành động</th>
+        </tr></thead><tbody class="historyTableBody">`;
+    const editCell = (item, field, value, display = null, type = 'text') => cncHistoryState.editMode
+        ? `<td><input class="cnc-history-cell-input" type="${type}" data-id="${item.id}" data-field="${field}" value="${escapeHtml(value ?? '')}" onchange="markCncHistoryDirty(${item.id})" onkeydown="handleCncHistoryCellKey(event)"></td>`
+        : `<td>${display === null ? escapeHtml(value ?? '') : display}</td>`;
+    for (const item of records) {
+        const toolNumber = getCncToolNumber(item);
+        html += `<tr data-history-id="${item.id}" class="${getHistoryReasonClass(item.reason)}">
+            ${editCell(item, 'shift', item.shift)}${editCell(item, 'supervisor', item.supervisor)}${editCell(item, 'mss', item.mss)}<td>${machineNumber}</td>
+            ${editCell(item, 'installDate', String(item.installDate || '').split('T')[0], formatCncHistoryDate(item.installDate), 'date')}
+            ${editCell(item, 'installTime', formatCncHistoryTime(item.installTime), formatCncHistoryTime(item.installTime), 'time')}
+            ${editCell(item, 'toolPosition', item.toolPosition, null, 'number')}
+            ${editCell(item, 'toolNumber', toolNumber, null, 'number')}
+            ${editCell(item, 'toolVersion', item.toolVersion, null, 'number')}
+            ${editCell(item, 'replaceDate', String(item.replaceDate || '').split('T')[0], formatCncHistoryDate(item.replaceDate), 'date')}
+            ${editCell(item, 'replaceTime', formatCncHistoryTime(item.replaceTime), formatCncHistoryTime(item.replaceTime), 'time')}
+            <td>${escapeHtml(item.toolPosition ?? '')}</td>
+            ${editCell(item, 'actualHours', item.actualHours, null, 'number')}
+            ${editCell(item, 'reason', item.reason)}${editCell(item, 'material', item.material)}${editCell(item, 'toolType', item.toolType)}
+            <td>${Number(item.id) < 0
+                ? `<button class="cnc-history-delete" onclick="removeCncHistoryDraft(${item.id})">✕</button>`
+                : `<button class="cnc-history-delete" onclick="undoRecord(${item.id})">🗑️</button>`}</td></tr>`;
+    }
+    if (cncHistoryState.editMode) {
+        html += '<tr class="cnc-history-add-row"><td colspan="17"><button type="button" onclick="addCncHistoryRow()">＋ Thêm bộ 4 dao</button></td></tr>';
+    }
+    html += `</tbody></table></div>${newer ? monthButton('newer', `Tải tháng ${cncHistoryState.months[cncHistoryState.loadedEnd + 1]}`) : ''}</section>`;
+    container.innerHTML = html;
+    document.getElementById('searchHistory')?.addEventListener('keydown', event => { if (event.key === 'Enter') applyCncHistoryFilters(); });
+}
+
+async function toggleCncHistoryEdit() {
+    if (!cncHistoryState.editMode) {
+        try {
+            // Mỗi lần bắt đầu một lượt chỉnh sửa đều phải xác thực lại.
+            // Token vừa nhận vẫn được dùng cho nút Lưu trong cùng lượt này.
+            sessionStorage.removeItem('cnc_go_lead_token');
+            await cncAuthorization('lead');
+        }
+        catch (error) { showToast('❌ ' + error.message, 'error'); return; }
+    }
+    cncHistoryState.editMode = !cncHistoryState.editMode;
+    cncHistoryState.dirtyIds.clear();
+    if (!cncHistoryState.editMode) {
+        for (const [month, rows] of cncHistoryState.recordsByMonth) {
+            cncHistoryState.recordsByMonth.set(month, rows.filter(item => Number(item.id) >= 0));
+        }
+    }
+    renderCncHistory();
+}
+
+function addCncHistoryRow() {
+    if (!cncHistoryState.editMode) return;
+    const today = new Date().toISOString().slice(0, 10);
+    let month = cncHistoryState.loadedStart >= 0 ? cncHistoryState.months[cncHistoryState.loadedStart] : today.slice(0, 7);
+    if (!cncHistoryState.recordsByMonth.has(month)) {
+        cncHistoryState.recordsByMonth.set(month, []);
+        if (!cncHistoryState.months.includes(month)) cncHistoryState.months.push(month);
+        cncHistoryState.months.sort();
+        cncHistoryState.loadedStart = cncHistoryState.loadedEnd = cncHistoryState.months.indexOf(month);
+    }
+    const defaultDate = today.startsWith(month) ? today : `${month}-01`;
+    const draftIds = [];
+    for (let position = 1; position <= 4; position++) {
+        const id = cncHistoryState.nextDraftId--;
+        const toolNumber = cncHistoryState.shift === 'Night Shift' ? position + 4 : position;
+        cncHistoryState.recordsByMonth.get(month).push({
+            id, shift: cncHistoryState.shift, supervisor: '', mss: '', date: defaultDate,
+            machineName: cncHistoryState.machine, installDate: defaultDate, installTime: '',
+            toolPosition: position, toolAddress: `${cncHistoryState.machine.replaceAll(' ', '')}-Dao${toolNumber}`,
+            toolVersion: 1, replaceDate: null, replaceTime: null, actualHours: null,
+            reason: '', material: 'PLYWOOD', toolType: 'MỚI'
+        });
+        cncHistoryState.dirtyIds.add(id);
+        draftIds.push(id);
+    }
+    renderCncHistory();
+    requestAnimationFrame(() => {
+        const wrap = document.querySelector('.cnc-history-table-wrap');
+        if (wrap) wrap.scrollTop = wrap.scrollHeight;
+        document.querySelector(`tr[data-history-id="${draftIds[0]}"] input`)?.focus();
+    });
+}
+
+function removeCncHistoryDraft(id) {
+    for (const [month, rows] of cncHistoryState.recordsByMonth) {
+        cncHistoryState.recordsByMonth.set(month, rows.filter(item => Number(item.id) !== Number(id)));
+    }
+    cncHistoryState.dirtyIds.delete(Number(id));
+    renderCncHistory();
+}
+
+function markCncHistoryDirty(id) {
+    cncHistoryState.dirtyIds.add(Number(id));
+    document.querySelector(`tr[data-history-id="${id}"]`)?.classList.add('cnc-history-row-dirty');
+}
+
+function handleCncHistoryCellKey(event) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const input = event.currentTarget;
+    const cellIndex = input.closest('td').cellIndex;
+    const nextRow = input.closest('tr').nextElementSibling;
+    nextRow?.cells[cellIndex]?.querySelector('input')?.focus();
+}
+
+async function saveCncHistoryEdits() {
+    const rows = [...cncHistoryState.dirtyIds].map(id => {
+        const row = document.querySelector(`tr[data-history-id="${id}"]`);
+        const values = Object.fromEntries([...row.querySelectorAll('input[data-field]')].map(input => [input.dataset.field, input.value.trim()]));
+        const source = [...cncHistoryState.recordsByMonth.values()].flat().find(item => Number(item.id) === Number(id));
+        return { id, ...values, machineName: cncHistoryState.machine,
+            date: String(source?.date || values.replaceDate || values.installDate || '').split('T')[0],
+            toolPosition: Number(values.toolPosition || 0), toolNumber: Number(values.toolNumber || 0),
+            toolVersion: Number(values.toolVersion || 0), actualHours: values.actualHours === '' ? null : Number(values.actualHours) };
+    });
+    if (!rows.length) { showToast('Chưa có ô nào được thay đổi', 'error'); return; }
+    try {
+        const response = await fetch('/api/tools/history/batch-update', { method:'PUT', headers:{'Content-Type':'application/json','Authorization':await cncAuthorization('lead')}, body:JSON.stringify({rows}) });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || result.title || 'Không lưu được thay đổi');
+        showToast('✅ ' + result.message, 'success');
+        cncHistoryState.editMode = false; cncHistoryState.dirtyIds.clear();
+        cncHistoryState.recordsByMonth = new Map(); await fetchCncHistoryMonth(cncHistoryState.loadedStart); renderCncHistory();
+    } catch (error) { showToast('❌ ' + error.message, 'error'); }
+}
+async function undoRecord(id) {
+    let reason;
+    if (cncHistoryState.editMode) {
+        if (!confirm('Bạn có chắc muốn xóa dòng lịch sử này?')) return;
+        reason = 'Xóa trong chế độ chỉnh sửa lịch sử';
+    } else {
+        reason = prompt('Nhập lý do hoàn tác (bắt buộc lưu audit log):');
+        if (reason === null || !reason.trim()) return;
+    }
+    try {
+        const response = await fetch(`/api/tools/change/${id}/undo`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': await cncAuthorization('manager') }, body: JSON.stringify({ reason: reason.trim() }) });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result?.detail || 'Không thể hoàn tác');
+        showToast(result.message, 'success'); loadHistory(false, true); loadDashboard();
+    } catch (error) { showToast('❌ ' + error.message, 'error'); }
+}
+
+async function cncAuthorization(role) {
+    if (!['manager', 'lead'].includes(role)) throw new Error('Quyền đăng nhập không hợp lệ.');
+    const cacheKey = `cnc_go_${role}_token`;
+    let token = sessionStorage.getItem(cacheKey);
+    if (token) return `Bearer ${token}`;
+    const password = prompt(role === 'manager' ? 'Nhập mật khẩu Manager:' : 'Nhập mật khẩu Lead/Supervisor:');
+    if (!password) throw new Error('Cần đăng nhập để thực hiện thao tác này');
+    const response = await fetch('/api/cnc/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role, password }) });
+    if (!response.ok) throw new Error('Mật khẩu không đúng');
+    const result = await response.json(); sessionStorage.setItem(cacheKey, result.token);
+    return `Bearer ${result.token}`;
+}
+function exportToExcel() {
+    window.location.href = '/api/tools/export';
+}
+
+// ==================== BÁO CÁO SUPPLIER ====================
+let supplierPerformanceChart = null;
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function getSupplierDisplayName(code) {
+    return code;
+}
+
+function getSupplierToolNumber(toolAddress) {
+    const match = String(toolAddress || '').match(/Dao(\d+)$/i);
+    return match ? match[1] : String(toolAddress || '');
+}
+
+async function loadSupplierReport() {
+    const container = document.getElementById('supplierReportContent');
     if (!container) return;
 
     container.innerHTML = '<p class="loading-text">Đang tải dữ liệu...</p>';
 
     try {
-        const response = await fetch('/api/tools/history');
-
+        const response = await fetch('/api/tools/supplier-performance');
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(errorText || `HTTP ${response.status}`);
         }
 
         const data = await response.json();
-
         if (!Array.isArray(data)) {
-            throw new Error('Response /api/tools/history không phải dạng mảng.');
+            throw new Error('Dữ liệu báo cáo Supplier không hợp lệ.');
         }
 
-        // ⭐ TÍNH DANH SÁCH MÁY CHƯA GHI TRONG KHUNG GIỜ BẮT BUỘC
-        const missingSummaryHtml = buildMissingSummary(data);
+        if (data.length === 0) {
+            container.innerHTML = '<div class="supplier-report-card"><p class="loading-text">Chưa có dữ liệu của An Bình hoặc Trang Tuyển.</p></div>';
+            return;
+        }
 
-        let html = `
-            ${missingSummaryHtml}
-            <div style="margin-bottom: 20px; display: flex; gap: 15px;">
-                <button class="btn btn-export" onclick="exportToExcel()">📊 Xuất Excel</button>
-                <input type="text" id="searchHistory" placeholder="🔍 Tìm kiếm..." style="flex: 1;" class="input-field">
+        container.innerHTML = `
+            <div class="supplier-report-card">
+                <h2>Tổng thời gian chạy theo Supplier, máy và dao</h2>
+                <div class="supplier-chart-wrap">
+                    <canvas id="supplierPerformanceChart"></canvas>
+                </div>
             </div>
-            <div style="overflow-x: auto;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Ca</th>
-                            <th>Máy</th>
-                            <th>Vị trí</th>
-                            <th>Version</th>
-                            <th>Loại dao</th>
-                            <th>Ngày thay</th>
-                            <th>Giờ thực tế</th>
-                            <th>Lý do</th>
-                            <th>Hành động</th>
-                        </tr>
-                    </thead>
-                    <tbody id="historyTableBody">
-        `;
+            <div class="supplier-report-card">
+                <h2>Chi tiết dữ liệu</h2>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Supplier</th>
+                                <th>Máy</th>
+                                <th>Dao số</th>
+                                <th>Tổng thời gian chạy</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.map(item => `
+                                <tr>
+                                    <td style="font-weight: bold;">${escapeHtml(getSupplierDisplayName(item.supplier))}</td>
+                                    <td>${escapeHtml(item.machineName)}</td>
+                                    <td style="text-align: center;">${escapeHtml(getSupplierToolNumber(item.toolNumber))}</td>
+                                    <td style="font-weight: bold; color: #3498db;">${Number(item.totalHours).toLocaleString('vi-VN')} giờ</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
 
-        data.forEach(item => {
-            html += `
-                <tr>
-                    <td>${item.shift}</td>
-                    <td>${item.machineName}</td>
-                    <td>${item.toolPosition}</td>
-                    <td style="font-weight: bold; color: #f39c12;">${item.toolVersion}</td>
-                    <td>${item.toolType}</td>
-                    <td>${item.replaceDate ? new Date(item.replaceDate).toLocaleDateString('vi-VN') : '-'}</td>
-                    <td style="font-weight: bold; color: #3498db;">${item.actualHours}h</td>
-                    <td>${item.reason}</td>
-                    <td>
-                        <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="deleteRecord(${item.id})">
-                            🗑️
-                        </button>
-                    </td>
-                </tr>
-            `;
-        });
-
-        html += '</tbody></table></div>';
-        container.innerHTML = html;
-
-        document.getElementById('searchHistory').addEventListener('input', (e) => {
-            const searchText = e.target.value.toLowerCase();
-            const rows = document.querySelectorAll('#historyTableBody tr');
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(searchText) ? '' : 'none';
-            });
-        });
+        renderSupplierPerformanceChart(data);
     } catch (error) {
-        container.innerHTML = `<p style="color: #e74c3c;">❌ Lỗi: ${error.message}</p>`;
+        container.innerHTML = `<p style="color: #e74c3c;">❌ Lỗi: ${escapeHtml(error.message)}</p>`;
     }
 }
 
-async function deleteRecord(id) {
-    if (!confirm('Bạn có chắc muốn xóa bản ghi này?')) return;
+function renderSupplierPerformanceChart(data) {
+    const canvas = document.getElementById('supplierPerformanceChart');
+    if (!canvas || typeof Chart === 'undefined') return;
 
-    try {
-        const response = await fetch(`/api/tools/change/${id}`, { method: 'DELETE' });
-        const result = await response.json();
+    if (supplierPerformanceChart) supplierPerformanceChart.destroy();
 
-        if (response.ok) {
-            showToast(result.message, 'success');
-            loadHistory();
-            loadDashboard();
-        } else {
-            showToast('❌ Lỗi xóa dữ liệu', 'error');
+    const suppliers = [...new Set(data.map(item => item.supplier))];
+    const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#1abc9c'];
+
+    supplierPerformanceChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: data.map(item => `${getSupplierDisplayName(item.supplier)} - ${item.machineName} - Dao ${getSupplierToolNumber(item.toolNumber)}`),
+            datasets: [{
+                label: 'Tổng thời gian chạy',
+                data: data.map(item => item.totalHours),
+                backgroundColor: data.map(item => colors[suppliers.indexOf(item.supplier) % colors.length])
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'Tổng thời gian chạy (giờ)' } } },
+            plugins: { legend: { display: false } }
         }
-    } catch (error) {
-        showToast('❌ Lỗi: ' + error.message, 'error');
-    }
+    });
 }
-
-function exportToExcel() {
-    window.location.href = '/api/tools/export';
-}
-
 // ==================== TOAST ====================
 function showToast(message, type = 'info') {
     const toast = document.createElement('div');
@@ -853,34 +1213,64 @@ function rebuildMachineOptions() {
 
 // ==================== SUPPLIER LOGIC ====================
 function populateSupplierDatalist() {
-    const datalist = document.getElementById('supplierList');
-    if (datalist) {
-        datalist.innerHTML = SUPPLIERS.map(s => `<option value="${s}"></option>`).join('');
+    const select = document.getElementById('supplierInput');
+    if (select && select.options.length !== SUPPLIERS.length + 1) {
+        select.innerHTML = '<option value="">-- Không chọn Supplier --</option>'
+            + SUPPLIERS.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
     }
 }
 
 function handleToolTypeChange(toolIndex) {
     const toolTypeSelect = document.getElementById(`toolType${toolIndex}`);
-    if (toolTypeSelect.value === 'MÀI LẦN 1' || toolTypeSelect.value === 'MÀI LẦN 2') {
-        currentToolIndexForSupplier = toolIndex;
-        const supplierInput = document.getElementById('supplierInput');
-        supplierInput.value = '';
-        populateSupplierDatalist();
-        openModal(document.getElementById('modalSupplier'));
-        setTimeout(() => supplierInput.focus(), 100);
-    } else {
-        const supplierHiddenInput = document.getElementById(`supplier${toolIndex}`);
-        if (supplierHiddenInput) {
-            supplierHiddenInput.value = '';
-        }
+    if (!toolTypeSelect) return;
+
+    const isSharpenedTool = ['MÀI LẦN 1', 'MÀI LẦN 2', 'MÀI LẦN 3'].includes(toolTypeSelect.value);
+    const supplierHiddenInput = document.getElementById(`supplier${toolIndex}`);
+
+    if (!isSharpenedTool) {
+        if (supplierHiddenInput) supplierHiddenInput.value = '';
+        return;
     }
+
+    currentToolIndexForSupplier = toolIndex;
+    const modal = document.getElementById('modalSupplier');
+    const supplierInput = document.getElementById('supplierInput');
+    supplierInput.value = supplierHiddenInput ? supplierHiddenInput.value : '';
+    populateSupplierDatalist();
+    positionSupplierPopover(toolTypeSelect);
+    openModal(modal);
+    setTimeout(() => supplierInput.focus(), 0);
 }
 
+function positionSupplierPopover(anchorElement) {
+    const popover = document.querySelector('#modalSupplier .supplier-popover-content');
+    if (!popover || !anchorElement) return;
+
+    const rect = anchorElement.getBoundingClientRect();
+    const popoverWidth = 320;
+    const estimatedHeight = 245;
+    const gap = 10;
+
+    let left = rect.right + gap;
+    if (left + popoverWidth > window.innerWidth - 8) {
+        left = rect.left - popoverWidth - gap;
+    }
+
+    let top = rect.top;
+    if (top + estimatedHeight > window.innerHeight - 8) {
+        top = window.innerHeight - estimatedHeight - 8;
+    }
+
+    popover.style.left = `${Math.max(8, left)}px`;
+    popover.style.top = `${Math.max(8, top)}px`;
+}
 function confirmSupplier() {
+    if (currentToolIndexForSupplier === null) return;
+
     const supplierInput = document.getElementById('supplierInput');
     const supplierName = supplierInput.value.trim();
-    if (!supplierName) {
-        showToast('Vui lòng nhập tên Supplier', 'error');
+    if (supplierName && !SUPPLIERS.includes(supplierName)) {
+        showToast('Supplier chỉ có thể là An Bình hoặc Trang Tuyển', 'error');
         return;
     }
 
@@ -893,18 +1283,20 @@ function confirmSupplier() {
     }
     supplierHiddenInput.value = supplierName;
 
-    if (!SUPPLIERS.includes(supplierName)) {
-        SUPPLIERS.push(supplierName);
-    }
-    
     closeModal(document.getElementById('modalSupplier'));
-    showToast(`Đã gán Supplier "${supplierName}" cho dao ${currentToolIndexForSupplier}`, 'success');
+    showToast(supplierName
+        ? `Đã gán Supplier "${supplierName}" cho dao ${currentToolIndexForSupplier}`
+        : `Đã để trống Supplier cho dao ${currentToolIndexForSupplier}`, 'success');
+    currentToolIndexForSupplier = null;
 }
 
 function cancelSupplier() {
-    const toolTypeSelect = document.getElementById(`toolType${currentToolIndexForSupplier}`);
-    toolTypeSelect.value = 'MỚI';
+    if (currentToolIndexForSupplier === null) return;
+
+    const supplierHiddenInput = document.getElementById(`supplier${currentToolIndexForSupplier}`);
+    if (supplierHiddenInput) supplierHiddenInput.value = '';
     closeModal(document.getElementById('modalSupplier'));
+    currentToolIndexForSupplier = null;
 }
 
 function clearAllRows() {
@@ -941,4 +1333,3 @@ function isTimeInRange(timeStr, fromStr, toStr) {
 
     return total >= from && total <= to;
 }
-

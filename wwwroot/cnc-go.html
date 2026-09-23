@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -61,6 +61,27 @@
             to { opacity: 1; transform: translateY(0); }
         }
         
+        .supplier-report-card {
+            background: #1a1a1a;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .supplier-report-card h2 { margin: 0 0 20px; text-align: center; }
+        .supplier-chart-wrap { position: relative; height: 380px; }
+        .supplier-manager-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 18px; }
+        .supplier-manager-heading h2 { margin: 0; text-align: left; }
+        .supplier-add-btn { width: 40px; height: 40px; flex: 0 0 40px; border: none; border-radius: 8px; background: #27ae60; color: #fff; font-size: 25px; font-weight: bold; line-height: 1; cursor: pointer; }
+        .supplier-add-btn:hover { background: #2ecc71; transform: translateY(-1px); }
+        .supplier-name-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+        .supplier-name-row { display: grid; grid-template-columns: 105px 1fr; align-items: center; gap: 10px; }
+        .supplier-name-row span { font-weight: 700; color: #a8edea; }
+        .supplier-name-row input { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid #555; border-radius: 7px; background: #222; color: #fff; }
+        .supplier-name-row input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 2px rgba(102,126,234,.2); }
+        html.simple-view .supplier-name-row span { color: #0369a1; }
+        html.simple-view .supplier-name-row input { background: #fff; color: #333; border-color: #cbd5e1; }
+        html.simple-view .supplier-report-card { background: #fff; border-color: #e2e8f0; }
         /* ==================== TABLE-BASED FORM LAYOUT ==================== */
         .form-container-table {
             background: #1a1a1a;
@@ -205,6 +226,91 @@
             padding-left: 15px;
         }
 
+        #modalSupplier.supplier-popover { background: transparent; backdrop-filter: none; }
+        #modalSupplier.supplier-popover.active { display: block; }
+        #modalSupplier .supplier-popover-content { position: fixed; width: 320px; max-width: calc(100vw - 16px); max-height: none; overflow: visible; border-radius: 10px; }
+        #modalSupplier .modal-header { padding: 12px 16px; border-radius: 10px 10px 0 0; }
+        #modalSupplier .modal-header h2 { margin: 0; font-size: 17px; }
+        #modalSupplier .modal-body { padding: 14px 16px; }
+        #modalSupplier .modal-body label { margin-bottom: 6px; }
+        #modalSupplier #supplierInput { background: #20242b; color: #fff; border: 1px solid #8b5cf6; color-scheme: dark; }
+        #modalSupplier #supplierInput option { background: #fff; color: #111827; }
+        #modalSupplier #supplierInput option:checked { background: #4b5563; color: #fff; }
+        html.simple-view #modalSupplier #supplierInput { background: #fff; color: #111827; color-scheme: light; }
+        #modalSupplier .modal-footer { padding: 10px 16px; gap: 10px; }
+        #modalSupplier .modal-footer .btn { padding: 8px 14px; font-size: 13px; }
+        .cnc-reason-legend { display: flex; align-items: stretch; flex-wrap: wrap; margin-bottom: 12px; }
+        .cnc-reason-legend span { min-width: 125px; padding: 7px 12px; border: 1px solid #222; background: transparent; color: #fff; font-weight: 700; }
+        .cnc-reason-legend .reason-me { background: #00B0F0; color: #000; }
+        .cnc-reason-legend .reason-chay { background: #FF0000; color: #000; }
+        .cnc-reason-legend .reason-cun { background: #92D050; color: #000; }
+        .cnc-reason-legend .reason-gay { background: #FFC000; color: #000; }
+        .cnc-sheet-tabs { display: grid; grid-template-rows: repeat(2, auto); grid-auto-columns: max-content; gap: 3px; overflow-x: auto; padding: 0 2px 5px; margin-bottom: 0; scrollbar-width: thin; }
+        .cnc-sheet-tab { padding: 8px 14px; border: 1px solid #777; border-bottom: none; border-radius: 6px 6px 0 0; background: #d9e1f2; color: #222; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .cnc-sheet-tab:hover { background: #b4c6e7; }
+        .cnc-sheet-tab.active { background: #fff; color: #107c41; border-top: 3px solid #107c41; padding-top: 6px; }
+        .cnc-history-sheet { display: none; }
+        .cnc-history-sheet.active { display: block; }
+        .cnc-history-sheet-title { padding: 8px 12px; background: #107c41; color: #fff; font-size: 14px; font-weight: 700; }
+        .cnc-history-table-wrap { width: 100%; max-height: 68vh; overflow-y: auto; overflow-x: hidden; border: 1px solid rgba(255,255,255,.18); }
+        .cnc-history-excel-table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: separate !important; border-spacing: 0 !important; font-size: clamp(8px, .58vw, 11px); }
+        .cnc-history-excel-table th { position: sticky; top: 0; z-index: 2; height: 38px; padding: 4px 2px; background: #FFFF00; color: #000; border-right: 1px solid #666; border-bottom: 1px solid #666; white-space: normal; line-height: 1.15; overflow-wrap: anywhere; text-align: center; }
+        .cnc-history-excel-table td { padding: 5px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; color: #fff; }
+        .cnc-history-excel-table th:nth-child(1) { width: 6.5%; }
+        .cnc-history-excel-table th:nth-child(2) { width: 7%; }
+        .cnc-history-excel-table th:nth-child(3) { width: 5%; }
+        .cnc-history-excel-table th:nth-child(4) { width: 3%; }
+        .cnc-history-excel-table th:nth-child(5), .cnc-history-excel-table th:nth-child(10) { width: 7%; }
+        .cnc-history-excel-table th:nth-child(6), .cnc-history-excel-table th:nth-child(11) { width: 5%; }
+        .cnc-history-excel-table th:nth-child(7), .cnc-history-excel-table th:nth-child(12) { width: 4.5%; }
+        .cnc-history-excel-table th:nth-child(8) { width: 5%; }
+        .cnc-history-excel-table th:nth-child(9) { width: 4.5%; }
+        .cnc-history-excel-table th:nth-child(13) { width: 5%; }
+        .cnc-history-excel-table th:nth-child(14) { width: 8%; }
+        .cnc-history-excel-table th:nth-child(15) { width: 10%; }
+        .cnc-history-excel-table th:nth-child(16) { width: 7%; }
+        .cnc-history-excel-table th:nth-child(17) { width: 5%; }
+        .cnc-history-excel-table tbody tr.reason-me > td { background: #00B0F0 !important; color: #000 !important; }
+        .cnc-history-excel-table tbody tr.reason-chay > td { background: #FF0000 !important; color: #000 !important; }
+        .cnc-history-excel-table tbody tr.reason-cun > td { background: #92D050 !important; color: #000 !important; }
+        .cnc-history-excel-table tbody tr.reason-gay > td { background: #FFC000 !important; color: #000 !important; }
+        .cnc-history-delete { padding: 3px 6px; border: 1px solid #c0392b; border-radius: 4px; background: #fff; font-size: 10px; cursor: pointer; }
+        .cnc-history-delete:hover { background: #fdecec; }
+        html.simple-view .cnc-reason-legend span { color: #222; }
+        html.simple-view .cnc-history-table-wrap { border-color: #cbd5e1; }
+        html.simple-view .cnc-history-excel-table td { color: #222; background: #fff; }
+
+        .history-toolbar { display: flex; align-items: center; flex-wrap: nowrap; gap: 10px; margin-bottom: 20px; overflow-x: auto; }
+        .history-toolbar > .btn {
+            width: 150px;
+            min-width: 150px;
+            height: 42px;
+            flex: 0 0 150px;
+            padding: 0 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            line-height: 1.15;
+            white-space: nowrap;
+        }
+        .history-toolbar .input-field { width: auto; min-width: 140px; height: 42px; box-sizing: border-box; flex: 1 1 auto; }
+        .cnc-month-load { width:100%; border:1px dashed rgba(255,255,255,.35); background:rgba(255,255,255,.07); color:#fff; padding:10px; font-weight:700; cursor:pointer; transition:.18s ease; }
+        .cnc-month-load:hover { background:#16a34a; border-color:#4ade80; }
+        .cnc-month-load span { display:inline-flex; width:25px; height:25px; margin-right:8px; border-radius:50%; align-items:center; justify-content:center; background:#fff; color:#15803d; font-size:20px; }
+        .cnc-history-cell-input { width:100%; min-width:0; box-sizing:border-box; border:1px solid transparent; border-radius:3px; background:#fff; color:#111; padding:5px 3px; font:inherit; text-align:center; }
+        .cnc-history-cell-input:focus { outline:0; border-color:#15803d; box-shadow:0 0 0 2px rgba(34,197,94,.35); }
+        .cnc-history-row-dirty td { box-shadow:inset 0 2px 0 #f59e0b,inset 0 -2px 0 #f59e0b; }
+        .cnc-history-add-row td { padding: 8px !important; background: #163c49 !important; }
+        .cnc-history-add-row button { width: 100%; min-height: 38px; border: 1px dashed #67e8f9; border-radius: 6px; background: rgba(6,182,212,.14); color: #ecfeff; font-weight: 800; cursor: pointer; }
+        .cnc-history-add-row button:hover { background: #0891b2; border-style: solid; }
+        html.simple-view .cnc-history-add-row td { background: #f0f9ff !important; }
+        html.simple-view .cnc-history-add-row button { color: #075985; border-color: #0284c7; background: #e0f2fe; }
+        @media (max-width: 600px) {
+            .history-toolbar { gap: 6px; }
+            .history-toolbar .input-field { flex: 1 0 140px; }
+            .history-toolbar > .btn { width: 130px; min-width: 130px; flex-basis: 130px; }
+        }
         /* Table Actions */
         .table-actions {
             display: flex;
@@ -213,6 +319,19 @@
             margin-top: 20px;
         }
 
+        /* Dashboard trạng thái dao */
+        .machine-status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; }
+        .machine-status-card { padding: 15px; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; }
+        .machine-status-title { margin: 0 0 15px; color: #a8edea; text-align: center; }
+        .machine-tool-status-row { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #2c3e50; }
+        .machine-tool-label { color: #bdc3c7; }
+        .machine-tool-version { margin-right: 8px; color: #f39c12; }
+
+        html.simple-view .machine-status-card { background: #fff; border-color: #cbd5e1; box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
+        html.simple-view .machine-status-title { color: #0f3a66; }
+        html.simple-view .machine-tool-status-row { border-bottom-color: #dbe4ee; }
+        html.simple-view .machine-tool-label { color: #334155; }
+        html.simple-view .machine-tool-version { color: #c56a00; }
         /* Simple View */
         html.simple-view .cnc-header {
             background: #fff;
@@ -281,8 +400,9 @@
             color: #aa1010;
         }
     </style>
+    <link rel="stylesheet" href="/css/page-scale-75.css">
 </head>
-<body>
+<body class="cnc-go-page">
     <div class="cnc-container">
         <!-- Header -->
         <div class="cnc-header">
@@ -298,7 +418,7 @@
             <button class="tab-btn active" onclick="switchTab('form')">📝 Nhập liệu thay dao</button>
             <button class="tab-btn" onclick="switchTab('dashboard')">📊 Quản lý</button>
             <button class="tab-btn" onclick="switchTab('history')">📋 Lịch sử</button>
-            <button class="tab-btn" onclick="window.location.href='/cnc-go-supplier-report'">📈 Báo cáo Supplier</button>
+            <button class="tab-btn" onclick="switchTab('supplier-report')">📈 Báo cáo Supplier</button>
         </div>
         
         <!-- Tab 1: Form nhập liệu -->
@@ -353,7 +473,7 @@
                 <!-- TABLE SECTION - 4 DAO CỐ ĐỊNH -->
                 <table class="tool-input-table">
                     <thead>
-                        <!-- Dòng nhãn nhóm -->
+                        <!-- D�ng nh�n nh�m -->
                         <tr>
                             <th></th>                         <!-- STT Dao -->
                             <th colspan="5">THAY DAO</th>    <!-- Ngày/giờ/đầu dao/giờ chạy/lý do -->
@@ -404,7 +524,7 @@
                                     <option value="Cháy">Cháy</option>
                                     <option value="Cùn">Cùn</option>
                                     <option value="Mẻ">Mẻ</option>
-                                    <option value="Gãy">Gãy</option>
+                                    <option value="G�y">G�y</option>
                                 </select>
                             </td>
                             <td><span id="installHead1" class="head-text"></span></td>
@@ -415,6 +535,7 @@
                                     <option value="MỚI">MỚI</option>
                                     <option value="MÀI LẦN 1">MÀI LẦN 1</option>
                                     <option value="MÀI LẦN 2">MÀI LẦN 2</option>
+                                    <option value="MÀI LẦN 3">MÀI LẦN 3</option>
                                 </select>
                             </td>
                         </tr>
@@ -448,7 +569,7 @@
                                     <option value="Cháy">Cháy</option>
                                     <option value="Cùn">Cùn</option>
                                     <option value="Mẻ">Mẻ</option>
-                                    <option value="Gãy">Gãy</option>
+                                    <option value="G�y">G�y</option>
                                 </select>
                             </td>
                             <td><span id="installHead2" class="head-text"></span></td>
@@ -459,6 +580,7 @@
                                     <option value="MỚI">MỚI</option>
                                     <option value="MÀI LẦN 1">MÀI LẦN 1</option>
                                     <option value="MÀI LẦN 2">MÀI LẦN 2</option>
+                                    <option value="MÀI LẦN 3">MÀI LẦN 3</option>
                                 </select>
                             </td>
                         </tr>
@@ -492,7 +614,7 @@
                                     <option value="Cháy">Cháy</option>
                                     <option value="Cùn">Cùn</option>
                                     <option value="Mẻ">Mẻ</option>
-                                    <option value="Gãy">Gãy</option>
+                                    <option value="G�y">G�y</option>
                                 </select>
                             </td>
                             <td><span id="installHead3" class="head-text"></span></td>
@@ -503,6 +625,7 @@
                                     <option value="MỚI">MỚI</option>
                                     <option value="MÀI LẦN 1">MÀI LẦN 1</option>
                                     <option value="MÀI LẦN 2">MÀI LẦN 2</option>
+                                    <option value="MÀI LẦN 3">MÀI LẦN 3</option>
                                 </select>
                             </td>
                         </tr>
@@ -536,7 +659,7 @@
                                     <option value="Cháy">Cháy</option>
                                     <option value="Cùn">Cùn</option>
                                     <option value="Mẻ">Mẻ</option>
-                                    <option value="Gãy">Gãy</option>
+                                    <option value="G�y">G�y</option>
                                 </select>
                             </td>
                             <td><span id="installHead4" class="head-text"></span></td>
@@ -547,6 +670,7 @@
                                     <option value="MỚI">MỚI</option>
                                     <option value="MÀI LẦN 1">MÀI LẦN 1</option>
                                     <option value="MÀI LẦN 2">MÀI LẦN 2</option>
+                                    <option value="MÀI LẦN 3">MÀI LẦN 3</option>
                                 </select>
                             </td>
                         </tr>
@@ -574,29 +698,37 @@
                 <p class="loading-text">Đang tải dữ liệu...</p>
             </div>
         </div>
+
+        <!-- Tab 4: Báo cáo Supplier -->
+        <div id="tab-supplier-report" class="tab-content">
+            <div id="supplierReportContent">
+                <p class="loading-text">Đang tải dữ liệu...</p>
+            </div>
+        </div>
     </div>
 
     <!-- ✅ MODAL NHẬP TÊN SUPPLIER -->
-    <div id="modalSupplier" class="modal">
-        <div class="modal-content modal-sm">
+    <div id="modalSupplier" class="modal supplier-popover">
+        <div class="modal-content modal-sm supplier-popover-content">
             <div class="modal-header">
                 <h2>Nhập tên Supplier mài dao</h2>
             </div>
             <div class="modal-body">
                 <label for="supplierInput">Supplier:</label>
-                <input type="text" id="supplierInput" class="input-field" list="supplierList" placeholder="Chọn hoặc nhập tên Supplier...">
-                <datalist id="supplierList">
-                    <!-- Danh sách supplier sẽ được thêm vào đây bằng JS -->
-                </datalist>
+                <select id="supplierInput" class="input-field">
+                    <option value="">-- Không chọn Supplier --</option>
+                    <option value="An Bình">An Bình</option>
+                    <option value="Trang Tuyển">Trang Tuyển</option>
+                </select>
             </div>
             <div class="modal-footer">
                 <button id="btnConfirmSupplier" class="btn btn-primary">Xác nhận</button>
-                <button id="btnCancelSupplier" class="btn btn-secondary">Bỏ qua</button>
             </div>
         </div>
     </div>
     
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr/dist/browser/signalr.min.js"></script>
-    <script src="/js/cnc-go.js"></script>
+    <script src="/js/cnc-go.js?v=20260919-history-add-four-tools"></script>
 </body>
 </html>

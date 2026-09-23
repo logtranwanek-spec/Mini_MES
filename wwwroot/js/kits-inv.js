@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+﻿document.addEventListener('DOMContentLoaded', () => {
     const mainInput = document.getElementById('mainInput');
     const statusText = document.getElementById('statusText');
     const actionButtons = document.getElementById('actionButtons');
@@ -9,11 +9,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMx = "";
     let appMode = "IDLE"; // IDLE, PLACING, FOUND
 
-    // ================= BỘ NÃO VẼ BẢN ĐỒ =================
+    // ================= B? N�O V? B?N �? =================
     function initMap() {
         mapCanvas.innerHTML = ''; // Xóa bản đồ cũ
         
-        // 🚀 BẠN CÓ THỂ TỰ DO CHỈNH SỬA TỌA ĐỘ VÀ KÍCH THƯỚC Ở ĐÂY 🚀
+        // ?? B?N C� TH? T? DO CH?NH S?A T?A �? V� K�CH THU?C ? ��Y ??
         // Cú pháp: { id: "Tên_Ô", text: "Chữ_hiện_ra", type: "loại_cart", top: "cách_mép_trên", left: "cách_mép_trái", width: "độ_rộng", height: "độ_cao" }
 
         const layout = [
@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleSlotClick(slotEl) {
         if (appMode === "IDLE") return;
         if (slotEl.classList.contains('occupied')) {
-            showToast('Ô này đã có xe hàng!', 'warning');
+            showToast('� n�y d� c� xe h�ng!', 'warning');
             return;
         }
 
@@ -140,14 +140,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (res.ok) {
                     const data = await res.json();
                     appMode = "FOUND";
-                    statusText.innerHTML = `Mã <span class="kits-inv-status-highlight">${currentMx}</span> đang ở vị trí <span class="kits-inv-status-highlight">${data.zoneCode}</span>. <br><span class="kits-inv-status-action">Bấm XUẤT KHO hoặc click vào ô trống khác để dời chỗ.</span>`;
+                    statusText.innerHTML = `M� <span class="kits-inv-status-highlight">${currentMx}</span> dang ? v? tr� <span class="kits-inv-status-highlight">${data.zoneCode}</span>. <br><span class="kits-inv-status-action">B?m XU?T KHO ho?c click v�o � tr?ng kh�c d? d?i ch?.</span>`;
                     actionButtons.style.display = "flex";
                     const targetSlot = document.getElementById(data.zoneCode);
                     if (targetSlot) targetSlot.classList.add('found-blink');
                     mapCanvas.classList.add('placing-mode');
                 } else {
                     appMode = "PLACING";
-                    statusText.innerHTML = `Mã <span class="kits-inv-status-highlight">${currentMx}</span> chưa có trong kho. <br><span class="kits-inv-status-action">👉 Hãy CLICK vào một ô trống trên bản đồ để cất hàng.</span>`;
+                    statusText.innerHTML = `M� <span class="kits-inv-status-highlight">${currentMx}</span> chua c� trong kho. <br><span class="kits-inv-status-action">?? H�y CLICK v�o m?t � tr?ng tr�n b?n d? d? c?t h�ng.</span>`;
                     actionButtons.style.display = "flex";
                     btnCheckout.style.display = "none";
                     mapCanvas.classList.add('placing-mode');
@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentMx = "";
         mainInput.value = "";
         mainInput.disabled = false;
-        statusText.innerHTML = "Vui lòng quét mã MX để bắt đầu.";
+        statusText.innerHTML = "Vui l�ng qu�t m� MX d? b?t d?u.";
         actionButtons.style.display = "none";
         btnCheckout.style.display = "block";
         document.querySelectorAll('.kit-slot').forEach(s => s.classList.remove('found-blink'));

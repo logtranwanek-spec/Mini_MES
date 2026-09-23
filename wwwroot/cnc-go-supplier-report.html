@@ -3,24 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CNC - Báo cáo hiệu suất Supplier</title>
+    <title>CNC - Báo cáo Supplier mài dao</title>
     <link rel="stylesheet" href="/css/app.css">
     <script src="/js/theme.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .report-container { max-width: 1400px; margin: 30px auto; padding: 0 20px; }
-        .report-header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); padding: 20px 30px; border-radius: 12px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+        .report-header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); min-height: 96px; padding: 20px 30px; border-radius: 12px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+        .report-header h1 { margin: 0; line-height: 1.2; }
+        .report-header-actions { display: flex; align-items: stretch; justify-content: flex-end; gap: 12px; flex-shrink: 0; }
+        .report-header-actions > a,
+        .report-header-actions > button { box-sizing: border-box; min-width: 128px; min-height: 48px; margin: 0; padding: 10px 18px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border-radius: 8px; font-size: 15px; font-weight: 700; line-height: 1.2; text-align: center; text-decoration: none; white-space: nowrap; }
+        .report-header-actions .btn-view-toggle { min-width: 76px; width: auto; padding-inline: 16px; }
+        .report-header-actions .btn-back-home:active { transform: scale(0.97); }
+        @media (max-width: 900px) {
+            .report-header { flex-direction: column; align-items: stretch; padding: 20px; }
+            .report-header h1 { text-align: center; font-size: 28px; }
+            .report-header-actions { justify-content: center; flex-wrap: wrap; }
+            .report-header-actions > a,
+            .report-header-actions > button { flex: 1 1 150px; }
+        }
+        @media (max-width: 520px) {
+            .report-container { margin-top: 15px; padding: 0 12px; }
+            .report-header h1 { font-size: 23px; }
+            .report-header-actions { flex-direction: column; }
+            .report-header-actions > a,
+            .report-header-actions > button { width: 100%; flex-basis: auto; }
+        }
         .chart-card { background: #1a1a1a; border: 1px solid #333; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
         html.simple-view .report-header { background: #fff; border-bottom: 1px solid #e2e8f0; }
         html.simple-view .chart-card { background: #fff; border: 1px solid #e2e8f0; }
     </style>
+    <link rel="stylesheet" href="/css/page-scale-75.css">
 </head>
 <body>
     <div class="report-container">
         <!-- Header -->
         <div class="report-header">
-            <h1>📊 Báo cáo hiệu suất Supplier</h1>
-            <div style="display: flex; gap: 15px;">
+            <h1>📊 Báo cáo Supplier mài dao</h1>
+            <div class="report-header-actions">
                 <a href="/cnc-go" class="btn btn-primary" style="text-decoration: none;">📝 Nhập liệu</a>
                 <a href="/" class="btn-back-home">🏠 Trang chủ</a>
                 <button class="btn-view-toggle btn-global-toggle">🎨 Chế độ đơn giản</button>
@@ -29,7 +50,7 @@
         
         <!-- Chart -->
         <div class="chart-card">
-            <h2 style="text-align: center; margin-bottom: 20px;">So sánh giờ chạy trung bình</h2>
+            <h2 style="text-align: center; margin-bottom: 20px;">Tổng thời gian chạy theo Supplier, máy và dao</h2>
             <canvas id="performanceChart" height="120"></canvas>
         </div>
 
@@ -40,9 +61,9 @@
                 <thead>
                     <tr>
                         <th>Supplier</th>
-                        <th>Loại dao (Lần mài)</th>
-                        <th>Số giờ chạy trung bình</th>
-                        <th>Tổng số lần thay</th>
+                        <th>Máy</th>
+                        <th>Dao số</th>
+                        <th>Tổng thời gian chạy</th>
                     </tr>
                 </thead>
                 <tbody id="supplierReportBody">
@@ -62,7 +83,7 @@
                 const data = await response.json();
 
                 if (data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px;">Không có dữ liệu</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px;">Chưa có dữ liệu của An Bình hoặc Trang Tuyển</td></tr>';
                     return;
                 }
                 
@@ -81,9 +102,9 @@
                 tbody.innerHTML += `
                     <tr>
                         <td style="font-weight: bold;">${item.supplier}</td>
-                        <td>${item.toolType}</td>
-                        <td style="font-weight: bold; color: #3498db;">${item.averageHours.toFixed(1)} giờ</td>
-                        <td style="text-align: center;">${item.totalChanges}</td>
+                        <td>${item.machineName}</td>
+                        <td style="text-align: center;">${getToolNumber(item.toolNumber)}</td>
+                        <td style="font-weight: bold; color: #3498db;">${Number(item.totalHours).toLocaleString('vi-VN')} giờ</td>
                     </tr>
                 `;
             });
@@ -93,8 +114,8 @@
             const ctx = document.getElementById('performanceChart').getContext('2d');
             if (performanceChart) performanceChart.destroy();
 
-            const labels = data.map(item => `${item.supplier} - ${item.toolType}`);
-            const chartData = data.map(item => item.averageHours);
+            const labels = data.map(item => `${item.supplier} - ${item.machineName} - Dao ${getToolNumber(item.toolNumber)}`);
+            const chartData = data.map(item => item.totalHours);
             
             // Tạo màu ngẫu nhiên cho mỗi supplier
             const suppliers = [...new Set(data.map(item => item.supplier))];
@@ -109,7 +130,7 @@
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Số giờ chạy trung bình',
+                        label: 'Tổng thời gian chạy',
                         data: chartData,
                         backgroundColor: backgroundColors,
                     }]
@@ -119,7 +140,7 @@
                     scales: {
                         y: {
                             beginAtZero: true,
-                            title: { display: true, text: 'Số giờ chạy trung bình' }
+                            title: { display: true, text: 'Tổng thời gian chạy (giờ)' }
                         }
                     },
                     plugins: {
@@ -127,6 +148,11 @@
                     }
                 }
             });
+        }
+
+        function getToolNumber(toolAddress) {
+            const match = String(toolAddress || '').match(/Dao(\d+)$/i);
+            return match ? match[1] : String(toolAddress || '');
         }
 
         window.onload = loadReport;

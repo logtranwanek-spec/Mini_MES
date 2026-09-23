@@ -1,14 +1,14 @@
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;          // ✅ cần cho FirstOrDefaultAsync       
+﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;          // ? c?n cho FirstOrDefaultAsync       
 
 namespace OrderTrackingWeb.Hubs
 {
     /// <summary>
-    /// SignalR Hub để xử lý real-time updates cho Order Tracking
+    /// SignalR Hub d? x? l� real-time updates cho Order Tracking
     /// </summary>
     public class OrderHub : Hub
     {
-        // Dictionary để track số người online (static để share giữa các instance),
+        // Dictionary d? track s? ngu?i online (static d? share gi?a c�c instance),
         private readonly BlowFillDbContext _blowDb;
         public OrderHub(BlowFillDbContext blowDb)
         {
@@ -18,7 +18,7 @@ namespace OrderTrackingWeb.Hubs
         private static readonly object LockObject = new();
 
         /// <summary>
-        /// Được gọi khi client kết nối thành công
+        /// �u?c g?i khi client k?t n?i th�nh c�ng
         /// </summary>
         public override async Task OnConnectedAsync()
         {
@@ -29,12 +29,12 @@ namespace OrderTrackingWeb.Hubs
                 ConnectedUsers[connectionId] = DateTime.Now;
             }
             
-            Console.WriteLine($"✅ Client connected: {connectionId} (Total: {ConnectedUsers.Count})");
+            Console.WriteLine($"? Client connected: {connectionId} (Total: {ConnectedUsers.Count})");
             
-            // Gửi số người online đến tất cả client
+            // G?i s? ngu?i online d?n t?t c? client
             await Clients.All.SendAsync("UserCountChanged", ConnectedUsers.Count);
             
-            // Gửi welcome message cho client mới kết nối
+            // G?i welcome message cho client m?i k?t n?i
             await Clients.Caller.SendAsync("Connected", new
             {
                 connectionId = connectionId,
@@ -46,7 +46,7 @@ namespace OrderTrackingWeb.Hubs
         }
 
         /// <summary>
-        /// Được gọi khi client ngắt kết nối
+        /// �u?c g?i khi client ng?t k?t n?i
         /// </summary>
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
@@ -59,30 +59,30 @@ namespace OrderTrackingWeb.Hubs
             
             if (exception != null)
             {
-                Console.WriteLine($"❌ Client disconnected with error: {connectionId} - {exception.Message}");
+                Console.WriteLine($"? Client disconnected with error: {connectionId} - {exception.Message}");
             }
             else
             {
-                Console.WriteLine($"👋 Client disconnected: {connectionId} (Total: {ConnectedUsers.Count})");
+                Console.WriteLine($"?? Client disconnected: {connectionId} (Total: {ConnectedUsers.Count})");
             }
             
-            // Thông báo số người online mới
+            // Th�ng b�o s? ngu?i online m?i
             await Clients.All.SendAsync("UserCountChanged", ConnectedUsers.Count);
             
             await base.OnDisconnectedAsync(exception);
         }
 
         /// <summary>
-        /// Client gọi để thông báo đã quét barcode
+        /// Client g?i d? th�ng b�o d� qu�t barcode
         /// </summary>
-        /// <param name="odrno">Mã MX</param>
-        /// <param name="status">Trạng thái (Received/Lack/NOT FOUND)</param>
-        /// <param name="note">Ghi chú (nếu có)</param>
+        /// <param name="odrno">M� MX</param>
+        /// <param name="status">Tr?ng th�i (Received/Lack/NOT FOUND)</param>
+        /// <param name="note">Ghi ch� (n?u c�)</param>
         public async Task NotifyOrderUpdate(string odrno, string status, string note = "")
         {
-            Console.WriteLine($"📡 Broadcasting order update: {odrno} → {status}");
+            Console.WriteLine($"?? Broadcasting order update: {odrno} ? {status}");
             
-            // Gửi đến TẤT CẢ client (bao gồm cả người gửi)
+            // G?i d?n T?T C? client (bao g?m c? ngu?i g?i)
             await Clients.All.SendAsync("OrderUpdated", new
             {
                 odrno = odrno,
@@ -94,13 +94,13 @@ namespace OrderTrackingWeb.Hubs
         }
 
         /// <summary>
-        /// Client gọi để yêu cầu refresh toàn bộ dashboard
+        /// Client g?i d? y�u c?u refresh to�n b? dashboard
         /// </summary>
         public async Task RequestRefresh()
         {
-            Console.WriteLine($"🔄 Broadcasting refresh request from {Context.ConnectionId}");
+            Console.WriteLine($"?? Broadcasting refresh request from {Context.ConnectionId}");
             
-            // Gửi đến tất cả client trừ người gửi
+            // G?i d?n t?t c? client tr? ngu?i g?i
             await Clients.Others.SendAsync("RefreshRequested", new
             {
                 requestedBy = Context.ConnectionId,
@@ -109,14 +109,14 @@ namespace OrderTrackingWeb.Hubs
         }
 
         /// <summary>
-        /// Server gọi để thông báo có MX mới từ file sync
+        /// Server g?i d? th�ng b�o c� MX m?i t? file sync
         /// </summary>
-        /// <param name="date">Ngày của file</param>
-        /// <param name="fileType">Loại file (Console Lid / Other)</param>
-        /// <param name="orderCount">Số lượng MX mới</param>
+        /// <param name="date">Ng�y c?a file</param>
+        /// <param name="fileType">Lo?i file (Console Lid / Other)</param>
+        /// <param name="orderCount">S? lu?ng MX m?i</param>
         public async Task NotifyNewOrders(string date, string fileType, int orderCount)
         {
-            Console.WriteLine($"📢 Broadcasting new orders: {date} - {fileType} ({orderCount} orders)");
+            Console.WriteLine($"?? Broadcasting new orders: {date} - {fileType} ({orderCount} orders)");
             
             await Clients.All.SendAsync("NewOrdersAdded", new
             {
@@ -128,11 +128,11 @@ namespace OrderTrackingWeb.Hubs
         }
 
         /// <summary>
-        /// Client gọi để gửi tin nhắn chat (bonus feature)
+        /// Client g?i d? g?i tin nh?n chat (bonus feature)
         /// </summary>
         public async Task SendMessage(string user, string message)
         {
-            Console.WriteLine($"💬 Chat: [{user}] {message}");
+            Console.WriteLine($"?? Chat: [{user}] {message}");
             
             await Clients.All.SendAsync("ReceiveMessage", new
             {
@@ -143,7 +143,7 @@ namespace OrderTrackingWeb.Hubs
         }
 
         /// <summary>
-        /// Lấy số người đang online
+        /// L?y s? ngu?i dang online
         /// </summary>
         public int GetOnlineCount()
         {
@@ -165,7 +165,7 @@ namespace OrderTrackingWeb.Hubs
         }
 
         /// <summary>
-        /// Lấy danh sách connection IDs đang online
+        /// L?y danh s�ch connection IDs dang online
         /// </summary>
         public List<string> GetOnlineUsers()
         {
@@ -175,19 +175,19 @@ namespace OrderTrackingWeb.Hubs
             }
         }
         /// <summary>
-        /// Cho client join vào group theo MachineId (dùng cho BlowFill)
+        /// Cho client join v�o group theo MachineId (d�ng cho BlowFill)
         /// </summary>
         public async Task JoinGroup(string machineId)
         {
             if (!string.IsNullOrWhiteSpace(machineId))
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, machineId.Trim());
-                Console.WriteLine($"🔗 Connection {Context.ConnectionId} joined group '{machineId.Trim()}'");
+                Console.WriteLine($"?? Connection {Context.ConnectionId} joined group '{machineId.Trim()}'");
             }
         }
 
         /// <summary>
-        /// Nhận dữ liệu cân từ BlowFillClient và broadcast cho các trình duyệt.
+        /// Nh?n d? li?u c�n t? BlowFillClient v� broadcast cho c�c tr�nh duy?t.
         /// </summary>
         public async Task PushWeightFromClient(string machineId, double weight)
         {
@@ -197,8 +197,8 @@ namespace OrderTrackingWeb.Hubs
         }
 
         /// <summary>
-        /// Broadcast context BlowFill (MO, Fiber kit, Target weight, số step)
-        /// cho tất cả client trong group MachineId.
+        /// Broadcast context BlowFill (MO, Fiber kit, Target weight, s? step)
+        /// cho t?t c? client trong group MachineId.
         /// </summary>
         public async Task BroadcastBlowFillContext(
             string machineId,
@@ -214,7 +214,7 @@ namespace OrderTrackingWeb.Hubs
 
             string machine = machineId.Trim();
 
-            // 1. Broadcast cho tất cả client trong group MachineId
+            // 1. Broadcast cho t?t c? client trong group MachineId
             await Clients.OthersInGroup(machine).SendAsync("BlowFillContextUpdated", new
             {
                 machineId = machine,
@@ -226,7 +226,7 @@ namespace OrderTrackingWeb.Hubs
                 currentPartIndex
             });
 
-            // 2. Lưu trạng thái hiện tại vào DB
+            // 2. Luu tr?ng th�i hi?n t?i v�o DB
             try
             {
                 var existing = await _blowDb.BlowFillContexts
@@ -245,16 +245,18 @@ namespace OrderTrackingWeb.Hubs
                 existing.FiberKit = fiberKit ?? "";
                 existing.TargetWeight = targetWeight;
                 existing.TotalSteps = totalSteps;
+                existing.CurrentStep = currentStep;
+                existing.CurrentPartIndex = currentPartIndex;
                 existing.LastUpdate = DateTime.Now;
 
                 await _blowDb.SaveChangesAsync();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error saving BlowFillContext: {ex.Message}");
+                Console.WriteLine($"? Error saving BlowFillContext: {ex.Message}");
             }
 
-            Console.WriteLine($"📡 BlowFillContextUpdated → Machine={machine}, MO={mo}, FiberKit={fiberKit}, Target={targetWeight}, Steps={totalSteps}");
+            Console.WriteLine($"?? BlowFillContextUpdated ? Machine={machine}, MO={mo}, FiberKit={fiberKit}, Target={targetWeight}, Steps={totalSteps}");
         }
     }
 }
